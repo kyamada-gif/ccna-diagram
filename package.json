@@ -1,0 +1,16 @@
+{
+  "name": "ccna-reflex",
+  "version": "0.1.0",
+  "description": "CCNA 200-301 暗記アプリのモック（分野 → 10問セット）",
+  "main": "app.js",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "dependencies": {
+    "@babel/cli": "^7.29.7",
+    "@babel/core": "^7.29.7",
+    "@babel/preset-react": "^7.29.7"
+  }
+}
