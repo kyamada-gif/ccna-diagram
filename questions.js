@@ -1,8 +1,15 @@
-/* 過去問。out/full/checkpoints_app.json から作った。手で直さない。
+/* 過去問。ブロックの id ごとに分けて持つ。手で直さない。
  * 出典：対策問題1・2・3。出力も選択肢も本のまま。
- * 目標1.4 の束Bのうち、本の答えが出力と食い違う4問は外してある。
+ *
+ * BANKS[<ブロックの id>] = [ {qid, book, text, exhibit, choices, answer, explanation}, … ]
+ * 答えが2つ以上の問題は answer を配列にしてよい（画面はどちらでも受ける）。
  */
-var QUESTIONS = [
+(function (global) {
+  "use strict";
+  var BANKS = {};
+
+  /* 「show interface の障害」。本の答えが出力と食い違う4問は外してある */
+  BANKS.showint = [
  {
   "qid": "B1-P11-032",
   "book": "B1",
@@ -438,4 +445,11 @@ var QUESTIONS = [
   "explanation": "rxload と txload が最大であるだけでなく、入力エラーがなく、入出力レートが高いため、高スループットです。"
  }
 ];
-if (typeof module !== "undefined" && module.exports) module.exports = { QUESTIONS: QUESTIONS };
+
+  global.BANKS = BANKS;
+  /* 前からある呼び方。1つ目のブロックを指す */
+  global.QUESTIONS = BANKS.showint;
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { BANKS: BANKS, QUESTIONS: BANKS.showint };
+  }
+})(typeof window !== "undefined" ? window : globalThis);

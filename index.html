@@ -116,6 +116,7 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .trow-s{font-family:var(--mono);font-size:var(--f1);color:var(--ink3)}
 .trow-p{font-family:var(--mono);font-size:var(--f2);color:var(--ink2);flex:0 0 auto}
 .trow-yet{color:var(--ink3)}
+.trow-soon{opacity:.5;cursor:default}
 
 /* 画面のいちばん下の段。**いつも見えている。**本文がどれだけ長くても隠れない。
    本文の段とは別の段なので、position:fixed に頼らない（スマホでもずれない） */
@@ -209,11 +210,15 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 </head>
 <body>
 <div id="root"></div>
-<!-- 出力を作るところ・見る所・判定ルール。画面側では判定しない -->
-<script src="./gen.js?v=17392" charset="utf-8"></script>
+<!-- 共通の仕掛け（判定・道すじ・出力作り）。題材の中身は入っていない -->
+<script src="./engine.js?v=20579" charset="utf-8"></script>
+<!-- ブロックごとの中身。ブロックを増やしたら、ここに1行足す -->
+<script src="./types/showint.js?v=20579" charset="utf-8"></script>
+<!-- 上の2つを組み立てる。画面側では判定しない -->
+<script src="./gen.js?v=20579" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
-<script src="./questions.js?v=51265" charset="utf-8"></script>
+<script src="./questions.js?v=51629" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=27463" charset="utf-8"></script>
+<script src="./app.js?v=33120" charset="utf-8"></script>
 </body>
 </html>
