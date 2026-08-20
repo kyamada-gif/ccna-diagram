@@ -132,10 +132,15 @@ BLOCK_IDS.forEach((id) => {
     });
   });
 
-  /* 判定エンジンがあるブロックは、過去問の判定が本の答えと合うか */
+  /* 判定エンジンがあるブロックは、過去問の判定が本の答えと合うか。
+     **bookOnly に入れた問題は、この検査から外す。**
+     規則では出せないが、本の答えで出題はできる問題（1問だけ違う聞き方、など）。
+     **外すのは判定の検査だけで、問題はテストに出る。**取りこぼしを作らない */
   if (G.kind === "rules" && (spec.same || G.answer)) {
-    let hit = 0;
+    const skip = spec.bookOnly || [];
+    let hit = 0, only = 0;
     qs.forEach((q) => {
+      if (skip.indexOf(q.qid) >= 0) { only++; return; }
       const ex = q.fig || q.exhibit;
       if (!ex) { bad.push(`${tag}: ${q.qid} に提示物が無い`); return; }
       const v = G.read(ex);
@@ -154,7 +159,9 @@ BLOCK_IDS.forEach((id) => {
       if (ok) hit++;
       else bad.push(`${tag}: ${q.qid} の判定が本の答えと合わない（${r ? r.verdict : "判定なし"}）`);
     });
-    console.log(`  ${tag}: 見る所 ${G.SPOTS.length} / ルール ${G.RULES.length} / 過去問の判定が本と合う ${hit} / ${qs.length}`);
+    console.log(`  ${tag}: 見る所 ${G.SPOTS.length} / ルール ${G.RULES.length} / ` +
+      `過去問の判定が本と合う ${hit} / ${qs.length - only}` +
+      (only ? `（本の答えだけで出す ${only} 問は判定の検査から外す）` : ""));
   } else {
     console.log(`  ${tag}: 過去問 ${qs.length} 問（判定エンジンなし。形だけ確かめた）`);
   }
