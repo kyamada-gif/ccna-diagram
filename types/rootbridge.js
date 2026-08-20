@@ -65,7 +65,7 @@
     { key: "mac", cond: "いちばん小さい優先度のスイッチが、2台以上",
       verdict: "MACアドレスで決まる",
       why: "優先度が同じなので、その中で MACアドレス が小さい方になる",
-      look: ["ブリッジ優先度", "MACアドレス"],
+      look: ["MACアドレス"],
       steps: function (v) {
         return [["いちばん小さい優先度", v.lowest], ["その優先度のスイッチ", v.tied.length + " 台"],
                 ["くらべる MACアドレス", listMac(v)]];
@@ -97,7 +97,7 @@
 
   function baseVals() {
     var names = pick(NAMES);
-    return { names: names, pris: null, macs: null, where: pick(["fig", "choice"]) };
+    return { names: names, pris: null, macs: null };
   }
 
   function build(v) {
@@ -110,8 +110,7 @@
       link: [[n[0], "Gi1/0/1", n[1], "Gi1/0/1"], [n[0], "Gi1/0/3", n[3], "Gi1/0/1"],
              [n[0], "Gi1/0/2", n[2], "Gi1/0/3"], [n[1], "Gi1/0/2", n[2], "Gi1/0/1"],
              [n[3], "Gi1/0/2", n[2], "Gi1/0/2"]],
-      host: [],
-      where: v.where
+      host: []
     };
   }
 
@@ -147,7 +146,7 @@
 
   /* 決め手だけを残す。図はそのまま、答えに関係しない線を落とす */
   function excerpt(fig, look) {
-    return { sw: fig.sw, link: [], host: [], where: "fig" };
+    return { sw: fig.sw, link: [], host: [] };
   }
 
   function sample() {
@@ -159,7 +158,7 @@
       link: [["SW1", "Gi1/0/1", "SW2", "Gi1/0/1"], ["SW1", "Gi1/0/3", "SW4", "Gi1/0/1"],
              ["SW1", "Gi1/0/2", "SW3", "Gi1/0/3"], ["SW2", "Gi1/0/2", "SW3", "Gi1/0/1"],
              ["SW4", "Gi1/0/2", "SW3", "Gi1/0/2"]],
-      host: [], where: "fig"
+      host: []
     };
   }
 
