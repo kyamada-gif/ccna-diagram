@@ -47,6 +47,22 @@ function checkItem(it, where, bad) {
   if (it.opts.length > 8) bad.push(`${tag}: 選択肢が ${it.opts.length} 個（8個まで）`);
 }
 
+/* ためる1件（attempt）の形。**練習もテストも同じでなければならない** */
+const ATTEMPT_KEYS = ["id", "app", "version", "user", "block", "mode", "set",
+  "startedAt", "endedAt", "seconds", "asked", "score", "of", "passLine", "passed", "answers"];
+const ANSWER_KEYS = ["no", "kind", "qid", "spot", "firstOk", "tries", "picked", "right", "ms"];
+
+function checkAttempt(a, where, bad) {
+  const k = Object.keys(a);
+  ATTEMPT_KEYS.forEach((x) => { if (k.indexOf(x) < 0) bad.push(`${where}: ${x} が無い`); });
+  k.forEach((x) => { if (ATTEMPT_KEYS.indexOf(x) < 0) bad.push(`${where}: 余計なキー ${x}`); });
+  a.answers.forEach((r, i) => {
+    const rk = Object.keys(r);
+    ANSWER_KEYS.forEach((x) => { if (rk.indexOf(x) < 0) bad.push(`${where} 答え[${i}]: ${x} が無い`); });
+    rk.forEach((x) => { if (ANSWER_KEYS.indexOf(x) < 0) bad.push(`${where} 答え[${i}]: 余計なキー ${x}`); });
+  });
+}
+
 function run() {
   const { ctx, GENS, BANKS, BLOCK_IDS } = load();
   const bad = [];
@@ -84,6 +100,31 @@ function run() {
       if (!inTest.has(q.qid)) bad.push(`${id}: ${q.qid} がどのテストにも入っていない`);
     });
     console.log(`  ${id}: テスト ${chunks.length} 回 / 過去問 ${qs.length} 問すべてが、どれかの回に入る`);
+
+    /* ためる1件の形が、練習とテストで同じか */
+    const STORE = require(path.join(__dirname, "store.js"));
+    const mk = (mode, plan, set) => {
+      const qn = plan.filter((x) => x.kind !== "learn").length;
+      const a = STORE.start({ version: "t", block: id, mode: mode, set: set,
+                              of: qn, passLine: qn - 1 });
+      let no = 0;
+      plan.forEach((it) => {
+        if (it.kind === "learn") return;
+        no += 1;
+        STORE.answer(a, { no: no, kind: it.kind, qid: it.note ? it.note.qid : null,
+          spot: it.kind === "step" ? it.extra.step.look.join(" と ") : null,
+          firstOk: true, tries: 1, picked: it.right, right: it.right, ms: 1 });
+      });
+      return STORE.finish(a);
+    };
+    const at = [];
+    if (G.kind === "rules") at.push(["練習", mk("practice", ctx.__P(G), "generated")]);
+    if (chunks.length) at.push(["テスト", mk("test", ctx.__T(id, 0), STORE.setKey(chunks[0]))]);
+    at.forEach(([w, a]) => checkAttempt(a, `${id} ${w}の記録`, bad));
+    if (at.length === 2) {
+      const A = Object.keys(at[0][1]).join(","), B = Object.keys(at[1][1]).join(",");
+      if (A !== B) bad.push(`${id}: 練習とテストで、ためる形が違う`);
+    }
   });
   return bad;
 }

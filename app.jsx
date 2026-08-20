@@ -23,7 +23,6 @@ const toTop = (y) => {
   try { window.scrollTo(0, y || 0); } catch (err) {}
 };
 
-const KEY = "showread-progress";
 const TEST_N = 10;
 const LETTERS = "ABCDEFGH";
 
@@ -83,12 +82,16 @@ const blockNo = (cid, bid) => {
 };
 const cardCount = (c) => c.blocks.reduce((a, b) => a + (bank(b.id) ? bank(b.id).length : b.n), 0);
 
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
-}
-function save(p) {
-  try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {}
-}
+/* 学習の記録は store.js（いまは localStorage、のちにサーバ）。
+   **画面は「いまの状態」だけを見る。**状態は、ためた記録から毎回作り直す */
+const allBlockIds = () => CARDS.reduce((a, c) => a.concat(c.blocks.map((b) => b.id)), []);
+const roundsOf = (id) => testChunks(id).map((c) => STORE.setKey(c));
+/* 問題データの版。中身ができているブロックだけを並べる。
+   例 "showint:31,rootbridge:23"。問題を足すと変わるので、
+   あとから「どの版で解いた記録か」が分かる */
+const dataVersion = () => allBlockIds()
+  .filter((id) => bank(id)).map((id) => id + ":" + bank(id).length).join(",");
+function loadState() { return STORE.summarize(STORE.load(), allBlockIds(), roundsOf); }
 
 /* ── 出力を出す ───────────────────────────── */
 function Console({ text, hits }) {
@@ -321,7 +324,7 @@ function Note({ title, body, gloss }) {
 function Home({ prog, go }) {
   const [pick, setPick] = useState(null);
   const done = CARDS.filter((c) =>
-    c.blocks.every((b) => prog[b.id] && prog[b.id].badge)).length;
+    c.blocks.every((b) => prog.blocks[b.id] && prog.blocks[b.id].badge)).length;
   return (
     <div className="wrap">
       <div className="hero">
@@ -333,7 +336,7 @@ function Home({ prog, go }) {
 
       {CARDS.map((c, i) => {
         const ready = c.blocks.filter((b) => isReady(b.id));
-        const clear = c.blocks.filter((b) => prog[b.id] && prog[b.id].badge).length;
+        const clear = c.blocks.filter((b) => prog.blocks[b.id] && prog.blocks[b.id].badge).length;
         return (
           <div className="road" key={c.id}>
             {i > 0 && <div className="link" />}
@@ -380,7 +383,7 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
   const c = CARDS.filter((x) => x.id === cid)[0];
   const block = c.blocks.filter((b) => b.id === bid)[0] || c.blocks[0];
   const isPractice = kind === "practice";
-  const st = prog[block.id] || {};
+  const st = prog.blocks[block.id] || {};
   const G = engine(block.id);
   const bs = G && G.kind === "rules" ? G.blocks() : [];
   const chunks = testChunks(block.id);
@@ -390,8 +393,8 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
 
   let nextRound = 0;
   for (let i = 0; i < chunks.length; i++) {
-    const r = (st.tests || {})[i] || {};
-    if (!r.badge) { nextRound = i; break; }
+    const r = (st.rounds || {})[STORE.setKey(chunks[i])] || {};
+    if (!r.passed) { nextRound = i; break; }
   }
 
   return (
@@ -483,7 +486,7 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
               )}
             </div>
             {chunks.map((ch, i) => {
-              const r = (st.tests || {})[i] || {};
+              const r = (st.rounds || {})[STORE.setKey(ch)] || {};
               return (
                 <button className="trow" key={i} onClick={() => start("test:" + i)}>
                   <span className="trow-n">{i + 1}</span>
@@ -491,8 +494,9 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
                     <span className="trow-t">テスト {i + 1}</span>
                     <span className="trow-s">{ch.length} 問　{ch[0].qid} 〜 {ch[ch.length - 1].qid}</span>
                   </span>
-                  {r.badge ? <span className="badge badge-gold">🏅</span>
-                    : r.best !== undefined ? <span className="trow-p">{r.best} / {ch.length}</span>
+                  {r.passed ? <span className="badge badge-gold">🏅</span>
+                    : r.best !== null && r.best !== undefined
+                      ? <span className="trow-p">{r.best} / {ch.length}</span>
                     : <span className="trow-p trow-yet">まだ</span>}
                 </button>
               );
@@ -527,6 +531,18 @@ function Drill({ bid, mode, prog, setProg, back }) {
   const [score, setScore] = useState(0);
   const [asked, setAsked] = useState(0);
   const [end, setEnd] = useState(false);
+  /* ためる1件。**練習もテストも同じ形。**問題ごとに足していく */
+  const at0 = useRef(Date.now());
+  const rec = useRef(null);
+  if (rec.current === null) {
+    const qn = plan.filter((x) => x.kind !== "learn").length;
+    rec.current = STORE.start({
+      version: dataVersion(), block: bid, mode: isTest ? "test" : "practice",
+      set: isTest ? STORE.setKey(testChunks(bid)[ci]) : "generated",
+      of: qn, passLine: passLine(qn)
+    });
+  }
+  const tries = useRef(0);
   const it = plan[at];
   const rights = it ? (Array.isArray(it.right) ? it.right : [it.right]) : [];
   const ok = done && picked === null;
@@ -537,39 +553,47 @@ function Drill({ bid, mode, prog, setProg, back }) {
 
   function choose(o) {
     if (done) return;
+    tries.current += 1;
     if (rights.indexOf(o) >= 0) {
       if (got.indexOf(o) >= 0) return;
       const g = got.concat([o]);
       setGot(g);
       if (g.length >= rights.length) {      // ぜんぶ当てた
         setDone(true);
-        if (firstOk === null) { setFirstOk(true); setAsked(asked + 1); setScore(score + 1); }
+        if (firstOk === null) {
+          setFirstOk(true); setAsked(asked + 1); setScore(score + 1);
+          writeAnswer(true, g);
+        }
       }
       return;
     }
     setPicked(o); setDone(true);
-    if (firstOk === null) { setFirstOk(false); setAsked(asked + 1); }
+    if (firstOk === null) { setFirstOk(false); setAsked(asked + 1); writeAnswer(false, got.concat([o])); }
+  }
+
+  /* その1問の結果を書きとめる。**点になるのは最初の答え** */
+  function writeAnswer(ok, picked) {
+    STORE.answer(rec.current, {
+      no: rec.current.answers.length + 1,
+      kind: it.kind,
+      qid: it.note ? it.note.qid : null,
+      spot: it.kind === "step" ? it.extra.step.look.join(" と ") : null,
+      firstOk: ok, tries: tries.current,
+      picked: picked, right: rights,
+      ms: Date.now() - at0.current
+    });
+    at0.current = Date.now();
   }
   /* やり直しは問題が上に出直すので、こちらも上へ戻す */
   function retry() { setPicked(null); setGot([]); setDone(false); toTop(); }
   function next() {
     if (at + 1 >= plan.length) {
-      const p = Object.assign({}, prog);
-      const prev = p[bid] || {};
-      const tests = Object.assign({}, prev.tests);
-      if (isTest) {
-        const t0 = tests[ci] || {};
-        tests[ci] = { best: Math.max(t0.best || 0, score),
-                      badge: (t0.badge || false) || score >= passLine(plan.length) };
-      }
-      const all = testChunks(bid).length;
-      let cleared = 0;
-      for (let k = 0; k < all; k++) if (tests[k] && tests[k].badge) cleared++;
-      p[bid] = { tests: tests, badge: all > 0 && cleared === all,
-                 practiced: prev.practiced || !isTest };
-      setProg(p); setEnd(true); return;
+      /* 1回ぶんを、そのまま1件ためる（のちにサーバへ送るのと同じ形） */
+      STORE.add(STORE.finish(rec.current));
+      setProg(loadState()); setEnd(true); return;
     }
     setAt(at + 1); setPicked(null); setGot([]); setDone(false); setFirstOk(null);
+    tries.current = 0; at0.current = Date.now();
   }
 
   useEffect(() => {
@@ -612,7 +636,7 @@ function Drill({ bid, mode, prog, setProg, back }) {
   }
 
   if (end) {
-    const need = passLine(plan.length);
+    const need = rec.current.passLine;
     return (
       <div className="wrap">
         <div className="head"><span className="head-t">おわり</span></div>
@@ -790,13 +814,12 @@ function Drill({ bid, mode, prog, setProg, back }) {
 }
 
 export default function App() {
-  const [prog, setProg] = useState(load);
+  const [prog, setProg] = useState(loadState);
   const [cid, setCid] = useState(null);    // 札
   const [kind, setKind] = useState(null);  // "practice" / "test"
   const [bid, setBid] = useState(null);    // 分野（ブロック）
   const [mode, setMode] = useState(null);  // null=分野を選ぶ / "practice" / "test:N"
   const homeY = useRef(0);
-  useEffect(() => { save(prog); }, [prog]);
   /* ホームに戻ったときだけ、見ていた所に戻す。ほかは上から */
   useEffect(() => { toTop(cid === null ? homeY.current : 0); }, [cid, kind, bid, mode]);
 

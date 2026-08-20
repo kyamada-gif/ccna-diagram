@@ -192,6 +192,52 @@ cd /Users/e2304-01/ccna/showread && python3 -m http.server 8811
 - **テスト** … 過去問そのもの。全問が必ずどれかの回に入る
 - 紙面の実物（`image`）があればそれを出す。無ければ `exhibit` から描く
 
+## 学習の記録（store.js）
+
+**いまは localStorage だが、サーバのDBのつもりで扱う。**
+載せ替えるときに直すのは `store.js` の `load` / `save` / `add` だけ。
+
+**練習もテストも、同じ1つの形（attempt）でためる。**1回の演習＝1件。追記だけで、書き換えない。
+
+```jsonc
+{ "id": "a-mt1c5h3l-0l4d",        // 一意。二重に入れないための番号
+  "app": "showread",
+  "version": "showint:31,rootbridge:23",   // 問題データの版
+  "user": null,                    // いまは無し。サーバでは必須
+  "block": "rootbridge",
+  "mode": "test",                  // "practice" / "test"
+  "set": "B1-P12-034..B2-0095-02#10",      // 出題範囲。**番号ではなく中身で決める**
+  "startedAt": "…", "endedAt": "…", "seconds": 208,
+  "asked": 10, "score": 9, "of": 10, "passLine": 9, "passed": true,
+  "answers": [
+    { "no": 1, "kind": "past",     // learn は問題ではないので入れない
+      "qid": "B1-P15-026",         // 過去問だけ。作った問題は null
+      "spot": null,                // 練習のとき「どの見る所の問題か」
+      "firstOk": true,             // **点になるのは最初の答え**
+      "tries": 1,
+      "picked": ["SW2"], "right": ["SW2"], "ms": 12000 } ] }
+```
+
+### set を「番号」にしない理由
+
+前は `tests["0"]` のように**位置**で持っていた。`"0"` は「qid順で先頭10問」という意味しかなく、
+**過去問を1問足すと区切りがずれて、同じ `"0"` が別の問題の集まりを指す。**
+過去の記録が静かに嘘になるので、中身から決まる名前（先頭の qid 〜 末尾の qid ＋ 問数）にした。
+
+### 画面が使う「いまの状態」
+
+ためた記録から毎回作り直す（`summarize`）。**ためない。**
+
+```jsonc
+{ "blocks": { "rootbridge": {
+    "practiced": true,
+    "rounds": { "B1-P12-034..B2-0095-02#10": {"best":9,"of":10,"passed":true,"at":"…"} },
+    "badge": false } } }
+```
+
+- **触っていないブロックもキーを作る。**無いと、受け取る側が毎回「無いのか 0 なのか」を考える
+- **まだやっていない回の数は `null`。`0` にしない**（「0点」と区別が付かなくなる）
+
 ## 決まり
 
 1. **判定と出力作りは `gen.js`。**画面側（`app.jsx`）では判定しない

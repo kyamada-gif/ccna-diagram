@@ -29,7 +29,7 @@ fs.writeFileSync(
 );
 
 const sum = (f) => fs.readFileSync(f, "utf8").length;
-const gv = sum("gen.js") + sum("engine.js") + sum("fig.js") +
+const gv = sum("gen.js") + sum("engine.js") + sum("fig.js") + sum("store.js") +
   fs.readdirSync("types").reduce((a, f) => a + sum(path.join("types", f)), 0);
 const qv = sum("questions.js");
 let html = fs.readFileSync("index.html", "utf8");
@@ -38,6 +38,7 @@ const next = html
   .replace(/(\.\/gen\.js)(\?v=\d+)?/, `$1?v=${gv}`)
   .replace(/(\.\/engine\.js)(\?v=\d+)?/, `$1?v=${gv}`)
   .replace(/(\.\/fig\.js)(\?v=\d+)?/, `$1?v=${gv}`)
+  .replace(/(\.\/store\.js)(\?v=\d+)?/, `$1?v=${gv}`)
   .replace(/(\.\/types\/[\w-]+\.js)(\?v=\d+)?/g, `$1?v=${gv}`)
   .replace(/(\.\/questions\.js)(\?v=\d+)?/, `$1?v=${qv}`);
 if (next !== html) if (next !== html) fs.writeFileSync("index.html", next);
