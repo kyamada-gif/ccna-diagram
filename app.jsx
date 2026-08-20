@@ -115,6 +115,18 @@ function Figure({ fig }) {
   return <div className="figwrap" dangerouslySetInnerHTML={{ __html: FIG.svg(fig) }} />;
 }
 
+/* ── 紙面から切り出した、本物の図 ─────────────────
+ * テストは**本と同じ見え方**にする。練習で出る図は作ったもの（Figure）。
+ */
+function Scan({ image, alt }) {
+  if (!image) return null;
+  return (
+    <div className="scan">
+      <img src={image.src} width={image.w} height={image.h} alt={alt || ""} loading="lazy" />
+    </div>
+  );
+}
+
 /* ── 練習を組む ───────────────────────────
  * 見る所の表を、上から一個ずつ。
  *   ① その見る所を覚える（説明の札）
@@ -636,7 +648,10 @@ function Drill({ bid, mode, prog, setProg, back }) {
   } else {
     const ex = it.q.fig || it.q.exhibit;
     const r = done && G && ex ? G.judge(G.read(ex)) : null;
-    con = it.q.fig ? <Figure fig={it.q.fig} />
+    /* 過去問は、紙面から切り出した実物があればそれを出す（本番と同じ見え方）。
+       無いときは、データから作った図か、出力のテキスト */
+    con = it.q.image ? <Scan image={it.q.image} alt={it.q.qid} />
+        : it.q.fig ? <Figure fig={it.q.fig} />
         : it.q.exhibit ? <Console text={it.q.exhibit} hits={r ? r.look : null} /> : null;
     ask = it.q.text;
   }
@@ -654,8 +669,14 @@ function Drill({ bid, mode, prog, setProg, back }) {
     else if (it.kind === "judge") note = <Steps t={G.trace(it.text)} />;
     else {
       const ex = it.q.fig || it.q.exhibit;
-      note = <Steps t={G && ex ? G.trace(ex) : null}
-        answer={rights.join(" ／ ")} book={it.q.explanation} />;
+      note = (
+        <>
+          {/* 紙面の図はかすれていることがある。答え合わせでは、読み取った中身も出す */}
+          {it.q.image && it.q.fig && <Figure fig={it.q.fig} />}
+          <Steps t={G && ex ? G.trace(ex) : null}
+            answer={rights.join(" ／ ")} book={it.q.explanation} />
+        </>
+      );
     }
   }
 

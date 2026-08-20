@@ -72,6 +72,11 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
   min-height:40px;font-size:var(--f2);color:var(--ink2);background:var(--bg1)}
 .tab.on{border-color:var(--blue);color:var(--blue-t);background:var(--blue-bg);font-weight:700}
 .tab-yet{opacity:.55}
+/* 紙面から切り出した図。白地なので、暗い画面でも見えるよう地を白のままにする */
+.scan{background:#fff;border:1px solid var(--line);border-radius:12px;
+  padding:var(--s2);margin-top:var(--s3);overflow-x:auto}
+.scan img{display:block;width:100%;height:auto;max-width:520px;margin:0 auto}
+
 /* 図。線と箱だけ。描くのは fig.js */
 .figwrap{background:var(--sunk);border:1px solid var(--line);border-radius:12px;
   padding:var(--s3);margin-top:var(--s3);overflow-x:auto}
@@ -250,8 +255,8 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <!-- 上の2つを組み立てる。画面側では判定しない -->
 <script src="./gen.js?v=31569" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
-<script src="./questions.js?v=74031" charset="utf-8"></script>
+<script src="./questions.js?v=75387" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=34744" charset="utf-8"></script>
+<script src="./app.js?v=35469" charset="utf-8"></script>
 </body>
 </html>

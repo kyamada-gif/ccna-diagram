@@ -93,6 +93,12 @@ BLOCK_IDS.forEach((id) => {
     });
   }
 
+  /* 紙面から切り出した図が、ちゃんと置いてあるか */
+  qs.forEach((q) => {
+    if (!q.image) return;
+    if (!fs.existsSync(q.image.src)) bad.push(`${tag}: ${q.qid} の図が無い（${q.image.src}）`);
+  });
+
   /* 過去問の形。ここは kind によらず全ブロック共通 */
   const seen = {};
   qs.forEach((q) => {

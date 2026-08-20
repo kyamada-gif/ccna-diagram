@@ -187,6 +187,25 @@ function Figure({
   });
 }
 
+/* ── 紙面から切り出した、本物の図 ─────────────────
+ * テストは**本と同じ見え方**にする。練習で出る図は作ったもの（Figure）。
+ */
+function Scan({
+  image,
+  alt
+}) {
+  if (!image) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "scan"
+  }, /*#__PURE__*/React.createElement("img", {
+    src: image.src,
+    width: image.w,
+    height: image.h,
+    alt: alt || "",
+    loading: "lazy"
+  }));
+}
+
 /* ── 練習を組む ───────────────────────────
  * 見る所の表を、上から一個ずつ。
  *   ① その見る所を覚える（説明の札）
@@ -848,7 +867,12 @@ function Drill({
   } else {
     const ex = it.q.fig || it.q.exhibit;
     const r = done && G && ex ? G.judge(G.read(ex)) : null;
-    con = it.q.fig ? /*#__PURE__*/React.createElement(Figure, {
+    /* 過去問は、紙面から切り出した実物があればそれを出す（本番と同じ見え方）。
+       無いときは、データから作った図か、出力のテキスト */
+    con = it.q.image ? /*#__PURE__*/React.createElement(Scan, {
+      image: it.q.image,
+      alt: it.q.qid
+    }) : it.q.fig ? /*#__PURE__*/React.createElement(Figure, {
       fig: it.q.fig
     }) : it.q.exhibit ? /*#__PURE__*/React.createElement(Console, {
       text: it.q.exhibit,
@@ -872,11 +896,13 @@ function Drill({
       t: G.trace(it.text)
     });else {
       const ex = it.q.fig || it.q.exhibit;
-      note = /*#__PURE__*/React.createElement(Steps, {
+      note = /*#__PURE__*/React.createElement(React.Fragment, null, it.q.image && it.q.fig && /*#__PURE__*/React.createElement(Figure, {
+        fig: it.q.fig
+      }), /*#__PURE__*/React.createElement(Steps, {
         t: G && ex ? G.trace(ex) : null,
         answer: rights.join(" ／ "),
         book: it.q.explanation
-      });
+      }));
     }
   }
   const head = isTest ? "テスト " + (ci + 1) : it.kind === "walk" ? "見る所　" + (it.i + 1) + " / " + it.of : "出力ぜんぶで判定";
