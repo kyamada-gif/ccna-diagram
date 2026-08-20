@@ -120,6 +120,11 @@ BLOCK_IDS.forEach((id) => {
   });
 
   /* 過去問の形。ここは kind によらず全ブロック共通 */
+  /* **配列に穴（空の要素）が無いか。**forEach も filter も穴を飛ばすので、
+     ふつうの検査では見つからない。手で編集したときに入りやすい */
+  for (let i = 0; i < qs.length; i++) {
+    if (!(i in qs)) bad.push(`${tag}: 過去問の並びの ${i} 番目が空`);
+  }
   const seen = {};
   qs.forEach((q) => {
     const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
@@ -167,6 +172,23 @@ BLOCK_IDS.forEach((id) => {
   }
   totalQ += qs.length;
 });
+
+/* ── 同じ問題が2つのブロックに入っていないか ───────────
+ * ブロックを分けて作っていると、同じ問題が別々のブロックに入ることがある。
+ * テストで同じ問題が2回出るので、見つけたら止める。
+ */
+{
+  const where = {};
+  Object.keys(BANKS).forEach((id) => (BANKS[id] || []).forEach((q) => {
+    (q.from || [String(q.qid).replace(/#\d+$/, "")]).forEach((f) => {
+      (where[f] = where[f] || []).push(id);
+    });
+  }));
+  Object.keys(where).forEach((f) => {
+    const ids = Array.from(new Set(where[f]));
+    if (ids.length > 1) bad.push(`${f} が ${ids.join(" と ")} の両方に入っている`);
+  });
+}
 
 /* ── 引き継ぎの見張り ─────────────────────────
  * ブロックが「この問題はよそのブロック行き」と言ったら（spec.movedTo）、

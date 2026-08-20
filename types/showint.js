@@ -67,7 +67,7 @@
   ];
 
   var PAT = {
-    duplex: /(Half|Full)[- ]?[Dd]uplex/, speed: /(\d+)\s?Mb/,
+    line: /line protocol is (up|down)/, duplex: /(Half|Full)[- ]?[Dd]uplex/, speed: /(\d+)\s?Mb/,
     txload: /txload\s+(\d+)\/255/, rxload: /rxload\s+(\d+)\/255/,
     inq: /Input queue[:：]\s*(\d+)\//, outq: /Output queue[:：]\s*(\d+)\//,
     drops: /Total output drops[:：]\s*(\d+)/, bcast: /Received\s+(\d+)\s+broadcasts/,
@@ -75,6 +75,17 @@
     coll: /(\d+)\s+collisions/
   };
   var RULES = [
+    /* **いちばん先に見る。**リンクが落ちていたら、下のエラーの数は過去の記録で、
+       いま起きていることの手がかりにならない。
+       デュプレックスの不一致では line protocol は落ちない（up のまま衝突が増える） */
+    { key: "linkdown", cond: "line protocol is down になっている",
+      verdict: "リンクが切れている（ケーブルか物理の故障）",
+      why: "line protocol が down。線がつながっていないので、下のエラーの数は過去のもの",
+      look: ["line protocol"],
+      steps: function (v) { return [["line protocol", v.line]]; },
+      no: function (v) { return "line protocol is up なので、線はつながっている"; },
+      test: function (v) { return v.line === "down"; } },
+
     { key: "queue", cond: "Input queue か Output queue に溜まっている",
       verdict: "キューイング（順番待ち）",
       why: "出ていく先が詰まっていて、パケットが列に並んでいる",
@@ -164,6 +175,7 @@
   ];
 
   var GLOSS = {
+    "リンクが切れている（ケーブルか物理の故障）": "線そのものがつながっていない。設定の話ではない",
     "キューイング（順番待ち）": "パケットが列に並んで待っている。壊れてはいない",
     "ポートのオーバーサブスクリプション": "運べる量より多く来ている。詰め込みすぎ",
     "高スループット": "たくさん流れているだけ。故障ではない",
@@ -180,7 +192,7 @@
   function build(v) {
     return [
       v.host + "# show interface fa0/0",
-      "FastEthernet0/0 is up, line protocol is up",
+      "FastEthernet0/0 is up, line protocol is " + (v.line || "up") + ",",
       "  Hardware is DEC21140, address is ca02.7788.0000 (bia ca02.7788.0000)",
       "  Description: " + v.seg,
       "  Internet address is 10.32.102.2/30",
@@ -239,6 +251,7 @@
 
   /* 本の答えとの言い換え表。判定の答えと、本に印刷された文言を突き合わせるのに使う */
   var SAME = {
+    "リンクが切れている（ケーブルか物理の故障）": ["ケーブルの切断"],
     "キューイング（順番待ち）": ["キューイング", "順番待ち"],
     "ポートのオーバーサブスクリプション": ["オーバーサブスクリプション", "過剰使用", "過剰利用"],
     "高スループット": ["高スループット", "高いスループット"],
@@ -259,9 +272,14 @@
     obj: "1.4",
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
-    expect: { spots: 13, rules: 10, questions: 31 },
+    expect: { spots: 13, rules: 11, questions: 31 },
     /* 本の答えが出力と食い違うため、演習から外した4問 */
-    dropped: ["B1-P14-072", "B2-0251-02", "B1-P12-076", "B2-0084-02"]
+    dropped: ["B1-P14-072", "B2-0251-02", "B1-P12-076", "B2-0084-02",
+              /* B2-0137-01 と出力も選択肢も同じなのに、本の答えが違う。
+                 line protocol is down のときリンクは落ちている。
+                 デュプレックスの不一致では line protocol は落ちないので、
+                 「ケーブルの切断」とする B2 のほうが正しい */
+              "B1-P14-050"]
   };
 
   global.SPECS = global.SPECS || {};
