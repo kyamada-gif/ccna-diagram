@@ -271,8 +271,15 @@ function exValue(ex) {
  *   ② 決まるとき / 決まらないとき の2問
  * 最後に、提示物ぜんぶで判定を3問。
  */
-function makePractice(G) {
-  if (!G || G.kind !== "rules") return [];
+function makePractice(G, id) {
+  /* 判定エンジンを持たないブロック（言葉と意味の組み合わせなど）は、
+     **過去問そのものを練習にする。**間違えたら、正解するまでやり直す形。
+     テストは同じ問題を、点を付けて解く（lpic-reflex と同じ考え方） */
+  if (!G || G.kind !== "rules") {
+    const qs = bank(id) || [];
+    if (!qs.length) return [];
+    return shuffleAny(qs).map(q => asPast(q));
+  }
   const bs = G.blocks();
   const out = [];
   bs.forEach((b, i) => {
@@ -376,10 +383,10 @@ function testChunks(id) {
 function passLine(len) {
   return Math.max(1, len - 1);
 }
-function makeTest(id, ci) {
-  const G = engine(id);
-  const sh = G ? G.shuffle : a => a.slice();
-  return sh(testChunks(id)[ci]).map(q => item({
+
+/* 過去問1問を、画面が読む形にする */
+function asPast(q) {
+  return item({
     kind: "past",
     ask: q.text,
     exhibit: asExhibit(q.fig || q.exhibit || null),
@@ -395,7 +402,22 @@ function makeTest(id, ci) {
       book: q.book,
       explanation: q.explanation
     }
-  }));
+  });
+}
+
+/* 判定エンジンが無いブロックでも混ぜられるように */
+function shuffleAny(a) {
+  const x = a.slice();
+  for (let i = x.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = x[i];
+    x[i] = x[j];
+    x[j] = t;
+  }
+  return x;
+}
+function makeTest(id, ci) {
+  return shuffleAny(testChunks(id)[ci]).map(q => asPast(q));
 }
 
 /* ── 答えの出し方を、実際の数字で見せる ───────── */
@@ -552,7 +574,7 @@ function Choose({
   const chunks = testChunks(block.id);
   const spec = G ? G.spec : null;
   const ready = isReady(block.id);
-  const canGo = isPractice ? bs.length > 0 : chunks.length > 0;
+  const canGo = isPractice ? bs.length > 0 || ready && !G : chunks.length > 0;
   let nextRound = 0;
   for (let i = 0; i < chunks.length; i++) {
     const r = (st.rounds || {})[STORE.setKey(chunks[i])] || {};
@@ -604,7 +626,7 @@ function Choose({
     className: "sec-l"
   }, "\u3053\u306E\u5206\u91CE\u3067\u3084\u308B\u3053\u3068"), /*#__PURE__*/React.createElement("div", {
     className: "brief-b"
-  }, spec ? spec.note : c.note, "\u3002\u6C7A\u3081\u624B\u306F\u6C7A\u307E\u3063\u305F\u6240\u306B\u3042\u308A\u307E\u3059\u3002 \u4E0A\u304B\u3089\u9806\u306B\u898B\u3066\u3044\u3063\u3066\u3001\u5F53\u305F\u3063\u305F\u3068\u3053\u308D\u3067\u7B54\u3048\u304C\u6C7A\u307E\u308A\u307E\u3059\u3002")), bs.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, spec ? spec.note + "。決め手は決まった所にあります。上から順に見ていって、当たったところで答えが決まります。" : c.note + "。1問ずつ出します。間違えたら、正解するまでやり直します。")), bs.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sec-l"
@@ -627,7 +649,7 @@ function Choose({
     className: "sec-l"
   }, "\u7DF4\u7FD2\u306E\u4E2D\u8EAB"), /*#__PURE__*/React.createElement("div", {
     className: "brief-b"
-  }, "\u898B\u308B\u6240\u3054\u3068\u306B\u3001\u899A\u3048\u308B1\u679A\u3068\u305D\u306E\u6240\u306E\u554F\u984C2\u554F\u3002 \u6700\u5F8C\u306B\u3001\u51FA\u529B\u305C\u3093\u3076\u3067\u5224\u5B9A\u3059\u308B\u554F\u984C\u304C3\u554F\u3042\u308A\u307E\u3059\u3002"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, bs.length > 0 ? "見る所ごとに、覚える1枚とその所の問題2問。最後に、出力ぜんぶで判定する問題が3問あります。" : bank(block.id).length + " 問を、順番を混ぜて1問ずつ出します。点は付きません。"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sec-l"
@@ -679,7 +701,7 @@ function Drill({
   const G = engine(bid);
   const ci = mode.indexOf("test:") === 0 ? parseInt(mode.slice(5), 10) : -1;
   const isTest = ci >= 0;
-  const [plan] = useState(() => isTest ? makeTest(bid, ci) : makePractice(G));
+  const [plan] = useState(() => isTest ? makeTest(bid, ci) : makePractice(G, bid));
   const [at, setAt] = useState(0);
   const [picked, setPicked] = useState(null); // 決まった時に押したもの（間違いのときだけ入る）
   const [got, setGot] = useState([]); // 当たった選択肢（答えが2つ以上のとき積む）
@@ -697,7 +719,8 @@ function Drill({
       version: dataVersion(),
       block: bid,
       mode: isTest ? "test" : "practice",
-      set: isTest ? STORE.setKey(testChunks(bid)[ci]) : "generated",
+      /* 出題範囲。作った問題は範囲という考えが無いので "generated" */
+      set: isTest ? STORE.setKey(testChunks(bid)[ci]) : G && G.kind === "rules" ? "generated" : STORE.setKey(bank(bid) || []),
       of: qn,
       passLine: passLine(qn)
     });
@@ -971,7 +994,7 @@ function Drill({
       }));
     }
   }
-  const head = isTest ? "テスト " + (ci + 1) : it.kind === "step" ? "見る所　" + (it.extra.i + 1) + " / " + it.extra.of : "ぜんぶ見て判定";
+  const head = isTest ? "テスト " + (ci + 1) : it.kind === "step" ? "見る所　" + (it.extra.i + 1) + " / " + it.extra.of : it.kind === "past" ? "練習" : "ぜんぶ見て判定";
   return /*#__PURE__*/React.createElement("div", {
     className: "wrap"
   }, /*#__PURE__*/React.createElement("div", {

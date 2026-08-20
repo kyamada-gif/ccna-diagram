@@ -66,16 +66,19 @@ function checkAttempt(a, where, bad) {
 function run() {
   const { ctx, GENS, BANKS, BLOCK_IDS } = load();
   const bad = [];
-  BLOCK_IDS.forEach((id) => {
+  /* 判定エンジンがあるブロックと、過去問だけのブロックの両方を見る */
+  const ids = Array.from(new Set(BLOCK_IDS.concat(Object.keys(BANKS))));
+  ids.forEach((id) => {
     const G = GENS[id];
     const qs = BANKS[id] || [];
-    if (!G) return;
+    if (!G && !qs.length) return;
 
-    /* 練習：何度作っても、毎回ちゃんとした問題になるか */
-    if (G.kind === "rules") {
+    /* 練習：何度作っても、毎回ちゃんとした問題になるか。
+       判定エンジンが無いブロックは、過去問そのものが練習になる */
+    {
       let len = null;
       for (let n = 0; n < 30; n++) {
-        const plan = ctx.__P(G);
+        const plan = ctx.__P(G, id);
         if (!plan.length) { bad.push(`${id}: 練習が空`); break; }
         if (len === null) len = plan.length;
         if (plan.length !== len) bad.push(`${id}: 練習の問題数が ${len} と ${plan.length} で変わる`);
@@ -118,7 +121,7 @@ function run() {
       return STORE.finish(a);
     };
     const at = [];
-    if (G.kind === "rules") at.push(["練習", mk("practice", ctx.__P(G), "generated")]);
+    at.push(["練習", mk("practice", ctx.__P(G, id), "generated")]);
     if (chunks.length) at.push(["テスト", mk("test", ctx.__T(id, 0), STORE.setKey(chunks[0]))]);
     at.forEach(([w, a]) => checkAttempt(a, `${id} ${w}の記録`, bad));
     if (at.length === 2) {

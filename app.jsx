@@ -181,8 +181,15 @@ function exValue(ex) { return ex ? (ex.kind === "console" ? ex.text : ex.fig) : 
  *   ② 決まるとき / 決まらないとき の2問
  * 最後に、提示物ぜんぶで判定を3問。
  */
-function makePractice(G) {
-  if (!G || G.kind !== "rules") return [];
+function makePractice(G, id) {
+  /* 判定エンジンを持たないブロック（言葉と意味の組み合わせなど）は、
+     **過去問そのものを練習にする。**間違えたら、正解するまでやり直す形。
+     テストは同じ問題を、点を付けて解く（lpic-reflex と同じ考え方） */
+  if (!G || G.kind !== "rules") {
+    const qs = bank(id) || [];
+    if (!qs.length) return [];
+    return shuffleAny(qs).map((q) => asPast(q));
+  }
   const bs = G.blocks();
   const out = [];
   bs.forEach((b, i) => {
@@ -257,17 +264,30 @@ function testChunks(id) {
    問題数から1を引く。**9割の計算だと 9問の回は 9/9 が必要になってしまう */
 function passLine(len) { return Math.max(1, len - 1); }
 
-function makeTest(id, ci) {
-  const G = engine(id);
-  const sh = G ? G.shuffle : (a) => a.slice();
-  return sh(testChunks(id)[ci]).map((q) => item({
+/* 過去問1問を、画面が読む形にする */
+function asPast(q) {
+  return item({
     kind: "past", ask: q.text,
     exhibit: asExhibit(q.fig || q.exhibit || null),
     image: q.image || null,
     opts: q.choices, right: q.answer,
     extra: { maclist: !!(q.fig && q.fig.maclist), sw: q.fig ? q.fig.sw : null },
     note: { qid: q.qid, book: q.book, explanation: q.explanation }
-  }));
+  });
+}
+
+/* 判定エンジンが無いブロックでも混ぜられるように */
+function shuffleAny(a) {
+  const x = a.slice();
+  for (let i = x.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = x[i]; x[i] = x[j]; x[j] = t;
+  }
+  return x;
+}
+
+function makeTest(id, ci) {
+  return shuffleAny(testChunks(id)[ci]).map((q) => asPast(q));
 }
 
 /* ── 答えの出し方を、実際の数字で見せる ───────── */
@@ -389,7 +409,7 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
   const chunks = testChunks(block.id);
   const spec = G ? G.spec : null;
   const ready = isReady(block.id);
-  const canGo = isPractice ? bs.length > 0 : chunks.length > 0;
+  const canGo = isPractice ? (bs.length > 0 || (ready && !G)) : chunks.length > 0;
 
   let nextRound = 0;
   for (let i = 0; i < chunks.length; i++) {
@@ -442,8 +462,8 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
             <div className="sec">
               <span className="sec-l">この分野でやること</span>
               <div className="brief-b">
-                {spec ? spec.note : c.note}。決め手は決まった所にあります。
-                上から順に見ていって、当たったところで答えが決まります。
+                {spec ? spec.note + "。決め手は決まった所にあります。上から順に見ていって、当たったところで答えが決まります。"
+                      : c.note + "。1問ずつ出します。間違えたら、正解するまでやり直します。"}
               </div>
             </div>
             {bs.length > 0 && (
@@ -464,8 +484,9 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
             <div className="sec">
               <span className="sec-l">練習の中身</span>
               <div className="brief-b">
-                見る所ごとに、覚える1枚とその所の問題2問。
-                最後に、出力ぜんぶで判定する問題が3問あります。
+                {bs.length > 0
+                  ? "見る所ごとに、覚える1枚とその所の問題2問。最後に、出力ぜんぶで判定する問題が3問あります。"
+                  : bank(block.id).length + " 問を、順番を混ぜて1問ずつ出します。点は付きません。"}
               </div>
             </div>
           </>
@@ -522,7 +543,7 @@ function Drill({ bid, mode, prog, setProg, back }) {
   const G = engine(bid);
   const ci = mode.indexOf("test:") === 0 ? parseInt(mode.slice(5), 10) : -1;
   const isTest = ci >= 0;
-  const [plan] = useState(() => (isTest ? makeTest(bid, ci) : makePractice(G)));
+  const [plan] = useState(() => (isTest ? makeTest(bid, ci) : makePractice(G, bid)));
   const [at, setAt] = useState(0);
   const [picked, setPicked] = useState(null);   // 決まった時に押したもの（間違いのときだけ入る）
   const [got, setGot] = useState([]);           // 当たった選択肢（答えが2つ以上のとき積む）
@@ -538,7 +559,9 @@ function Drill({ bid, mode, prog, setProg, back }) {
     const qn = plan.filter((x) => x.kind !== "learn").length;
     rec.current = STORE.start({
       version: dataVersion(), block: bid, mode: isTest ? "test" : "practice",
-      set: isTest ? STORE.setKey(testChunks(bid)[ci]) : "generated",
+      /* 出題範囲。作った問題は範囲という考えが無いので "generated" */
+      set: isTest ? STORE.setKey(testChunks(bid)[ci])
+        : (G && G.kind === "rules" ? "generated" : STORE.setKey(bank(bid) || [])),
       of: qn, passLine: passLine(qn)
     });
   }
@@ -758,7 +781,7 @@ function Drill({ bid, mode, prog, setProg, back }) {
   const head = isTest
     ? "テスト " + (ci + 1)
     : (it.kind === "step" ? "見る所　" + (it.extra.i + 1) + " / " + it.extra.of
-       : "ぜんぶ見て判定");
+       : it.kind === "past" ? "練習" : "ぜんぶ見て判定");
 
   return (
     <div className="wrap">
