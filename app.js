@@ -353,9 +353,8 @@ function Home({
     }, i > 0 && /*#__PURE__*/React.createElement("div", {
       className: "link"
     }), /*#__PURE__*/React.createElement("button", {
-      className: "tile" + (clear === c.blocks.length ? " tile-clear" : "") + (ready.length ? "" : " tile-soon"),
-      onClick: () => ready.length && open(c.id),
-      disabled: !ready.length
+      className: "tile" + (clear === c.blocks.length ? " tile-clear" : ""),
+      onClick: () => open(c.id)
     }, /*#__PURE__*/React.createElement("span", {
       className: "tile-n"
     }, i + 1), /*#__PURE__*/React.createElement("span", {
@@ -410,10 +409,9 @@ function Card({
     const ready = isReady(b.id);
     const num = ready ? bank(b.id).length : b.n;
     return /*#__PURE__*/React.createElement("button", {
-      className: "trow" + (ready ? "" : " trow-soon"),
+      className: "trow",
       key: b.id,
-      onClick: () => ready && open(b.id),
-      disabled: !ready
+      onClick: () => open(b.id)
     }, /*#__PURE__*/React.createElement("span", {
       className: "trow-n"
     }, i + 1), /*#__PURE__*/React.createElement("span", {
@@ -448,6 +446,40 @@ function Brief({
   const bs = G && G.kind === "rules" ? G.blocks() : [];
   const chunks = testChunks(bid);
   const spec = G ? G.spec : null;
+
+  /* まだ中身を作っていないブロック。**押せなくするのではなく、
+     何がここに入るのかを見せる。**進み具合で止めているわけではない */
+  if (!isReady(bid)) {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "wrap"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "head"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "back",
+      onClick: back
+    }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
+      className: "head-t"
+    }, block.name), /*#__PURE__*/React.createElement("span", {
+      className: "badge badge-soon"
+    }, "\u3053\u308C\u304B\u3089")), /*#__PURE__*/React.createElement("div", {
+      className: "sec"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sec-l"
+    }, "\u3053\u3053\u306B\u5165\u308B\u554F\u984C"), /*#__PURE__*/React.createElement("div", {
+      className: "brief-t"
+    }, "\u904E\u53BB\u554F ", block.n, " \u554F"), /*#__PURE__*/React.createElement("div", {
+      className: "brief-b"
+    }, card.name, "\u306E\u672D\u306E ", block.name, " \u3067\u3059\u3002", card.note, "\u3002")), /*#__PURE__*/React.createElement("div", {
+      className: "sec"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sec-l"
+    }, "\u307E\u3060\u3067\u304D\u3066\u3044\u306A\u3044\u3053\u3068"), /*#__PURE__*/React.createElement("div", {
+      className: "brief-b"
+    }, "\u3053\u306E\u984C\u6750\u306E\u300C\u898B\u308B\u6240\u300D\u3068\u300C\u6C7A\u3081\u65B9\u300D\u3092\u3001\u904E\u53BB\u554F\u3068\u89E3\u8AAC\u304B\u3089\u8D77\u3053\u3059\u4F5C\u696D\u304C\u3053\u308C\u304B\u3089\u3067\u3059\u3002 \u3067\u304D\u308B\u3068\u3001\u307B\u304B\u306E\u30D6\u30ED\u30C3\u30AF\u3068\u540C\u3058\u3088\u3046\u306B\u3001\u7DF4\u7FD2\u3067\u899A\u3048\u3066\u304B\u3089\u30C6\u30B9\u30C8\u306B\u9032\u3081\u307E\u3059\u3002")), /*#__PURE__*/React.createElement("button", {
+      className: "go",
+      onClick: back
+    }, "\u30D6\u30ED\u30C3\u30AF\u306E\u4E00\u89A7\u306B\u3082\u3069\u308B"));
+  }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "wrap has-dock"
   }, /*#__PURE__*/React.createElement("div", {

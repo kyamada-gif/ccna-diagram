@@ -234,8 +234,9 @@ function Home({ prog, open }) {
         return (
           <div className="road" key={c.id}>
             {i > 0 && <div className="link" />}
-            <button className={"tile" + (clear === c.blocks.length ? " tile-clear" : "") + (ready.length ? "" : " tile-soon")}
-              onClick={() => ready.length && open(c.id)} disabled={!ready.length}>
+            {/* 中身がまだ無い札も開ける。**何がここに入るかを先に見せる** */}
+            <button className={"tile" + (clear === c.blocks.length ? " tile-clear" : "")}
+              onClick={() => open(c.id)}>
               <span className="tile-n">{i + 1}</span>
               <span className="tile-b">
                 <span className="tile-t">{c.name}</span>
@@ -283,8 +284,7 @@ function Card({ cid, prog, open, back }) {
         const ready = isReady(b.id);
         const num = ready ? bank(b.id).length : b.n;
         return (
-          <button className={"trow" + (ready ? "" : " trow-soon")} key={b.id}
-            onClick={() => ready && open(b.id)} disabled={!ready}>
+          <button className="trow" key={b.id} onClick={() => open(b.id)}>
             <span className="trow-n">{i + 1}</span>
             <span className="trow-b">
               <span className="trow-t">{b.name}</span>
@@ -308,6 +308,36 @@ function Brief({ bid, prog, go, back }) {
   const bs = G && G.kind === "rules" ? G.blocks() : [];
   const chunks = testChunks(bid);
   const spec = G ? G.spec : null;
+
+  /* まだ中身を作っていないブロック。**押せなくするのではなく、
+     何がここに入るのかを見せる。**進み具合で止めているわけではない */
+  if (!isReady(bid)) {
+    return (
+      <div className="wrap">
+        <div className="head">
+          <button className="back" onClick={back}>← もどる</button>
+          <span className="head-t">{block.name}</span>
+          <span className="badge badge-soon">これから</span>
+        </div>
+        <div className="sec">
+          <span className="sec-l">ここに入る問題</span>
+          <div className="brief-t">過去問 {block.n} 問</div>
+          <div className="brief-b">
+            {card.name}の札の {block.name} です。{card.note}。
+          </div>
+        </div>
+        <div className="sec">
+          <span className="sec-l">まだできていないこと</span>
+          <div className="brief-b">
+            この題材の「見る所」と「決め方」を、過去問と解説から起こす作業がこれからです。
+            できると、ほかのブロックと同じように、練習で覚えてからテストに進めます。
+          </div>
+        </div>
+        <button className="go" onClick={back}>ブロックの一覧にもどる</button>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="wrap has-dock">
