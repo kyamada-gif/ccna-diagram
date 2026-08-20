@@ -77,6 +77,14 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
   padding:var(--s2);margin-top:var(--s3);overflow-x:auto}
 .scan img{display:block;width:100%;height:auto;max-width:520px;margin:0 auto}
 
+/* 図の下に刷られている MACアドレスの一覧 */
+.mlist{margin-top:var(--s3);border:1px solid var(--line);border-radius:12px;
+  background:var(--sunk);padding:var(--s2) var(--s3)}
+.mrow{display:flex;gap:var(--s4);padding:6px 0;border-bottom:1px solid var(--bg2)}
+.mrow:last-child{border-bottom:0}
+.mk{font-size:var(--f3);font-weight:700;flex:0 0 84px}
+.mv{font-family:var(--mono);font-size:var(--f3);color:var(--blue-t)}
+
 /* 図。線と箱だけ。描くのは fig.js */
 .figwrap{background:var(--sunk);border:1px solid var(--line);border-radius:12px;
   padding:var(--s3);margin-top:var(--s3);overflow-x:auto}
@@ -255,8 +263,8 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <!-- 上の2つを組み立てる。画面側では判定しない -->
 <script src="./gen.js?v=31569" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
-<script src="./questions.js?v=75387" charset="utf-8"></script>
+<script src="./questions.js?v=76208" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=35469" charset="utf-8"></script>
+<script src="./app.js?v=36130" charset="utf-8"></script>
 </body>
 </html>

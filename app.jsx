@@ -127,6 +127,23 @@ function Scan({ image, alt }) {
   );
 }
 
+/* ── MACアドレスの一覧 ─────────────────────────
+ * 本の紙面では、図の下に別で刷られていることがある。
+ * 切り出した図には入らないので、ここで出す。**紙面と同じ並び。**
+ */
+function MacList({ sw }) {
+  return (
+    <div className="mlist">
+      {sw.map((s, i) => (
+        <div className="mrow" key={i}>
+          <span className="mk">{s.id}</span>
+          <span className="mv">{s.mac}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── 練習を組む ───────────────────────────
  * 見る所の表を、上から一個ずつ。
  *   ① その見る所を覚える（説明の札）
@@ -650,9 +667,17 @@ function Drill({ bid, mode, prog, setProg, back }) {
     const r = done && G && ex ? G.judge(G.read(ex)) : null;
     /* 過去問は、紙面から切り出した実物があればそれを出す（本番と同じ見え方）。
        無いときは、データから作った図か、出力のテキスト */
-    con = it.q.image ? <Scan image={it.q.image} alt={it.q.qid} />
+    const body = it.q.image ? <Scan image={it.q.image} alt={it.q.qid} />
         : it.q.fig ? <Figure fig={it.q.fig} />
         : it.q.exhibit ? <Console text={it.q.exhibit} hits={r ? r.look : null} /> : null;
+    con = (
+      <>
+        {body}
+        {/* 図の下に MACアドレスの一覧が別に刷られている問題。
+            これが無いと、選択肢が SW1〜SW4 だけの問題は解けない */}
+        {it.q.fig && it.q.fig.maclist && <MacList sw={it.q.fig.sw} />}
+      </>
+    );
     ask = it.q.text;
   }
   /* 問題文が自分で「2つ選択」と言っているときは、重ねて書かない */

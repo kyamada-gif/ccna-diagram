@@ -93,6 +93,23 @@ BLOCK_IDS.forEach((id) => {
     });
   }
 
+  /* **その問題が、画面に出るものだけで本当に解けるか。**
+     ルートブリッジのように答えが選択肢の1つになる問題は、
+     優先度とMACアドレスが「図の中」か「選択肢の中」か「MACの一覧」の
+     どこかに必ず出ていないと、解きようがない */
+  if (G.answer) {
+    qs.forEach((q) => {
+      const f = q.fig;
+      if (!f) return;
+      const inChoice = q.choices.some((c) => /[0-9a-f]{2}:[0-9a-f]{2}:/i.test(c));
+      const inList = !!f.maclist;
+      const inFig = !!f.figvals;   /* 図そのものに値が書かれている */
+      if (!inChoice && !inList && !inFig && q.image) {
+        bad.push(`${tag}: ${q.qid} は MACアドレスが画面のどこにも出ない（解けない）`);
+      }
+    });
+  }
+
   /* 紙面から切り出した図が、ちゃんと置いてあるか */
   qs.forEach((q) => {
     if (!q.image) return;

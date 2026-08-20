@@ -206,6 +206,25 @@ function Scan({
   }));
 }
 
+/* ── MACアドレスの一覧 ─────────────────────────
+ * 本の紙面では、図の下に別で刷られていることがある。
+ * 切り出した図には入らないので、ここで出す。**紙面と同じ並び。**
+ */
+function MacList({
+  sw
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mlist"
+  }, sw.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    className: "mrow",
+    key: i
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mk"
+  }, s.id), /*#__PURE__*/React.createElement("span", {
+    className: "mv"
+  }, s.mac))));
+}
+
 /* ── 練習を組む ───────────────────────────
  * 見る所の表を、上から一個ずつ。
  *   ① その見る所を覚える（説明の札）
@@ -869,7 +888,7 @@ function Drill({
     const r = done && G && ex ? G.judge(G.read(ex)) : null;
     /* 過去問は、紙面から切り出した実物があればそれを出す（本番と同じ見え方）。
        無いときは、データから作った図か、出力のテキスト */
-    con = it.q.image ? /*#__PURE__*/React.createElement(Scan, {
+    const body = it.q.image ? /*#__PURE__*/React.createElement(Scan, {
       image: it.q.image,
       alt: it.q.qid
     }) : it.q.fig ? /*#__PURE__*/React.createElement(Figure, {
@@ -878,6 +897,9 @@ function Drill({
       text: it.q.exhibit,
       hits: r ? r.look : null
     }) : null;
+    con = /*#__PURE__*/React.createElement(React.Fragment, null, body, it.q.fig && it.q.fig.maclist && /*#__PURE__*/React.createElement(MacList, {
+      sw: it.q.fig.sw
+    }));
     ask = it.q.text;
   }
   /* 問題文が自分で「2つ選択」と言っているときは、重ねて書かない */
