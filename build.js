@@ -158,6 +158,10 @@ BLOCK_IDS.forEach((id) => {
   totalQ += qs.length;
 });
 
+/* 画面に出る1問1問の形（練習・テストとも同じ形か、正解が選択肢の中にあるか） */
+const { run } = require(path.join(__dirname, "selftest.js"));
+run().forEach((b) => bad.push(b));
+
 console.log(`ブロック ${BLOCK_IDS.length} / 過去問 ${totalQ} 問`);
 if (bad.length) {
   console.error("\n止まりました。直してからもう一度：");

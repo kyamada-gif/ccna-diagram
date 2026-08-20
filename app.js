@@ -225,63 +225,103 @@ function MacList({
   }, s.mac))));
 }
 
+/* ── 1問の形 ─────────────────────────────
+ * **練習もテストも、同じ形にそろえる。**画面側は kind で場合分けしない。
+ *
+ *   kind    "learn"（覚える1枚）／"step"（見る所ごとの問題）
+ *           "whole"（提示物ぜんぶで判定）／"past"（過去問）
+ *   ask     問題文。learn は null
+ *   exhibit 提示物。{kind:"console", text} か {kind:"topology", fig} か null
+ *   image   紙面から切り出した実物。{src,w,h} か null
+ *   opts    選択肢。learn は null
+ *   right   正解。**いつも配列**（答えが2つ以上の問題があるため）
+ *   extra   その形だけが持つもの（覚える1枚の中身、見る所の道すじ、MACの一覧…）
+ *   note    出どころ。{qid, book, explanation}。過去問だけ
+ */
+function item(o) {
+  return {
+    kind: o.kind,
+    ask: o.ask || null,
+    exhibit: o.exhibit || null,
+    image: o.image || null,
+    opts: o.opts || null,
+    right: o.right ? Array.isArray(o.right) ? o.right : [o.right] : null,
+    extra: o.extra || {},
+    note: o.note || null
+  };
+}
+/* 提示物を1つの形にする。文字列なら出力、それ以外は図 */
+function asExhibit(x) {
+  if (x == null) return null;
+  return typeof x === "string" ? {
+    kind: "console",
+    text: x
+  } : {
+    kind: "topology",
+    fig: x
+  };
+}
+/* 判定エンジンに渡す中身を取り出す */
+function exValue(ex) {
+  return ex ? ex.kind === "console" ? ex.text : ex.fig : null;
+}
+
 /* ── 練習を組む ───────────────────────────
  * 見る所の表を、上から一個ずつ。
  *   ① その見る所を覚える（説明の札）
  *   ② 決まるとき / 決まらないとき の2問
- * 最後に、出力ぜんぶで判定を3問。
+ * 最後に、提示物ぜんぶで判定を3問。
  */
 function makePractice(G) {
   if (!G || G.kind !== "rules") return [];
   const bs = G.blocks();
   const out = [];
   bs.forEach((b, i) => {
-    out.push({
+    out.push(item({
       kind: "learn",
-      b: b,
-      i: i,
-      of: bs.length
-    });
+      extra: {
+        block: b,
+        i: i,
+        of: bs.length
+      }
+    }));
     [true, false].forEach(hit => {
       const r = G.reach(i, hit);
       if (!r) return;
       const st = r.step;
       /* 聞き方と選択肢を、その題材が自分で持っているときは、そちらを使う。
          **画面側では文を組み立てない**（判定と同じ考え方） */
+      let ask, opts, right;
       if (G.spec.walk) {
         const w = G.spec.walk(st, G.read(r.text), G.shuffle);
-        out.push({
-          kind: "walk",
-          text: r.text,
-          st: st,
-          b: b,
-          i: i,
-          of: bs.length,
-          opts: w.opts,
-          right: w.right,
-          ask: w.ask
-        });
-        return;
-      }
-      const right = st.hit ? "答えは「" + st.verdict + "」" : "次に " + st.next + " を見る";
-      const opts = [right];
-      if (st.hit) {
-        if (st.next) opts.push("次に " + st.next + " を見る");
+        ask = w.ask;
+        opts = w.opts;
+        right = w.right;
       } else {
-        opts.push("答えは「" + st.verdict + "」");
+        right = st.hit ? "答えは「" + st.verdict + "」" : "次に " + st.next + " を見る";
+        opts = [right];
+        if (st.hit) {
+          if (st.next) opts.push("次に " + st.next + " を見る");
+        } else {
+          opts.push("答えは「" + st.verdict + "」");
+        }
+        const other = G.shuffle(G.VERDICTS.filter(v => v !== st.verdict))[0];
+        if (other) opts.push("答えは「" + other + "」");
+        opts = G.shuffle(opts.slice(0, 3));
+        ask = "この値なら、どうしますか。";
       }
-      const other = G.shuffle(G.VERDICTS.filter(v => v !== st.verdict))[0];
-      if (other) opts.push("答えは「" + other + "」");
-      out.push({
-        kind: "walk",
-        text: r.text,
-        st: st,
-        b: b,
-        i: i,
-        of: bs.length,
-        opts: G.shuffle(opts.slice(0, 3)),
-        right: right
-      });
+      out.push(item({
+        kind: "step",
+        ask: ask,
+        exhibit: asExhibit(r.text),
+        opts: opts,
+        right: right,
+        extra: {
+          step: st,
+          i: i,
+          of: bs.length
+        }
+      }));
     });
   });
   for (let k = 0; k < 3; k++) {
@@ -289,30 +329,27 @@ function makePractice(G) {
     if (!g.text) continue;
     const r = G.RULES.filter(x => x.key === g.key)[0];
     /* 答えが「その場の選択肢」になるブロック（ルートブリッジなど）は、
-       誤答も同じ図の中の別のスイッチから作る */
+       誤答も同じ提示物の中の別のものから作る */
+    let opts, right;
     if (G.answer) {
       const v = G.read(g.text);
-      const right = G.answer(v);
-      const opts = G.shuffle(v.sw.map(x => x.id));
-      out.push({
-        kind: "judge",
-        text: g.text,
-        i: bs.length,
-        of: bs.length,
-        opts: opts,
-        right: right
-      });
-      continue;
+      right = G.answer(v);
+      opts = G.shuffle(v.sw.map(x => x.id));
+    } else {
+      right = r.verdict;
+      opts = G.shuffle([r.verdict].concat(G.shuffle(G.VERDICTS.filter(v => v !== r.verdict)).slice(0, 3)));
     }
-    const wrong = G.shuffle(G.VERDICTS.filter(v => v !== r.verdict)).slice(0, 3);
-    out.push({
-      kind: "judge",
-      text: g.text,
-      i: bs.length,
-      of: bs.length,
-      opts: G.shuffle([r.verdict].concat(wrong)),
-      right: r.verdict
-    });
+    out.push(item({
+      kind: "whole",
+      ask: G.spec && G.spec.ask || "この出力で起きていることはどれですか。",
+      exhibit: asExhibit(g.text),
+      opts: opts,
+      right: right,
+      extra: {
+        i: bs.length,
+        of: bs.length
+      }
+    }));
   }
   return out;
 }
@@ -343,11 +380,22 @@ function passLine(len) {
 function makeTest(id, ci) {
   const G = engine(id);
   const sh = G ? G.shuffle : a => a.slice();
-  return sh(testChunks(id)[ci]).map(q => ({
+  return sh(testChunks(id)[ci]).map(q => item({
     kind: "past",
-    q: q,
+    ask: q.text,
+    exhibit: asExhibit(q.fig || q.exhibit || null),
+    image: q.image || null,
     opts: q.choices,
-    right: Array.isArray(q.answer) ? q.answer : [q.answer]
+    right: q.answer,
+    extra: {
+      maclist: !!(q.fig && q.fig.maclist),
+      sw: q.fig ? q.fig.sw : null
+    },
+    note: {
+      qid: q.qid,
+      book: q.book,
+      explanation: q.explanation
+    }
   }));
 }
 
@@ -784,6 +832,9 @@ function Drill({
 
   /* 見る所を覚える1枚 */
   if (it.kind === "learn") {
+    const lb = it.extra.block,
+      li = it.extra.i,
+      lof = it.extra.of;
     return /*#__PURE__*/React.createElement("div", {
       className: "wrap"
     }, /*#__PURE__*/React.createElement("div", {
@@ -793,7 +844,7 @@ function Drill({
       onClick: back
     }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
       className: "head-t"
-    }, "\u898B\u308B\u6240\u3000", it.i + 1, " / ", it.of), /*#__PURE__*/React.createElement("span", {
+    }, "\u898B\u308B\u6240\u3000", li + 1, " / ", lof), /*#__PURE__*/React.createElement("span", {
       className: "head-n"
     }, at + 1, " / ", plan.length)), /*#__PURE__*/React.createElement("div", {
       className: "bar"
@@ -806,13 +857,13 @@ function Drill({
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
-    }, it.i + 1, " \u756A\u76EE\u306B\u898B\u308B\u6240"), /*#__PURE__*/React.createElement("div", {
+    }, li + 1, " \u756A\u76EE\u306B\u898B\u308B\u6240"), /*#__PURE__*/React.createElement("div", {
       className: "brief-t"
-    }, it.b.name)), /*#__PURE__*/React.createElement("div", {
+    }, lb.name)), /*#__PURE__*/React.createElement("div", {
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
-    }, "\u4F55\u3092\u8868\u3059\u304B"), it.b.spots.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    }, "\u4F55\u3092\u8868\u3059\u304B"), lb.spots.map((s, i) => /*#__PURE__*/React.createElement("div", {
       className: "brief-r",
       key: i
     }, /*#__PURE__*/React.createElement("span", {
@@ -823,14 +874,14 @@ function Drill({
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
-    }, "\u3069\u3046\u4F7F\u3046\u304B"), it.b.spots.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    }, "\u3069\u3046\u4F7F\u3046\u304B"), lb.spots.map((s, i) => /*#__PURE__*/React.createElement("div", {
       className: "brief-b",
       key: i
     }, s.use))), /*#__PURE__*/React.createElement("div", {
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
-    }, "\u3053\u3053\u3067\u6C7A\u307E\u308B\u3068\u304D"), it.b.cond.map((c, i) => /*#__PURE__*/React.createElement("div", {
+    }, "\u3053\u3053\u3067\u6C7A\u307E\u308B\u3068\u304D"), lb.cond.map((c, i) => /*#__PURE__*/React.createElement("div", {
       className: "brief-r",
       key: i
     }, /*#__PURE__*/React.createElement("span", {
@@ -843,91 +894,65 @@ function Drill({
       className: "brief-k"
     }, "\u306A\u3089"), /*#__PURE__*/React.createElement("span", {
       className: "brief-v brief-hit"
-    }, it.b.verdict)), /*#__PURE__*/React.createElement("div", {
+    }, lb.verdict)), /*#__PURE__*/React.createElement("div", {
       className: "gloss"
-    }, G.gloss(it.b.verdict)), /*#__PURE__*/React.createElement("div", {
+    }, G.gloss(lb.verdict)), /*#__PURE__*/React.createElement("div", {
       className: "brief-b"
-    }, it.i + 1 < it.of ? "決まらなければ、次の所を見ます。" : "ここまでで決まらないときの、最後の所です。")), /*#__PURE__*/React.createElement("button", {
+    }, li + 1 < lof ? "決まらなければ、次の所を見ます。" : "ここまでで決まらないときの、最後の所です。")), /*#__PURE__*/React.createElement("button", {
       className: "go",
       onClick: next
     }, "\u3053\u306E\u6240\u306E\u554F\u984C\u3078\uFF08Enter\uFF09"));
   }
-  const isFig = G && G.view === "topology";
-  let con = null,
-    vals = null,
-    ask = null;
-  if (it.kind === "walk") {
-    con = isFig ? /*#__PURE__*/React.createElement(Figure, {
-      fig: it.text
-    }) : /*#__PURE__*/React.createElement(Console, {
-      text: it.text,
-      hits: it.st.look
-    });
-    vals = /*#__PURE__*/React.createElement("div", {
-      className: "vals"
-    }, it.st.values.map((v, i) => /*#__PURE__*/React.createElement("div", {
-      className: "val",
-      key: i
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "val-k"
-    }, v.name), /*#__PURE__*/React.createElement("span", {
-      className: "val-v"
-    }, v.value))));
-    ask = it.ask || "この値なら、どうしますか。";
-  } else if (it.kind === "judge") {
-    const r = done ? G.judge(G.read(it.text)) : null;
-    con = isFig ? /*#__PURE__*/React.createElement(Figure, {
-      fig: it.text
-    }) : /*#__PURE__*/React.createElement(Console, {
-      text: it.text,
-      hits: r ? r.look : null
-    });
-    ask = G.spec && G.spec.ask || "この出力で起きていることはどれですか。";
-  } else {
-    const ex = it.q.fig || it.q.exhibit;
-    const r = done && G && ex ? G.judge(G.read(ex)) : null;
-    /* 過去問は、紙面から切り出した実物があればそれを出す（本番と同じ見え方）。
-       無いときは、データから作った図か、出力のテキスト */
-    const body = it.q.image ? /*#__PURE__*/React.createElement(Scan, {
-      image: it.q.image,
-      alt: it.q.qid
-    }) : it.q.fig ? /*#__PURE__*/React.createElement(Figure, {
-      fig: it.q.fig
-    }) : it.q.exhibit ? /*#__PURE__*/React.createElement(Console, {
-      text: it.q.exhibit,
-      hits: r ? r.look : null
-    }) : null;
-    con = /*#__PURE__*/React.createElement(React.Fragment, null, body, it.q.fig && it.q.fig.maclist && /*#__PURE__*/React.createElement(MacList, {
-      sw: it.q.fig.sw
-    }));
-    ask = it.q.text;
-  }
+
+  /* **kind で場合分けしない。**あるものを出すだけ */
+  const exv = exValue(it.exhibit);
+  const hitWords = it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null;
+  const con = /*#__PURE__*/React.createElement(React.Fragment, null, it.image ? /*#__PURE__*/React.createElement(Scan, {
+    image: it.image,
+    alt: it.note ? it.note.qid : ""
+  }) : it.exhibit && it.exhibit.kind === "topology" ? /*#__PURE__*/React.createElement(Figure, {
+    fig: it.exhibit.fig
+  }) : it.exhibit ? /*#__PURE__*/React.createElement(Console, {
+    text: it.exhibit.text,
+    hits: hitWords
+  }) : null, it.extra.maclist && /*#__PURE__*/React.createElement(MacList, {
+    sw: it.extra.sw
+  }));
+  const vals = it.kind === "step" ? /*#__PURE__*/React.createElement("div", {
+    className: "vals"
+  }, it.extra.step.values.map((v, i) => /*#__PURE__*/React.createElement("div", {
+    className: "val",
+    key: i
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "val-k"
+  }, v.name), /*#__PURE__*/React.createElement("span", {
+    className: "val-v"
+  }, v.value)))) : null;
+  let ask = it.ask || "";
   /* 問題文が自分で「2つ選択」と言っているときは、重ねて書かない */
   if (rights.length > 1 && !/つ選|選択して/.test(ask)) {
     ask = ask + "（" + rights.length + "つ選びます）";
   }
   let note = null;
   if (done) {
-    if (it.kind === "walk") {
+    if (it.kind === "step") {
+      const st = it.extra.step;
       note = /*#__PURE__*/React.createElement(Note, {
-        title: it.right,
-        body: it.st.why,
-        gloss: it.st.hit ? G.gloss(it.st.verdict) : ""
+        title: it.right[0],
+        body: st.why,
+        gloss: st.hit ? G.gloss(st.verdict) : ""
       });
-    } else if (it.kind === "judge") note = /*#__PURE__*/React.createElement(Steps, {
-      t: G.trace(it.text)
-    });else {
-      const ex = it.q.fig || it.q.exhibit;
-      note = /*#__PURE__*/React.createElement(React.Fragment, null, it.q.image && it.q.fig && /*#__PURE__*/React.createElement(Figure, {
-        fig: it.q.fig
+    } else {
+      note = /*#__PURE__*/React.createElement(React.Fragment, null, it.image && it.exhibit && it.exhibit.kind === "topology" && /*#__PURE__*/React.createElement(Figure, {
+        fig: it.exhibit.fig
       }), /*#__PURE__*/React.createElement(Steps, {
-        t: G && ex ? G.trace(ex) : null,
-        answer: rights.join(" ／ "),
-        book: it.q.explanation
+        t: G && exv ? G.trace(exv) : null,
+        answer: it.note ? rights.join(" ／ ") : null,
+        book: it.note ? it.note.explanation : null
       }));
     }
   }
-  const head = isTest ? "テスト " + (ci + 1) : it.kind === "walk" ? "見る所　" + (it.i + 1) + " / " + it.of : "出力ぜんぶで判定";
+  const head = isTest ? "テスト " + (ci + 1) : it.kind === "step" ? "見る所　" + (it.extra.i + 1) + " / " + it.extra.of : "ぜんぶ見て判定";
   return /*#__PURE__*/React.createElement("div", {
     className: "wrap"
   }, /*#__PURE__*/React.createElement("div", {
@@ -979,9 +1004,9 @@ function Drill({
   }, "\uD83D\uDD01 \u3082\u3046\u4E00\u5EA6\u30C1\u30E3\u30EC\u30F3\u30B8\uFF08Enter\uFF09") : /*#__PURE__*/React.createElement("button", {
     className: "go",
     onClick: next
-  }, at + 1 >= plan.length ? "結果を見る（Enter）" : "次へ（Enter）"), it.kind === "past" && /*#__PURE__*/React.createElement("div", {
+  }, at + 1 >= plan.length ? "結果を見る（Enter）" : "次へ（Enter）"), it.note && /*#__PURE__*/React.createElement("div", {
     className: "src"
-  }, it.q.qid));
+  }, it.note.qid));
 }
 function App() {
   const [prog, setProg] = useState(load);

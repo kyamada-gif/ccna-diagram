@@ -144,38 +144,68 @@ function MacList({ sw }) {
   );
 }
 
+/* ── 1問の形 ─────────────────────────────
+ * **練習もテストも、同じ形にそろえる。**画面側は kind で場合分けしない。
+ *
+ *   kind    "learn"（覚える1枚）／"step"（見る所ごとの問題）
+ *           "whole"（提示物ぜんぶで判定）／"past"（過去問）
+ *   ask     問題文。learn は null
+ *   exhibit 提示物。{kind:"console", text} か {kind:"topology", fig} か null
+ *   image   紙面から切り出した実物。{src,w,h} か null
+ *   opts    選択肢。learn は null
+ *   right   正解。**いつも配列**（答えが2つ以上の問題があるため）
+ *   extra   その形だけが持つもの（覚える1枚の中身、見る所の道すじ、MACの一覧…）
+ *   note    出どころ。{qid, book, explanation}。過去問だけ
+ */
+function item(o) {
+  return { kind: o.kind, ask: o.ask || null,
+           exhibit: o.exhibit || null, image: o.image || null,
+           opts: o.opts || null,
+           right: o.right ? (Array.isArray(o.right) ? o.right : [o.right]) : null,
+           extra: o.extra || {}, note: o.note || null };
+}
+/* 提示物を1つの形にする。文字列なら出力、それ以外は図 */
+function asExhibit(x) {
+  if (x == null) return null;
+  return typeof x === "string" ? { kind: "console", text: x } : { kind: "topology", fig: x };
+}
+/* 判定エンジンに渡す中身を取り出す */
+function exValue(ex) { return ex ? (ex.kind === "console" ? ex.text : ex.fig) : null; }
+
 /* ── 練習を組む ───────────────────────────
  * 見る所の表を、上から一個ずつ。
  *   ① その見る所を覚える（説明の札）
  *   ② 決まるとき / 決まらないとき の2問
- * 最後に、出力ぜんぶで判定を3問。
+ * 最後に、提示物ぜんぶで判定を3問。
  */
 function makePractice(G) {
   if (!G || G.kind !== "rules") return [];
   const bs = G.blocks();
   const out = [];
   bs.forEach((b, i) => {
-    out.push({ kind: "learn", b: b, i: i, of: bs.length });
+    out.push(item({ kind: "learn", extra: { block: b, i: i, of: bs.length } }));
     [true, false].forEach((hit) => {
       const r = G.reach(i, hit);
       if (!r) return;
       const st = r.step;
       /* 聞き方と選択肢を、その題材が自分で持っているときは、そちらを使う。
          **画面側では文を組み立てない**（判定と同じ考え方） */
+      let ask, opts, right;
       if (G.spec.walk) {
         const w = G.spec.walk(st, G.read(r.text), G.shuffle);
-        out.push({ kind: "walk", text: r.text, st: st, b: b, i: i, of: bs.length,
-          opts: w.opts, right: w.right, ask: w.ask });
-        return;
+        ask = w.ask; opts = w.opts; right = w.right;
+      } else {
+        right = st.hit ? "答えは「" + st.verdict + "」" : "次に " + st.next + " を見る";
+        opts = [right];
+        if (st.hit) { if (st.next) opts.push("次に " + st.next + " を見る"); }
+        else { opts.push("答えは「" + st.verdict + "」"); }
+        const other = G.shuffle(G.VERDICTS.filter((v) => v !== st.verdict))[0];
+        if (other) opts.push("答えは「" + other + "」");
+        opts = G.shuffle(opts.slice(0, 3));
+        ask = "この値なら、どうしますか。";
       }
-      const right = st.hit ? "答えは「" + st.verdict + "」" : "次に " + st.next + " を見る";
-      const opts = [right];
-      if (st.hit) { if (st.next) opts.push("次に " + st.next + " を見る"); }
-      else { opts.push("答えは「" + st.verdict + "」"); }
-      const other = G.shuffle(G.VERDICTS.filter((v) => v !== st.verdict))[0];
-      if (other) opts.push("答えは「" + other + "」");
-      out.push({ kind: "walk", text: r.text, st: st, b: b, i: i, of: bs.length,
-        opts: G.shuffle(opts.slice(0, 3)), right: right });
+      out.push(item({ kind: "step", ask: ask, exhibit: asExhibit(r.text),
+        opts: opts, right: right, extra: { step: st, i: i, of: bs.length } }));
     });
   });
   for (let k = 0; k < 3; k++) {
@@ -183,18 +213,21 @@ function makePractice(G) {
     if (!g.text) continue;
     const r = G.RULES.filter((x) => x.key === g.key)[0];
     /* 答えが「その場の選択肢」になるブロック（ルートブリッジなど）は、
-       誤答も同じ図の中の別のスイッチから作る */
+       誤答も同じ提示物の中の別のものから作る */
+    let opts, right;
     if (G.answer) {
       const v = G.read(g.text);
-      const right = G.answer(v);
-      const opts = G.shuffle(v.sw.map((x) => x.id));
-      out.push({ kind: "judge", text: g.text, i: bs.length, of: bs.length,
-        opts: opts, right: right });
-      continue;
+      right = G.answer(v);
+      opts = G.shuffle(v.sw.map((x) => x.id));
+    } else {
+      right = r.verdict;
+      opts = G.shuffle([r.verdict].concat(
+        G.shuffle(G.VERDICTS.filter((v) => v !== r.verdict)).slice(0, 3)));
     }
-    const wrong = G.shuffle(G.VERDICTS.filter((v) => v !== r.verdict)).slice(0, 3);
-    out.push({ kind: "judge", text: g.text, i: bs.length, of: bs.length,
-      opts: G.shuffle([r.verdict].concat(wrong)), right: r.verdict });
+    out.push(item({ kind: "whole",
+      ask: (G.spec && G.spec.ask) || "この出力で起きていることはどれですか。",
+      exhibit: asExhibit(g.text), opts: opts, right: right,
+      extra: { i: bs.length, of: bs.length } }));
   }
   return out;
 }
@@ -224,9 +257,13 @@ function passLine(len) { return Math.max(1, len - 1); }
 function makeTest(id, ci) {
   const G = engine(id);
   const sh = G ? G.shuffle : (a) => a.slice();
-  return sh(testChunks(id)[ci]).map((q) => ({
-    kind: "past", q: q, opts: q.choices,
-    right: Array.isArray(q.answer) ? q.answer : [q.answer]
+  return sh(testChunks(id)[ci]).map((q) => item({
+    kind: "past", ask: q.text,
+    exhibit: asExhibit(q.fig || q.exhibit || null),
+    image: q.image || null,
+    opts: q.choices, right: q.answer,
+    extra: { maclist: !!(q.fig && q.fig.maclist), sw: q.fig ? q.fig.sw : null },
+    note: { qid: q.qid, book: q.book, explanation: q.explanation }
   }));
 }
 
@@ -595,22 +632,23 @@ function Drill({ bid, mode, prog, setProg, back }) {
 
   /* 見る所を覚える1枚 */
   if (it.kind === "learn") {
+    const lb = it.extra.block, li = it.extra.i, lof = it.extra.of;
     return (
       <div className="wrap">
         <div className="head">
           <button className="back" onClick={back}>← もどる</button>
-          <span className="head-t">見る所　{it.i + 1} / {it.of}</span>
+          <span className="head-t">見る所　{li + 1} / {lof}</span>
           <span className="head-n">{at + 1} / {plan.length}</span>
         </div>
         <div className="bar"><div className="bar-in" style={{ width: (at / plan.length * 100) + "%" }} /></div>
 
         <div className="sec">
-          <span className="sec-l">{it.i + 1} 番目に見る所</span>
-          <div className="brief-t">{it.b.name}</div>
+          <span className="sec-l">{li + 1} 番目に見る所</span>
+          <div className="brief-t">{lb.name}</div>
         </div>
         <div className="sec">
           <span className="sec-l">何を表すか</span>
-          {it.b.spots.map((s, i) => (
+          {lb.spots.map((s, i) => (
             <div className="brief-r" key={i}>
               <span className="brief-k">{s.name}</span>
               <span className="brief-v">{s.mean}</span>
@@ -619,11 +657,11 @@ function Drill({ bid, mode, prog, setProg, back }) {
         </div>
         <div className="sec">
           <span className="sec-l">どう使うか</span>
-          {it.b.spots.map((s, i) => <div className="brief-b" key={i}>{s.use}</div>)}
+          {lb.spots.map((s, i) => <div className="brief-b" key={i}>{s.use}</div>)}
         </div>
         <div className="sec">
           <span className="sec-l">ここで決まるとき</span>
-          {it.b.cond.map((c, i) => (
+          {lb.cond.map((c, i) => (
             <div className="brief-r" key={i}>
               <span className="brief-k">もし</span>
               <span className="brief-v">{c}</span>
@@ -631,11 +669,11 @@ function Drill({ bid, mode, prog, setProg, back }) {
           ))}
           <div className="brief-r">
             <span className="brief-k">なら</span>
-            <span className="brief-v brief-hit">{it.b.verdict}</span>
+            <span className="brief-v brief-hit">{lb.verdict}</span>
           </div>
-          <div className="gloss">{G.gloss(it.b.verdict)}</div>
+          <div className="gloss">{G.gloss(lb.verdict)}</div>
           <div className="brief-b">
-            {it.i + 1 < it.of ? "決まらなければ、次の所を見ます。" : "ここまでで決まらないときの、最後の所です。"}
+            {li + 1 < lof ? "決まらなければ、次の所を見ます。" : "ここまでで決まらないときの、最後の所です。"}
           </div>
         </div>
         <button className="go" onClick={next}>この所の問題へ（Enter）</button>
@@ -643,43 +681,31 @@ function Drill({ bid, mode, prog, setProg, back }) {
     );
   }
 
-  const isFig = G && G.view === "topology";
-  let con = null, vals = null, ask = null;
-  if (it.kind === "walk") {
-    con = isFig ? <Figure fig={it.text} /> : <Console text={it.text} hits={it.st.look} />;
-    vals = (
-      <div className="vals">
-        {it.st.values.map((v, i) => (
-          <div className="val" key={i}>
-            <span className="val-k">{v.name}</span>
-            <span className="val-v">{v.value}</span>
-          </div>
-        ))}
-      </div>
-    );
-    ask = it.ask || "この値なら、どうしますか。";
-  } else if (it.kind === "judge") {
-    const r = done ? G.judge(G.read(it.text)) : null;
-    con = isFig ? <Figure fig={it.text} /> : <Console text={it.text} hits={r ? r.look : null} />;
-    ask = (G.spec && G.spec.ask) || "この出力で起きていることはどれですか。";
-  } else {
-    const ex = it.q.fig || it.q.exhibit;
-    const r = done && G && ex ? G.judge(G.read(ex)) : null;
-    /* 過去問は、紙面から切り出した実物があればそれを出す（本番と同じ見え方）。
-       無いときは、データから作った図か、出力のテキスト */
-    const body = it.q.image ? <Scan image={it.q.image} alt={it.q.qid} />
-        : it.q.fig ? <Figure fig={it.q.fig} />
-        : it.q.exhibit ? <Console text={it.q.exhibit} hits={r ? r.look : null} /> : null;
-    con = (
-      <>
-        {body}
-        {/* 図の下に MACアドレスの一覧が別に刷られている問題。
-            これが無いと、選択肢が SW1〜SW4 だけの問題は解けない */}
-        {it.q.fig && it.q.fig.maclist && <MacList sw={it.q.fig.sw} />}
-      </>
-    );
-    ask = it.q.text;
-  }
+  /* **kind で場合分けしない。**あるものを出すだけ */
+  const exv = exValue(it.exhibit);
+  const hitWords = it.kind === "step" ? it.extra.step.look
+    : (done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
+  const con = (
+    <>
+      {it.image ? <Scan image={it.image} alt={it.note ? it.note.qid : ""} />
+        : it.exhibit && it.exhibit.kind === "topology" ? <Figure fig={it.exhibit.fig} />
+        : it.exhibit ? <Console text={it.exhibit.text} hits={hitWords} /> : null}
+      {/* 図の下に MACアドレスの一覧が別に刷られている問題。
+          これが無いと、選択肢が SW1〜SW4 だけの問題は解けない */}
+      {it.extra.maclist && <MacList sw={it.extra.sw} />}
+    </>
+  );
+  const vals = it.kind === "step" ? (
+    <div className="vals">
+      {it.extra.step.values.map((v, i) => (
+        <div className="val" key={i}>
+          <span className="val-k">{v.name}</span>
+          <span className="val-v">{v.value}</span>
+        </div>
+      ))}
+    </div>
+  ) : null;
+  let ask = it.ask || "";
   /* 問題文が自分で「2つ選択」と言っているときは、重ねて書かない */
   if (rights.length > 1 && !/つ選|選択して/.test(ask)) {
     ask = ask + "（" + rights.length + "つ選びます）";
@@ -687,19 +713,19 @@ function Drill({ bid, mode, prog, setProg, back }) {
 
   let note = null;
   if (done) {
-    if (it.kind === "walk") {
-      note = <Note title={it.right} body={it.st.why}
-        gloss={it.st.hit ? G.gloss(it.st.verdict) : ""} />;
-    }
-    else if (it.kind === "judge") note = <Steps t={G.trace(it.text)} />;
-    else {
-      const ex = it.q.fig || it.q.exhibit;
+    if (it.kind === "step") {
+      const st = it.extra.step;
+      note = <Note title={it.right[0]} body={st.why}
+        gloss={st.hit ? G.gloss(st.verdict) : ""} />;
+    } else {
       note = (
         <>
           {/* 紙面の図はかすれていることがある。答え合わせでは、読み取った中身も出す */}
-          {it.q.image && it.q.fig && <Figure fig={it.q.fig} />}
-          <Steps t={G && ex ? G.trace(ex) : null}
-            answer={rights.join(" ／ ")} book={it.q.explanation} />
+          {it.image && it.exhibit && it.exhibit.kind === "topology" &&
+            <Figure fig={it.exhibit.fig} />}
+          <Steps t={G && exv ? G.trace(exv) : null}
+            answer={it.note ? rights.join(" ／ ") : null}
+            book={it.note ? it.note.explanation : null} />
         </>
       );
     }
@@ -707,7 +733,8 @@ function Drill({ bid, mode, prog, setProg, back }) {
 
   const head = isTest
     ? "テスト " + (ci + 1)
-    : (it.kind === "walk" ? "見る所　" + (it.i + 1) + " / " + it.of : "出力ぜんぶで判定");
+    : (it.kind === "step" ? "見る所　" + (it.extra.i + 1) + " / " + it.extra.of
+       : "ぜんぶ見て判定");
 
   return (
     <div className="wrap">
@@ -757,7 +784,7 @@ function Drill({ bid, mode, prog, setProg, back }) {
           {at + 1 >= plan.length ? "結果を見る（Enter）" : "次へ（Enter）"}
         </button>
       )}
-      {it.kind === "past" && <div className="src">{it.q.qid}</div>}
+      {it.note && <div className="src">{it.note.qid}</div>}
     </div>
   );
 }
