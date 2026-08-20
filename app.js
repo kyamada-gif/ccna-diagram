@@ -104,32 +104,40 @@ const CARDS = [{
   blocks: [{
     id: "etherchannel",
     name: "EtherChannel",
-    n: 22
-  }, {
-    id: "access",
-    name: "機器への入り方",
-    n: 14
+    n: 20
   }, {
     id: "trunk",
     name: "トランク",
+    n: 11
+  }, {
+    id: "access",
+    name: "機器への入り方",
     n: 10
   }, {
     id: "vlan",
-    name: "VLAN",
-    n: 9
+    name: "VLAN の設定と確認",
+    n: 10
   }, {
     id: "othercfg",
     name: "そのほかの設定",
-    n: 18
+    n: 13
   }]
 }, {
   id: "misc",
   name: "そのほか",
   note: "決まった見る所が立たない、一点物",
   blocks: [{
+    id: "wlangui",
+    name: "無線の画面を読む",
+    n: 12
+  }, {
+    id: "nolink",
+    name: "つながらない原因をさがす",
+    n: 4
+  }, {
     id: "misc",
-    name: "題材ごとに分けます",
-    n: 32
+    name: "そのほか",
+    n: 8
   }]
 }];
 const bank = id => typeof BANKS !== "undefined" && BANKS[id] || null;

@@ -56,16 +56,18 @@ const CARDS = [
   { id: "config", name: "足りない設定を選ぶ",
     note: "要件と今の設定を読んで、打つコマンドを選ぶ",
     blocks: [
-      { id: "etherchannel", name: "EtherChannel", n: 22 },
-      { id: "access", name: "機器への入り方", n: 14 },
-      { id: "trunk", name: "トランク", n: 10 },
-      { id: "vlan", name: "VLAN", n: 9 },
-      { id: "othercfg", name: "そのほかの設定", n: 18 }
+      { id: "etherchannel", name: "EtherChannel", n: 20 },
+      { id: "trunk", name: "トランク", n: 11 },
+      { id: "access", name: "機器への入り方", n: 10 },
+      { id: "vlan", name: "VLAN の設定と確認", n: 10 },
+      { id: "othercfg", name: "そのほかの設定", n: 13 }
     ] },
   { id: "misc", name: "そのほか",
     note: "決まった見る所が立たない、一点物",
     blocks: [
-      { id: "misc", name: "題材ごとに分けます", n: 32 }
+      { id: "wlangui", name: "無線の画面を読む", n: 12 },
+      { id: "nolink", name: "つながらない原因をさがす", n: 4 },
+      { id: "misc", name: "そのほか", n: 8 }
     ] }
 ];
 

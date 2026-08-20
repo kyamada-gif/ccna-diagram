@@ -190,6 +190,44 @@ BLOCK_IDS.forEach((id) => {
   });
 }
 
+/* ── 全問カバーの見張り ───────────────────────
+ * **束B の335問が、どれかのブロックに入っているか。**
+ * 入っていない問題は、out/full/not_used.csv に理由つきで載っていなければならない。
+ * **黙って落ちた問題を、ここで見つける。**
+ */
+{
+  const csvPath = path.join(__dirname, "..", "out", "full", "bucket_review.csv");
+  const notUsed = path.join(__dirname, "..", "out", "full", "not_used.csv");
+  if (fs.existsSync(csvPath) && fs.existsSync(notUsed)) {
+    const cell = (line) => {
+      /* 「,」を含む値は引用符でくくられている。素朴に割らない */
+      const out = []; let cur = "", q = false;
+      for (const ch of line) {
+        if (ch === '"') q = !q;
+        else if (ch === "," && !q) { out.push(cur); cur = ""; }
+        else cur += ch;
+      }
+      out.push(cur); return out;
+    };
+    const rows = fs.readFileSync(csvPath, "utf8").split("\n").filter(Boolean).map(cell);
+    const head = rows[0];
+    const iQid = head.indexOf("問題番号"), iB1 = head.indexOf("束（機械）"),
+          iB2 = head.indexOf("束（直したもの）");
+    const all = rows.slice(1).filter((r) => (r[iB2] || r[iB1]) === "B").map((r) => r[iQid]);
+    const placed = new Set();
+    Object.keys(BANKS).forEach((id) => (BANKS[id] || []).forEach((q) => {
+      (q.from || [String(q.qid).replace(/#\d+$/, "")]).forEach((f) => placed.add(f));
+    }));
+    const excused = new Set(fs.readFileSync(notUsed, "utf8").split("\n")
+      .slice(1).filter(Boolean).map((l) => cell(l)[0]));
+    const lost = all.filter((q) => !placed.has(q) && !excused.has(q));
+    const covered = all.filter((q) => placed.has(q)).length;
+    console.log(`束B ${all.length} 問中 ${covered} 問がブロックに入っている` +
+      `（出さないと決めた ${excused.size} 問をのぞく）`);
+    lost.forEach((q) => bad.push(`${q} がどのブロックにも入らず、理由も書かれていない`));
+  }
+}
+
 /* ── 引き継ぎの見張り ─────────────────────────
  * ブロックが「この問題はよそのブロック行き」と言ったら（spec.movedTo）、
  * **その問題が本当にどこかのブロックに入っているか**を確かめる。
