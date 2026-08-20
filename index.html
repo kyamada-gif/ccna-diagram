@@ -44,16 +44,34 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 @media (prefers-reduced-motion:reduce){.bar-in{transition:none}}
 .road{margin-bottom:var(--s2)}
 .link{width:2px;height:16px;background:var(--line);margin:0 auto}
-.tile{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;
+/* 札。**はじめは札だけ。押した札にだけ、2つのボタンが出る**（ipcalc2 と同じ）。
+   8つのボタンが最初から並んでいると、どこを見ればいいのか分からなくなる */
+.tile{display:block;width:100%;text-align:left;
   background:var(--bg-tile);border:1px solid var(--line);border-radius:12px;
-  padding:var(--s3) var(--s4);min-height:44px}
-.tile:active{background:var(--bg2)}
+  padding:var(--s3) var(--s4);transition:.15s}
+.tile.pick{border-color:var(--blue)}
 .tile-clear{border-color:var(--green-s)}
+.t-top{display:flex;align-items:center;gap:var(--s3)}
+.t-h{display:flex;align-items:center;gap:var(--s3);flex:1;min-width:0;
+  text-align:left;min-height:48px}
+.t-h:active{opacity:.7}
 .tile-n{font-family:var(--mono);font-size:var(--f4);color:var(--ink2);flex:0 0 auto;
   width:22px;text-align:center}
 .tile-b{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
 .tile-t{font-size:var(--f3);font-weight:700}
 .tile-s{font-size:var(--f2);color:var(--ink2);line-height:1.5}
+/* 札の中に出る2つのボタン。ここでは緑にしない（札の列の中で目立ちすぎる） */
+.t-go{display:flex;gap:var(--s2);margin-top:var(--s3)}
+.t-go .go{flex:1;min-height:44px;margin-top:0;padding:10px 6px;
+  background:var(--bg);border:1px solid var(--line);
+  font-size:var(--f3);font-weight:700;color:var(--ink)}
+
+/* どの分野をやるか選ぶタブ */
+.tabs{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0 var(--s4)}
+.tab{border:1px solid var(--line);border-radius:99px;padding:8px var(--s4);
+  min-height:40px;font-size:var(--f2);color:var(--ink2);background:var(--bg1)}
+.tab.on{border-color:var(--blue);color:var(--blue-t);background:var(--blue-bg);font-weight:700}
+.tab-yet{opacity:.55}
 .badge{font-size:var(--f1);color:var(--green-t);border:1px solid var(--green-s);
   border-radius:99px;padding:2px 8px;flex:0 0 auto}
 .foot{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--line);
@@ -219,6 +237,6 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <!-- 過去問。差し替えるのはこのファイルだけ -->
 <script src="./questions.js?v=51629" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=34961" charset="utf-8"></script>
+<script src="./app.js?v=32835" charset="utf-8"></script>
 </body>
 </html>

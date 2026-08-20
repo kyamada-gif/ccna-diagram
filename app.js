@@ -321,11 +321,15 @@ function Note({
   }, body));
 }
 
-/* ── ホーム。札＝問題の型 ────────────────────── */
+/* ── ホーム。札＝問題の型 ──────────────────────
+ * **はじめは札だけ。押した札にだけ、2つのボタンが出る**（ipcalc2 と同じ）。
+ * 鍵は無い。どの札も、練習もテストも、いつでも押せる。
+ */
 function Home({
   prog,
-  open
+  go
 }) {
+  const [pick, setPick] = useState(null);
   const done = CARDS.filter(c => c.blocks.every(b => prog[b.id] && prog[b.id].badge)).length;
   return /*#__PURE__*/React.createElement("div", {
     className: "wrap"
@@ -352,9 +356,13 @@ function Home({
       key: c.id
     }, i > 0 && /*#__PURE__*/React.createElement("div", {
       className: "link"
-    }), /*#__PURE__*/React.createElement("button", {
-      className: "tile" + (clear === c.blocks.length ? " tile-clear" : ""),
-      onClick: () => open(c.id)
+    }), /*#__PURE__*/React.createElement("div", {
+      className: "tile" + (clear === c.blocks.length ? " tile-clear" : "") + (pick === c.id ? " pick" : "")
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "t-top"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "t-h",
+      onClick: () => setPick(pick === c.id ? null : c.id)
     }, /*#__PURE__*/React.createElement("span", {
       className: "tile-n"
     }, i + 1), /*#__PURE__*/React.createElement("span", {
@@ -363,122 +371,55 @@ function Home({
       className: "tile-t"
     }, c.name), /*#__PURE__*/React.createElement("span", {
       className: "tile-s"
-    }, c.note, "\u3000\uFF0F\u3000", c.blocks.length, " \u30D6\u30ED\u30C3\u30AF\u30FB\u904E\u53BB\u554F ", cardCount(c), " \u554F")), clear === c.blocks.length ? /*#__PURE__*/React.createElement("span", {
+    }, c.note, "\u3000\uFF0F\u3000", c.blocks.length, " \u30D6\u30ED\u30C3\u30AF\u30FB\u904E\u53BB\u554F ", cardCount(c), " \u554F"))), clear === c.blocks.length ? /*#__PURE__*/React.createElement("span", {
       className: "badge badge-gold"
-    }, "\uD83C\uDFC5") : ready.length ? /*#__PURE__*/React.createElement("span", {
+    }, "\uD83C\uDFC5") : /*#__PURE__*/React.createElement("span", {
       className: "trow-p"
-    }, ready.length, " / ", c.blocks.length, " \u3067\u304D\u3066\u3044\u307E\u3059") : /*#__PURE__*/React.createElement("span", {
-      className: "badge badge-soon"
-    }, "\u3053\u308C\u304B\u3089")));
+    }, ready.length, " / ", c.blocks.length, " \u3067\u304D\u3066\u3044\u307E\u3059")), pick === c.id && /*#__PURE__*/React.createElement("div", {
+      className: "t-go"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "go",
+      onClick: () => go(c.id, "practice")
+    }, "\u7DF4\u7FD2\u3092\u3059\u308B"), /*#__PURE__*/React.createElement("button", {
+      className: "go",
+      onClick: () => go(c.id, "test")
+    }, "\u30C6\u30B9\u30C8\u3092\u3059\u308B"))));
   }), /*#__PURE__*/React.createElement("div", {
     className: "foot"
   }, "\u56F3\u8868\u554F\u984C\u306F\u5168\u90E8\u3067 335 \u554F\u3042\u308A\u307E\u3059\u3002\u3069\u306E\u554F\u984C\u3082\u3001\u5FC5\u305A\u3069\u308C\u304B\u306E\u672D\u306E\u3069\u308C\u304B\u306E\u30D6\u30ED\u30C3\u30AF\u306B\u5165\u308A\u307E\u3059\u3002 \u3044\u307E\u4E2D\u8EAB\u304C\u3067\u304D\u3066\u3044\u308B\u306E\u306F\u300Cshow interface \u306E\u969C\u5BB3\u300D\u3060\u3051\u3067\u3059\u3002"));
 }
 
-/* ── 札の中。ブロックの一覧 ───────────────────── */
-function Card({
+/* ── どの分野をやるか選ぶ ───────────────────────
+ * 上のタブで分野（ブロック）を選び、中身を見てから、
+ * いちばん下のボタンで始める。練習もテストも同じ形。
+ */
+/* 上のタブ＋中身＋いちばん下のボタン */
+function Choose({
   cid,
+  kind,
+  bid,
   prog,
-  open,
+  setBid,
+  start,
   back
 }) {
   const c = CARDS.filter(x => x.id === cid)[0];
-  return /*#__PURE__*/React.createElement("div", {
-    className: "wrap"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "head"
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "back",
-    onClick: back
-  }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
-    className: "head-t"
-  }, c.name)), /*#__PURE__*/React.createElement("div", {
-    className: "sec"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sec-l"
-  }, "\u3053\u306E\u672D\u3067\u3084\u308B\u3053\u3068"), /*#__PURE__*/React.createElement("div", {
-    className: "brief-b"
-  }, c.note, "\u3002"), /*#__PURE__*/React.createElement("div", {
-    className: "brief-b"
-  }, "\u30D6\u30ED\u30C3\u30AF\u3054\u3068\u306B\u3001\u307E\u305A\u4ED5\u7D44\u307F\u3092\u899A\u3048\u3066\u3001\u305D\u306E\u3042\u3068\u540C\u3058\u6240\u306E\u904E\u53BB\u554F\u3092\u89E3\u304D\u307E\u3059\u3002")), /*#__PURE__*/React.createElement("div", {
-    className: "sec"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sec-l"
-  }, "\u30D6\u30ED\u30C3\u30AF")), c.blocks.map((b, i) => {
-    const st = prog[b.id] || {};
-    const ready = isReady(b.id);
-    const num = ready ? bank(b.id).length : b.n;
-    return /*#__PURE__*/React.createElement("button", {
-      className: "trow",
-      key: b.id,
-      onClick: () => open(b.id)
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "trow-n"
-    }, i + 1), /*#__PURE__*/React.createElement("span", {
-      className: "trow-b"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "trow-t"
-    }, b.name), /*#__PURE__*/React.createElement("span", {
-      className: "trow-s"
-    }, "\u904E\u53BB\u554F ", num, " \u554F")), st.badge ? /*#__PURE__*/React.createElement("span", {
-      className: "badge badge-gold"
-    }, "\uD83C\uDFC5") : ready ? /*#__PURE__*/React.createElement("span", {
-      className: "trow-p trow-yet"
-    }, "\u307E\u3060") : /*#__PURE__*/React.createElement("span", {
-      className: "badge badge-soon"
-    }, "\u3053\u308C\u304B\u3089"));
-  }));
-}
-
-/* ── 説明の1枚（ブロック1つぶん） ───────────────── */
-function Brief({
-  bid,
-  prog,
-  go,
-  back
-}) {
-  const {
-    card,
-    block
-  } = blockOf(bid);
-  const st = prog[bid] || {};
-  const G = engine(bid);
+  const block = c.blocks.filter(b => b.id === bid)[0] || c.blocks[0];
+  const isPractice = kind === "practice";
+  const st = prog[block.id] || {};
+  const G = engine(block.id);
   const bs = G && G.kind === "rules" ? G.blocks() : [];
-  const chunks = testChunks(bid);
+  const chunks = testChunks(block.id);
   const spec = G ? G.spec : null;
-
-  /* まだ中身を作っていないブロック。**押せなくするのではなく、
-     何がここに入るのかを見せる。**進み具合で止めているわけではない */
-  if (!isReady(bid)) {
-    return /*#__PURE__*/React.createElement("div", {
-      className: "wrap"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "head"
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "back",
-      onClick: back
-    }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
-      className: "head-t"
-    }, block.name), /*#__PURE__*/React.createElement("span", {
-      className: "badge badge-soon"
-    }, "\u3053\u308C\u304B\u3089")), /*#__PURE__*/React.createElement("div", {
-      className: "sec"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "sec-l"
-    }, "\u3053\u3053\u306B\u5165\u308B\u554F\u984C"), /*#__PURE__*/React.createElement("div", {
-      className: "brief-t"
-    }, "\u904E\u53BB\u554F ", block.n, " \u554F"), /*#__PURE__*/React.createElement("div", {
-      className: "brief-b"
-    }, card.name, "\u306E\u672D\u306E ", block.name, " \u3067\u3059\u3002", card.note, "\u3002")), /*#__PURE__*/React.createElement("div", {
-      className: "sec"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "sec-l"
-    }, "\u307E\u3060\u3067\u304D\u3066\u3044\u306A\u3044\u3053\u3068"), /*#__PURE__*/React.createElement("div", {
-      className: "brief-b"
-    }, "\u3053\u306E\u984C\u6750\u306E\u300C\u898B\u308B\u6240\u300D\u3068\u300C\u6C7A\u3081\u65B9\u300D\u3092\u3001\u904E\u53BB\u554F\u3068\u89E3\u8AAC\u304B\u3089\u8D77\u3053\u3059\u4F5C\u696D\u304C\u3053\u308C\u304B\u3089\u3067\u3059\u3002 \u3067\u304D\u308B\u3068\u3001\u307B\u304B\u306E\u30D6\u30ED\u30C3\u30AF\u3068\u540C\u3058\u3088\u3046\u306B\u3001\u7DF4\u7FD2\u3067\u899A\u3048\u3066\u304B\u3089\u30C6\u30B9\u30C8\u306B\u9032\u3081\u307E\u3059\u3002")), /*#__PURE__*/React.createElement("button", {
-      className: "go",
-      onClick: back
-    }, "\u30D6\u30ED\u30C3\u30AF\u306E\u4E00\u89A7\u306B\u3082\u3069\u308B"));
+  const ready = isReady(block.id);
+  const canGo = isPractice ? bs.length > 0 : chunks.length > 0;
+  let nextRound = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const r = (st.tests || {})[i] || {};
+    if (!r.badge) {
+      nextRound = i;
+      break;
+    }
   }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "wrap has-dock"
@@ -489,19 +430,43 @@ function Brief({
     onClick: back
   }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
     className: "head-t"
-  }, block.name), st.badge && /*#__PURE__*/React.createElement("span", {
+  }, c.name, "\u3000", isPractice ? "練習" : "テスト"), st.badge && /*#__PURE__*/React.createElement("span", {
     className: "head-n"
   }, "\uD83C\uDFC5")), /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sec-l"
-  }, "\u3053\u306E\u30D6\u30ED\u30C3\u30AF\u3067\u3084\u308B\u3053\u3068"), /*#__PURE__*/React.createElement("div", {
-    className: "brief-b"
-  }, spec ? spec.note : card.note, "\u3002\u6C7A\u3081\u624B\u306F\u6C7A\u307E\u3063\u305F\u6240\u306B\u3042\u308A\u307E\u3059\u3002 \u4E0A\u304B\u3089\u9806\u306B\u898B\u3066\u3044\u3063\u3066\u3001\u5F53\u305F\u3063\u305F\u3068\u3053\u308D\u3067\u7B54\u3048\u304C\u6C7A\u307E\u308A\u307E\u3059\u3002")), bs.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "\u3069\u306E\u5206\u91CE\u3092\u3084\u308A\u307E\u3059\u304B")), /*#__PURE__*/React.createElement("div", {
+    className: "tabs"
+  }, c.blocks.map(b => /*#__PURE__*/React.createElement("button", {
+    key: b.id,
+    className: "tab" + (b.id === block.id ? " on" : "") + (isReady(b.id) ? "" : " tab-yet"),
+    onClick: () => setBid(b.id)
+  }, b.name))), !ready ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sec-l"
-  }, "\u898B\u308B\u9806\u756A\uFF08\u7DF4\u7FD2\u3067\u4E0A\u304B\u3089\u4E00\u500B\u305A\u3064\u899A\u3048\u307E\u3059\uFF09"), /*#__PURE__*/React.createElement("div", {
+  }, "\u3053\u3053\u306B\u5165\u308B\u554F\u984C"), /*#__PURE__*/React.createElement("div", {
+    className: "brief-t"
+  }, "\u904E\u53BB\u554F ", block.n, " \u554F"), /*#__PURE__*/React.createElement("div", {
+    className: "brief-b"
+  }, c.note, "\u3002")), /*#__PURE__*/React.createElement("div", {
+    className: "sec"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sec-l"
+  }, "\u307E\u3060\u3067\u304D\u3066\u3044\u306A\u3044\u3053\u3068"), /*#__PURE__*/React.createElement("div", {
+    className: "brief-b"
+  }, "\u3053\u306E\u984C\u6750\u306E\u300C\u898B\u308B\u6240\u300D\u3068\u300C\u6C7A\u3081\u65B9\u300D\u3092\u3001\u904E\u53BB\u554F\u3068\u89E3\u8AAC\u304B\u3089\u8D77\u3053\u3059\u4F5C\u696D\u304C\u3053\u308C\u304B\u3089\u3067\u3059\u3002 \u3067\u304D\u308B\u3068\u3001\u307B\u304B\u306E\u5206\u91CE\u3068\u540C\u3058\u3088\u3046\u306B\u3001\u7DF4\u7FD2\u3067\u899A\u3048\u3066\u304B\u3089\u30C6\u30B9\u30C8\u306B\u9032\u3081\u307E\u3059\u3002"))) : isPractice ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "sec"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sec-l"
+  }, "\u3053\u306E\u5206\u91CE\u3067\u3084\u308B\u3053\u3068"), /*#__PURE__*/React.createElement("div", {
+    className: "brief-b"
+  }, spec ? spec.note : c.note, "\u3002\u6C7A\u3081\u624B\u306F\u6C7A\u307E\u3063\u305F\u6240\u306B\u3042\u308A\u307E\u3059\u3002 \u4E0A\u304B\u3089\u9806\u306B\u898B\u3066\u3044\u3063\u3066\u3001\u5F53\u305F\u3063\u305F\u3068\u3053\u308D\u3067\u7B54\u3048\u304C\u6C7A\u307E\u308A\u307E\u3059\u3002")), bs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "sec"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sec-l"
+  }, "\u898B\u308B\u9806\u756A\uFF08\u4E0A\u304B\u3089\u4E00\u500B\u305A\u3064\u899A\u3048\u307E\u3059\uFF09"), /*#__PURE__*/React.createElement("div", {
     className: "order"
   }, bs.map((x, i) => /*#__PURE__*/React.createElement("div", {
     className: "order-r",
@@ -518,55 +483,22 @@ function Brief({
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sec-l"
-  }, "\u30C6\u30B9\u30C8\u306E\u4E2D\u8EAB"), /*#__PURE__*/React.createElement("div", {
+  }, "\u7DF4\u7FD2\u306E\u4E2D\u8EAB"), /*#__PURE__*/React.createElement("div", {
     className: "brief-b"
-  }, "\u3053\u306E\u30D6\u30ED\u30C3\u30AF\u306E\u904E\u53BB\u554F ", bank(bid).length, " \u554F\u3092 ", chunks.length, " \u56DE\u306B\u5206\u3051\u3066\u3042\u308A\u307E\u3059\u3002 \u3069\u306E\u554F\u984C\u3082\u3001\u5FC5\u305A\u3069\u308C\u304B\u306E\u56DE\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002 1\u554F\u307E\u3067\u9593\u9055\u3048\u3066\u3082\u3001\u305D\u306E\u56DE\u306B\u5370\u304C\u4ED8\u304D\u307E\u3059\u3002"), spec && spec.dropped && spec.dropped.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "brief-b"
-  }, "\u3053\u306E\u984C\u6750\u306E\u56F3\u8868\u554F\u984C\u306F\u5168\u90E8\u3067 ", bank(bid).length + spec.dropped.length, " \u554F\u3042\u308A\u307E\u3059\u304C\u3001", spec.dropped.length, " \u554F\u306F\u672C\u306E\u7B54\u3048\u304C\u51FA\u529B\u3068\u98DF\u3044\u9055\u3046\u305F\u3081\u5916\u3057\u3066\u3044\u307E\u3059\u3002"))), /*#__PURE__*/React.createElement("div", {
-    className: "dock"
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "go next",
-    onClick: () => go("practice"),
-    disabled: !bs.length
-  }, "\u7DF4\u7FD2\u3092\u3059\u308B"), /*#__PURE__*/React.createElement("button", {
-    className: "go next ghost",
-    onClick: () => go("testpick")
-  }, "\u30C6\u30B9\u30C8\u3092\u3059\u308B")));
-}
-
-/* ── どのテストを受けるか選ぶ ────────────────── */
-function TestPick({
-  bid,
-  prog,
-  go,
-  back
-}) {
-  const {
-    block
-  } = blockOf(bid);
-  const st = prog[bid] || {};
-  const chunks = testChunks(bid);
-  return /*#__PURE__*/React.createElement("div", {
-    className: "wrap"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "head"
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "back",
-    onClick: back
-  }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
-    className: "head-t"
-  }, block.name, "\u3000\u30C6\u30B9\u30C8")), /*#__PURE__*/React.createElement("div", {
+  }, "\u898B\u308B\u6240\u3054\u3068\u306B\u3001\u899A\u3048\u308B1\u679A\u3068\u305D\u306E\u6240\u306E\u554F\u984C2\u554F\u3002 \u6700\u5F8C\u306B\u3001\u51FA\u529B\u305C\u3093\u3076\u3067\u5224\u5B9A\u3059\u308B\u554F\u984C\u304C3\u554F\u3042\u308A\u307E\u3059\u3002"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sec-l"
-  }, "\u3069\u306E\u30C6\u30B9\u30C8\u3092\u53D7\u3051\u307E\u3059\u304B"), /*#__PURE__*/React.createElement("div", {
+  }, "\u30C6\u30B9\u30C8\u306E\u4E2D\u8EAB"), /*#__PURE__*/React.createElement("div", {
     className: "brief-b"
-  }, "\u3053\u306E\u30D6\u30ED\u30C3\u30AF\u3067\u899A\u3048\u305F\u6240\u304C\u3001\u305D\u306E\u307E\u307E\u30C6\u30B9\u30C8\u306E\u7BC4\u56F2\u3067\u3059\u3002 1\u554F\u307E\u3067\u9593\u9055\u3048\u3066\u3082\u3001\u305D\u306E\u56DE\u306B\u5370\u304C\u4ED8\u304D\u307E\u3059\u3002")), chunks.map((c, i) => {
+  }, "\u3053\u306E\u5206\u91CE\u3067\u899A\u3048\u305F\u6240\u304C\u3001\u305D\u306E\u307E\u307E\u30C6\u30B9\u30C8\u306E\u7BC4\u56F2\u3067\u3059\u3002 \u904E\u53BB\u554F ", bank(block.id).length, " \u554F\u3092 ", chunks.length, " \u56DE\u306B\u5206\u3051\u3066\u3042\u308A\u307E\u3059\u3002 1\u554F\u307E\u3067\u9593\u9055\u3048\u3066\u3082\u3001\u305D\u306E\u56DE\u306B\u5370\u304C\u4ED8\u304D\u307E\u3059\u3002"), spec && spec.dropped && spec.dropped.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "brief-b"
+  }, "\u3053\u306E\u984C\u6750\u306E\u56F3\u8868\u554F\u984C\u306F\u5168\u90E8\u3067 ", bank(block.id).length + spec.dropped.length, " \u554F\u3042\u308A\u307E\u3059\u304C\u3001", spec.dropped.length, " \u554F\u306F\u672C\u306E\u7B54\u3048\u304C\u51FA\u529B\u3068\u98DF\u3044\u9055\u3046\u305F\u3081\u5916\u3057\u3066\u3044\u307E\u3059\u3002")), chunks.map((ch, i) => {
     const r = (st.tests || {})[i] || {};
     return /*#__PURE__*/React.createElement("button", {
       className: "trow",
       key: i,
-      onClick: () => go("test:" + i)
+      onClick: () => start("test:" + i)
     }, /*#__PURE__*/React.createElement("span", {
       className: "trow-n"
     }, i + 1), /*#__PURE__*/React.createElement("span", {
@@ -575,14 +507,20 @@ function TestPick({
       className: "trow-t"
     }, "\u30C6\u30B9\u30C8 ", i + 1), /*#__PURE__*/React.createElement("span", {
       className: "trow-s"
-    }, c.length, " \u554F\u3000", c[0].qid, " \u301C ", c[c.length - 1].qid)), r.badge ? /*#__PURE__*/React.createElement("span", {
+    }, ch.length, " \u554F\u3000", ch[0].qid, " \u301C ", ch[ch.length - 1].qid)), r.badge ? /*#__PURE__*/React.createElement("span", {
       className: "badge badge-gold"
     }, "\uD83C\uDFC5") : r.best !== undefined ? /*#__PURE__*/React.createElement("span", {
       className: "trow-p"
-    }, r.best, " / ", c.length) : /*#__PURE__*/React.createElement("span", {
+    }, r.best, " / ", ch.length) : /*#__PURE__*/React.createElement("span", {
       className: "trow-p trow-yet"
     }, "\u307E\u3060"));
-  }));
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "dock"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "go next",
+    disabled: !canGo,
+    onClick: () => start(isPractice ? "practice" : "test:" + nextRound)
+  }, isPractice ? "この分野を練習する" : "テスト " + (nextRound + 1) + " を受ける")));
 }
 
 /* ── 一問一答 ────────────────────────── */
@@ -932,8 +870,9 @@ function Drill({
 function App() {
   const [prog, setProg] = useState(load);
   const [cid, setCid] = useState(null); // 札
-  const [bid, setBid] = useState(null); // ブロック
-  const [mode, setMode] = useState(null); // null=説明 / "practice" / "testpick" / "test:N"
+  const [kind, setKind] = useState(null); // "practice" / "test"
+  const [bid, setBid] = useState(null); // 分野（ブロック）
+  const [mode, setMode] = useState(null); // null=分野を選ぶ / "practice" / "test:N"
   const homeY = useRef(0);
   useEffect(() => {
     save(prog);
@@ -941,43 +880,34 @@ function App() {
   /* ホームに戻ったときだけ、見ていた所に戻す。ほかは上から */
   useEffect(() => {
     toTop(cid === null ? homeY.current : 0);
-  }, [cid, bid, mode]);
+  }, [cid, kind, bid, mode]);
   if (cid === null) {
     return /*#__PURE__*/React.createElement(Home, {
       prog: prog,
-      open: id => {
+      go: (c, k) => {
         homeY.current = nowY();
-        setCid(id);
-        setBid(null);
+        const card = CARDS.filter(x => x.id === c)[0];
+        const first = card.blocks.filter(b => isReady(b.id))[0] || card.blocks[0];
+        setCid(c);
+        setKind(k);
+        setBid(first.id);
         setMode(null);
       }
     });
   }
-  if (bid === null) {
-    return /*#__PURE__*/React.createElement(Card, {
-      cid: cid,
-      prog: prog,
-      open: id => {
-        setBid(id);
-        setMode(null);
-      },
-      back: () => setCid(null)
-    });
-  }
   if (mode === null) {
-    return /*#__PURE__*/React.createElement(Brief, {
+    return /*#__PURE__*/React.createElement(Choose, {
+      cid: cid,
+      kind: kind,
       bid: bid,
       prog: prog,
-      go: setMode,
-      back: () => setBid(null)
-    });
-  }
-  if (mode === "testpick") {
-    return /*#__PURE__*/React.createElement(TestPick, {
-      bid: bid,
-      prog: prog,
-      go: setMode,
-      back: () => setMode(null)
+      setBid: id => setBid(id),
+      start: m => setMode(m),
+      back: () => {
+        setCid(null);
+        setKind(null);
+        setBid(null);
+      }
     });
   }
   return /*#__PURE__*/React.createElement(Drill, {
@@ -985,7 +915,7 @@ function App() {
     mode: mode,
     prog: prog,
     setProg: setProg,
-    back: () => setMode(mode.indexOf("test:") === 0 ? "testpick" : null)
+    back: () => setMode(null)
   });
 }
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));

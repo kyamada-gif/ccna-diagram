@@ -215,8 +215,12 @@ function Note({ title, body, gloss }) {
   );
 }
 
-/* ── ホーム。札＝問題の型 ────────────────────── */
-function Home({ prog, open }) {
+/* ── ホーム。札＝問題の型 ──────────────────────
+ * **はじめは札だけ。押した札にだけ、2つのボタンが出る**（ipcalc2 と同じ）。
+ * 鍵は無い。どの札も、練習もテストも、いつでも押せる。
+ */
+function Home({ prog, go }) {
+  const [pick, setPick] = useState(null);
   const done = CARDS.filter((c) =>
     c.blocks.every((b) => prog[b.id] && prog[b.id].badge)).length;
   return (
@@ -234,20 +238,28 @@ function Home({ prog, open }) {
         return (
           <div className="road" key={c.id}>
             {i > 0 && <div className="link" />}
-            {/* 中身がまだ無い札も開ける。**何がここに入るかを先に見せる** */}
-            <button className={"tile" + (clear === c.blocks.length ? " tile-clear" : "")}
-              onClick={() => open(c.id)}>
-              <span className="tile-n">{i + 1}</span>
-              <span className="tile-b">
-                <span className="tile-t">{c.name}</span>
-                <span className="tile-s">
-                  {c.note}　／　{c.blocks.length} ブロック・過去問 {cardCount(c)} 問
-                </span>
-              </span>
-              {clear === c.blocks.length ? <span className="badge badge-gold">🏅</span>
-                : ready.length ? <span className="trow-p">{ready.length} / {c.blocks.length} できています</span>
-                : <span className="badge badge-soon">これから</span>}
-            </button>
+            <div className={"tile" + (clear === c.blocks.length ? " tile-clear" : "") +
+              (pick === c.id ? " pick" : "")}>
+              <div className="t-top">
+                <button className="t-h" onClick={() => setPick(pick === c.id ? null : c.id)}>
+                  <span className="tile-n">{i + 1}</span>
+                  <span className="tile-b">
+                    <span className="tile-t">{c.name}</span>
+                    <span className="tile-s">
+                      {c.note}　／　{c.blocks.length} ブロック・過去問 {cardCount(c)} 問
+                    </span>
+                  </span>
+                </button>
+                {clear === c.blocks.length ? <span className="badge badge-gold">🏅</span>
+                  : <span className="trow-p">{ready.length} / {c.blocks.length} できています</span>}
+              </div>
+              {pick === c.id && (
+                <div className="t-go">
+                  <button className="go" onClick={() => go(c.id, "practice")}>練習をする</button>
+                  <button className="go" onClick={() => go(c.id, "test")}>テストをする</button>
+                </div>
+              )}
+            </div>
           </div>
         );
       })}
@@ -260,82 +272,27 @@ function Home({ prog, open }) {
   );
 }
 
-/* ── 札の中。ブロックの一覧 ───────────────────── */
-function Card({ cid, prog, open, back }) {
+/* ── どの分野をやるか選ぶ ───────────────────────
+ * 上のタブで分野（ブロック）を選び、中身を見てから、
+ * いちばん下のボタンで始める。練習もテストも同じ形。
+ */
+/* 上のタブ＋中身＋いちばん下のボタン */
+function Choose({ cid, kind, bid, prog, setBid, start, back }) {
   const c = CARDS.filter((x) => x.id === cid)[0];
-  return (
-    <div className="wrap">
-      <div className="head">
-        <button className="back" onClick={back}>← もどる</button>
-        <span className="head-t">{c.name}</span>
-      </div>
-      <div className="sec">
-        <span className="sec-l">この札でやること</span>
-        <div className="brief-b">{c.note}。</div>
-        <div className="brief-b">
-          ブロックごとに、まず仕組みを覚えて、そのあと同じ所の過去問を解きます。
-        </div>
-      </div>
-      <div className="sec">
-        <span className="sec-l">ブロック</span>
-      </div>
-      {c.blocks.map((b, i) => {
-        const st = prog[b.id] || {};
-        const ready = isReady(b.id);
-        const num = ready ? bank(b.id).length : b.n;
-        return (
-          <button className="trow" key={b.id} onClick={() => open(b.id)}>
-            <span className="trow-n">{i + 1}</span>
-            <span className="trow-b">
-              <span className="trow-t">{b.name}</span>
-              <span className="trow-s">過去問 {num} 問</span>
-            </span>
-            {st.badge ? <span className="badge badge-gold">🏅</span>
-              : ready ? <span className="trow-p trow-yet">まだ</span>
-              : <span className="badge badge-soon">これから</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ── 説明の1枚（ブロック1つぶん） ───────────────── */
-function Brief({ bid, prog, go, back }) {
-  const { card, block } = blockOf(bid);
-  const st = prog[bid] || {};
-  const G = engine(bid);
+  const block = c.blocks.filter((b) => b.id === bid)[0] || c.blocks[0];
+  const isPractice = kind === "practice";
+  const st = prog[block.id] || {};
+  const G = engine(block.id);
   const bs = G && G.kind === "rules" ? G.blocks() : [];
-  const chunks = testChunks(bid);
+  const chunks = testChunks(block.id);
   const spec = G ? G.spec : null;
+  const ready = isReady(block.id);
+  const canGo = isPractice ? bs.length > 0 : chunks.length > 0;
 
-  /* まだ中身を作っていないブロック。**押せなくするのではなく、
-     何がここに入るのかを見せる。**進み具合で止めているわけではない */
-  if (!isReady(bid)) {
-    return (
-      <div className="wrap">
-        <div className="head">
-          <button className="back" onClick={back}>← もどる</button>
-          <span className="head-t">{block.name}</span>
-          <span className="badge badge-soon">これから</span>
-        </div>
-        <div className="sec">
-          <span className="sec-l">ここに入る問題</span>
-          <div className="brief-t">過去問 {block.n} 問</div>
-          <div className="brief-b">
-            {card.name}の札の {block.name} です。{card.note}。
-          </div>
-        </div>
-        <div className="sec">
-          <span className="sec-l">まだできていないこと</span>
-          <div className="brief-b">
-            この題材の「見る所」と「決め方」を、過去問と解説から起こす作業がこれからです。
-            できると、ほかのブロックと同じように、練習で覚えてからテストに進めます。
-          </div>
-        </div>
-        <button className="go" onClick={back}>ブロックの一覧にもどる</button>
-      </div>
-    );
+  let nextRound = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const r = (st.tests || {})[i] || {};
+    if (!r.badge) { nextRound = i; break; }
   }
 
   return (
@@ -343,95 +300,113 @@ function Brief({ bid, prog, go, back }) {
       <div className="wrap has-dock">
         <div className="head">
           <button className="back" onClick={back}>← もどる</button>
-          <span className="head-t">{block.name}</span>
+          <span className="head-t">{c.name}　{isPractice ? "練習" : "テスト"}</span>
           {st.badge && <span className="head-n">🏅</span>}
         </div>
 
         <div className="sec">
-          <span className="sec-l">このブロックでやること</span>
-          <div className="brief-b">
-            {spec ? spec.note : card.note}。決め手は決まった所にあります。
-            上から順に見ていって、当たったところで答えが決まります。
-          </div>
+          <span className="sec-l">どの分野をやりますか</span>
+        </div>
+        <div className="tabs">
+          {c.blocks.map((b) => (
+            <button key={b.id}
+              className={"tab" + (b.id === block.id ? " on" : "") + (isReady(b.id) ? "" : " tab-yet")}
+              onClick={() => setBid(b.id)}>
+              {b.name}
+            </button>
+          ))}
         </div>
 
-        {bs.length > 0 && (
-          <div className="sec">
-            <span className="sec-l">見る順番（練習で上から一個ずつ覚えます）</span>
-            <div className="order">
-              {bs.map((x, i) => (
-                <div className="order-r" key={i}>
-                  <span className="order-n">{i + 1}</span>
-                  <span className="order-k">{x.name}</span>
-                  <span className="order-v">{x.verdict}
-                    <span className="order-g">{G.gloss(x.verdict)}</span></span>
+        {!ready ? (
+          <>
+            <div className="sec">
+              <span className="sec-l">ここに入る問題</span>
+              <div className="brief-t">過去問 {block.n} 問</div>
+              <div className="brief-b">{c.note}。</div>
+            </div>
+            <div className="sec">
+              <span className="sec-l">まだできていないこと</span>
+              <div className="brief-b">
+                この題材の「見る所」と「決め方」を、過去問と解説から起こす作業がこれからです。
+                できると、ほかの分野と同じように、練習で覚えてからテストに進めます。
+              </div>
+            </div>
+          </>
+        ) : isPractice ? (
+          <>
+            <div className="sec">
+              <span className="sec-l">この分野でやること</span>
+              <div className="brief-b">
+                {spec ? spec.note : c.note}。決め手は決まった所にあります。
+                上から順に見ていって、当たったところで答えが決まります。
+              </div>
+            </div>
+            {bs.length > 0 && (
+              <div className="sec">
+                <span className="sec-l">見る順番（上から一個ずつ覚えます）</span>
+                <div className="order">
+                  {bs.map((x, i) => (
+                    <div className="order-r" key={i}>
+                      <span className="order-n">{i + 1}</span>
+                      <span className="order-k">{x.name}</span>
+                      <span className="order-v">{x.verdict}
+                        <span className="order-g">{G.gloss(x.verdict)}</span></span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+            <div className="sec">
+              <span className="sec-l">練習の中身</span>
+              <div className="brief-b">
+                見る所ごとに、覚える1枚とその所の問題2問。
+                最後に、出力ぜんぶで判定する問題が3問あります。
+              </div>
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            <div className="sec">
+              <span className="sec-l">テストの中身</span>
+              <div className="brief-b">
+                この分野で覚えた所が、そのままテストの範囲です。
+                過去問 {bank(block.id).length} 問を {chunks.length} 回に分けてあります。
+                1問まで間違えても、その回に印が付きます。
+              </div>
+              {spec && spec.dropped && spec.dropped.length > 0 && (
+                <div className="brief-b">
+                  この題材の図表問題は全部で {bank(block.id).length + spec.dropped.length} 問ありますが、
+                  {spec.dropped.length} 問は本の答えが出力と食い違うため外しています。
+                </div>
+              )}
+            </div>
+            {chunks.map((ch, i) => {
+              const r = (st.tests || {})[i] || {};
+              return (
+                <button className="trow" key={i} onClick={() => start("test:" + i)}>
+                  <span className="trow-n">{i + 1}</span>
+                  <span className="trow-b">
+                    <span className="trow-t">テスト {i + 1}</span>
+                    <span className="trow-s">{ch.length} 問　{ch[0].qid} 〜 {ch[ch.length - 1].qid}</span>
+                  </span>
+                  {r.badge ? <span className="badge badge-gold">🏅</span>
+                    : r.best !== undefined ? <span className="trow-p">{r.best} / {ch.length}</span>
+                    : <span className="trow-p trow-yet">まだ</span>}
+                </button>
+              );
+            })}
+          </>
         )}
-
-        <div className="sec">
-          <span className="sec-l">テストの中身</span>
-          <div className="brief-b">
-            このブロックの過去問 {bank(bid).length} 問を {chunks.length} 回に分けてあります。
-            どの問題も、必ずどれかの回に入っています。
-            1問まで間違えても、その回に印が付きます。
-          </div>
-          {spec && spec.dropped && spec.dropped.length > 0 && (
-            <div className="brief-b">
-              この題材の図表問題は全部で {bank(bid).length + spec.dropped.length} 問ありますが、
-              {spec.dropped.length} 問は本の答えが出力と食い違うため外しています。
-            </div>
-          )}
-        </div>
       </div>
 
       {/* いちばん下の段。本文をどこまで送っても、ここは動かない */}
       <div className="dock">
-        <button className="go next" onClick={() => go("practice")} disabled={!bs.length}>
-          練習をする
+        <button className="go next" disabled={!canGo}
+          onClick={() => start(isPractice ? "practice" : "test:" + nextRound)}>
+          {isPractice ? "この分野を練習する" : "テスト " + (nextRound + 1) + " を受ける"}
         </button>
-        <button className="go next ghost" onClick={() => go("testpick")}>テストをする</button>
       </div>
     </>
-  );
-}
-
-/* ── どのテストを受けるか選ぶ ────────────────── */
-function TestPick({ bid, prog, go, back }) {
-  const { block } = blockOf(bid);
-  const st = prog[bid] || {};
-  const chunks = testChunks(bid);
-  return (
-    <div className="wrap">
-      <div className="head">
-        <button className="back" onClick={back}>← もどる</button>
-        <span className="head-t">{block.name}　テスト</span>
-      </div>
-      <div className="sec">
-        <span className="sec-l">どのテストを受けますか</span>
-        <div className="brief-b">
-          このブロックで覚えた所が、そのままテストの範囲です。
-          1問まで間違えても、その回に印が付きます。
-        </div>
-      </div>
-      {chunks.map((c, i) => {
-        const r = (st.tests || {})[i] || {};
-        return (
-          <button className="trow" key={i} onClick={() => go("test:" + i)}>
-            <span className="trow-n">{i + 1}</span>
-            <span className="trow-b">
-              <span className="trow-t">テスト {i + 1}</span>
-              <span className="trow-s">{c.length} 問　{c[0].qid} 〜 {c[c.length - 1].qid}</span>
-            </span>
-            {r.badge ? <span className="badge badge-gold">🏅</span>
-              : r.best !== undefined ? <span className="trow-p">{r.best} / {c.length}</span>
-              : <span className="trow-p trow-yet">まだ</span>}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -701,29 +676,29 @@ function Drill({ bid, mode, prog, setProg, back }) {
 
 export default function App() {
   const [prog, setProg] = useState(load);
-  const [cid, setCid] = useState(null);   // 札
-  const [bid, setBid] = useState(null);   // ブロック
-  const [mode, setMode] = useState(null); // null=説明 / "practice" / "testpick" / "test:N"
+  const [cid, setCid] = useState(null);    // 札
+  const [kind, setKind] = useState(null);  // "practice" / "test"
+  const [bid, setBid] = useState(null);    // 分野（ブロック）
+  const [mode, setMode] = useState(null);  // null=分野を選ぶ / "practice" / "test:N"
   const homeY = useRef(0);
   useEffect(() => { save(prog); }, [prog]);
   /* ホームに戻ったときだけ、見ていた所に戻す。ほかは上から */
-  useEffect(() => { toTop(cid === null ? homeY.current : 0); }, [cid, bid, mode]);
+  useEffect(() => { toTop(cid === null ? homeY.current : 0); }, [cid, kind, bid, mode]);
 
   if (cid === null) {
-    return <Home prog={prog}
-      open={(id) => { homeY.current = nowY(); setCid(id); setBid(null); setMode(null); }} />;
-  }
-  if (bid === null) {
-    return <Card cid={cid} prog={prog}
-      open={(id) => { setBid(id); setMode(null); }}
-      back={() => setCid(null)} />;
+    return <Home prog={prog} go={(c, k) => {
+      homeY.current = nowY();
+      const card = CARDS.filter((x) => x.id === c)[0];
+      const first = card.blocks.filter((b) => isReady(b.id))[0] || card.blocks[0];
+      setCid(c); setKind(k); setBid(first.id); setMode(null);
+    }} />;
   }
   if (mode === null) {
-    return <Brief bid={bid} prog={prog} go={setMode} back={() => setBid(null)} />;
-  }
-  if (mode === "testpick") {
-    return <TestPick bid={bid} prog={prog} go={setMode} back={() => setMode(null)} />;
+    return <Choose cid={cid} kind={kind} bid={bid} prog={prog}
+      setBid={(id) => setBid(id)}
+      start={(m) => setMode(m)}
+      back={() => { setCid(null); setKind(null); setBid(null); }} />;
   }
   return <Drill bid={bid} mode={mode} prog={prog} setProg={setProg}
-    back={() => setMode(mode.indexOf("test:") === 0 ? "testpick" : null)} />;
+    back={() => setMode(null)} />;
 }
