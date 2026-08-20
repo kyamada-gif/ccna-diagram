@@ -135,6 +135,12 @@ const blockOf = id => {
   };
   return null;
 };
+/* 番号。トップの札が 1・2・3・4、その中の分野が 1.1・1.2 … */
+const cardNo = cid => CARDS.findIndex(c => c.id === cid) + 1;
+const blockNo = (cid, bid) => {
+  const c = CARDS.filter(x => x.id === cid)[0];
+  return cardNo(cid) + "." + (c.blocks.findIndex(b => b.id === bid) + 1);
+};
 const cardCount = c => c.blocks.reduce((a, b) => a + (bank(b.id) ? bank(b.id).length : b.n), 0);
 function load() {
   try {
@@ -430,7 +436,7 @@ function Choose({
     onClick: back
   }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
     className: "head-t"
-  }, c.name, "\u3000", isPractice ? "練習" : "テスト"), st.badge && /*#__PURE__*/React.createElement("span", {
+  }, cardNo(cid), " ", c.name, "\u3000", isPractice ? "練習" : "テスト"), st.badge && /*#__PURE__*/React.createElement("span", {
     className: "head-n"
   }, "\uD83C\uDFC5")), /*#__PURE__*/React.createElement("div", {
     className: "sec"
@@ -442,7 +448,9 @@ function Choose({
     key: b.id,
     className: "tab" + (b.id === block.id ? " on" : "") + (isReady(b.id) ? "" : " tab-yet"),
     onClick: () => setBid(b.id)
-  }, b.name))), !ready ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "tab-n"
+  }, blockNo(cid, b.id)), b.name))), !ready ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sec"
   }, /*#__PURE__*/React.createElement("span", {
     className: "sec-l"

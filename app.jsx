@@ -75,6 +75,12 @@ const blockOf = (id) => {
   for (const c of CARDS) for (const b of c.blocks) if (b.id === id) return { card: c, block: b };
   return null;
 };
+/* 番号。トップの札が 1・2・3・4、その中の分野が 1.1・1.2 … */
+const cardNo = (cid) => CARDS.findIndex((c) => c.id === cid) + 1;
+const blockNo = (cid, bid) => {
+  const c = CARDS.filter((x) => x.id === cid)[0];
+  return cardNo(cid) + "." + (c.blocks.findIndex((b) => b.id === bid) + 1);
+};
 const cardCount = (c) => c.blocks.reduce((a, b) => a + (bank(b.id) ? bank(b.id).length : b.n), 0);
 
 function load() {
@@ -300,7 +306,9 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
       <div className="wrap has-dock">
         <div className="head">
           <button className="back" onClick={back}>← もどる</button>
-          <span className="head-t">{c.name}　{isPractice ? "練習" : "テスト"}</span>
+          <span className="head-t">
+            {cardNo(cid)} {c.name}　{isPractice ? "練習" : "テスト"}
+          </span>
           {st.badge && <span className="head-n">🏅</span>}
         </div>
 
@@ -312,6 +320,7 @@ function Choose({ cid, kind, bid, prog, setBid, start, back }) {
             <button key={b.id}
               className={"tab" + (b.id === block.id ? " on" : "") + (isReady(b.id) ? "" : " tab-yet")}
               onClick={() => setBid(b.id)}>
+              <span className="tab-n">{blockNo(cid, b.id)}</span>
               {b.name}
             </button>
           ))}
