@@ -208,18 +208,32 @@ function makePractice(G) {
       const r = G.reach(i, hit);
       if (!r) return;
       const st = r.step;
-      /* 答えが決まった言葉のブロックは「答えは「◯◯」」。
-         決め手を答えるブロック（ルートブリッジなど）は、その言葉のまま出す */
-      const say = t => G.answer ? t : "答えは「" + t + "」";
-      const right = st.hit ? say(st.verdict) : "次に " + st.next + " を見る";
+      /* 聞き方と選択肢を、その題材が自分で持っているときは、そちらを使う。
+         **画面側では文を組み立てない**（判定と同じ考え方） */
+      if (G.spec.walk) {
+        const w = G.spec.walk(st, G.read(r.text), G.shuffle);
+        out.push({
+          kind: "walk",
+          text: r.text,
+          st: st,
+          b: b,
+          i: i,
+          of: bs.length,
+          opts: w.opts,
+          right: w.right,
+          ask: w.ask
+        });
+        return;
+      }
+      const right = st.hit ? "答えは「" + st.verdict + "」" : "次に " + st.next + " を見る";
       const opts = [right];
       if (st.hit) {
         if (st.next) opts.push("次に " + st.next + " を見る");
       } else {
-        opts.push(say(st.verdict));
+        opts.push("答えは「" + st.verdict + "」");
       }
       const other = G.shuffle(G.VERDICTS.filter(v => v !== st.verdict))[0];
-      if (other) opts.push(say(other));
+      if (other) opts.push("答えは「" + other + "」");
       out.push({
         kind: "walk",
         text: r.text,
@@ -821,7 +835,7 @@ function Drill({
     }, v.name), /*#__PURE__*/React.createElement("span", {
       className: "val-v"
     }, v.value))));
-    ask = "この値なら、どうしますか。";
+    ask = it.ask || "この値なら、どうしますか。";
   } else if (it.kind === "judge") {
     const r = done ? G.judge(G.read(it.text)) : null;
     con = isFig ? /*#__PURE__*/React.createElement(Figure, {
@@ -830,7 +844,7 @@ function Drill({
       text: it.text,
       hits: r ? r.look : null
     });
-    ask = isFig ? "この図なら、どれがルートブリッジになりますか。" : "この出力で起きていることはどれですか。";
+    ask = G.spec && G.spec.ask || "この出力で起きていることはどれですか。";
   } else {
     const ex = it.q.fig || it.q.exhibit;
     const r = done && G && ex ? G.judge(G.read(ex)) : null;

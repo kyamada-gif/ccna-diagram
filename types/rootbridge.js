@@ -144,6 +144,37 @@
     }
   };
 
+  /* ── 練習の問題文と選択肢 ─────────────────────
+   * **「この値なら、どうしますか」では何を聞かれているか分からない。**
+   * 何を見て、何が決まるのかを、そのまま文にする。
+   *   ブリッジ優先度 を見ます。ここでルートブリッジは決まりますか。
+   *     ・ブリッジ優先度 で SW4 に決まる
+   *     ・ブリッジ優先度 だけでは決まらない。次に MACアドレス を見る
+   */
+  function walkQ(st, v, shuffle) {
+    var look = st.look.join(" と ");
+    var ans = v.win ? v.win.id : "";
+    var others = v.sw.map(function (s) { return s.id; })
+      .filter(function (id) { return id !== ans; });
+    var right, opts;
+    if (st.hit) {
+      right = look + " で " + ans + " に決まる";
+      opts = [right,
+              look + " だけでは決まらない",
+              look + " で " + pick(others) + " に決まる"];
+    } else {
+      right = look + " だけでは決まらない。次に " + st.next + " を見る";
+      opts = [right,
+              look + " で " + ans + " に決まる",
+              look + " で " + pick(others) + " に決まる"];
+    }
+    /* 同じ文が2つ出ないようにする */
+    var seen = {}, uniq = [];
+    opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; uniq.push(o); } });
+    return { ask: look + " を見ます。ここでルートブリッジは決まりますか。",
+             opts: shuffle(uniq), right: right };
+  }
+
   /* 決め手だけを残す。図はそのまま、答えに関係しない線を落とす */
   function excerpt(fig, look) {
     return { sw: fig.sw, link: [], host: [] };
@@ -172,6 +203,9 @@
     obj: "2.5",
     spots: SPOTS, rules: RULES, gloss: GLOSS,
     read: read, answer: answer, excerpt: excerpt,
+    /* 図ぜんぶを見て答える問題の、聞き方 */
+    ask: "この構成の中で、どのスイッチがルートブリッジになりますか。",
+    walk: walkQ,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 2, rules: 2, questions: 23 },
     dropped: []
