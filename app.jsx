@@ -381,7 +381,7 @@ function Home({ prog, go }) {
                   <span className="tile-b">
                     <span className="tile-t">{c.name}</span>
                     <span className="tile-s">
-                      {c.note}　／　{c.blocks.length} ブロック・過去問 {cardCount(c)} 問
+                      {c.note}　／　{c.blocks.length} ブロック・{cardCount(c)} 問
                     </span>
                   </span>
                 </button>
@@ -400,8 +400,9 @@ function Home({ prog, go }) {
       })}
 
       <div className="foot">
-        図表問題は全部で 335 問あります。どの問題も、必ずどれかの札のどれかのブロックに入ります。
-        いま中身ができているのは「show interface の障害」だけです。
+        計算のいらない図表問題は、本で 335 問あります。
+        どの問題も、必ずどれかの札のどれかのブロックに入ります。
+        対応づけの問題は、1つずつ答えられる形に開いてあるので、数はふえます。
       </div>
     </div>
   );

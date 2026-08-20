@@ -554,7 +554,7 @@ function Home({
       className: "tile-t"
     }, c.name), /*#__PURE__*/React.createElement("span", {
       className: "tile-s"
-    }, c.note, "\u3000\uFF0F\u3000", c.blocks.length, " \u30D6\u30ED\u30C3\u30AF\u30FB\u904E\u53BB\u554F ", cardCount(c), " \u554F"))), clear === c.blocks.length ? /*#__PURE__*/React.createElement("span", {
+    }, c.note, "\u3000\uFF0F\u3000", c.blocks.length, " \u30D6\u30ED\u30C3\u30AF\u30FB", cardCount(c), " \u554F"))), clear === c.blocks.length ? /*#__PURE__*/React.createElement("span", {
       className: "badge badge-gold"
     }, "\uD83C\uDFC5") : /*#__PURE__*/React.createElement("span", {
       className: "trow-p"
@@ -569,7 +569,7 @@ function Home({
     }, "\u30C6\u30B9\u30C8\u3092\u3059\u308B"))));
   }), /*#__PURE__*/React.createElement("div", {
     className: "foot"
-  }, "\u56F3\u8868\u554F\u984C\u306F\u5168\u90E8\u3067 335 \u554F\u3042\u308A\u307E\u3059\u3002\u3069\u306E\u554F\u984C\u3082\u3001\u5FC5\u305A\u3069\u308C\u304B\u306E\u672D\u306E\u3069\u308C\u304B\u306E\u30D6\u30ED\u30C3\u30AF\u306B\u5165\u308A\u307E\u3059\u3002 \u3044\u307E\u4E2D\u8EAB\u304C\u3067\u304D\u3066\u3044\u308B\u306E\u306F\u300Cshow interface \u306E\u969C\u5BB3\u300D\u3060\u3051\u3067\u3059\u3002"));
+  }, "\u8A08\u7B97\u306E\u3044\u3089\u306A\u3044\u56F3\u8868\u554F\u984C\u306F\u3001\u672C\u3067 335 \u554F\u3042\u308A\u307E\u3059\u3002 \u3069\u306E\u554F\u984C\u3082\u3001\u5FC5\u305A\u3069\u308C\u304B\u306E\u672D\u306E\u3069\u308C\u304B\u306E\u30D6\u30ED\u30C3\u30AF\u306B\u5165\u308A\u307E\u3059\u3002 \u5BFE\u5FDC\u3065\u3051\u306E\u554F\u984C\u306F\u30011\u3064\u305A\u3064\u7B54\u3048\u3089\u308C\u308B\u5F62\u306B\u958B\u3044\u3066\u3042\u308B\u306E\u3067\u3001\u6570\u306F\u3075\u3048\u307E\u3059\u3002"));
 }
 
 /* ── どの分野をやるか選ぶ ───────────────────────
