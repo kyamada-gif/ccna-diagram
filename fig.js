@@ -41,8 +41,54 @@
     return { slot: slot, byId: byId, bw: BW, bh: bh, h: h };
   }
 
+  /* ── 星形（中央に1つ、まわりに4つ）─────────────────
+   * OSPF の DR 選出の図。中央のスイッチに、上下左右からルータがつながる。
+   *   { shape:"star", hub:"スイッチ", title:"OSPF 1",
+   *     node:[ {id:"R1", at:"top|left|right|bottom", pri:108, rid:"1.1.1.1", tag:"DR"}, … ] }
+   */
+  function star(fig) {
+    var SW = 320, HB = 92, HH = 30, NB = 122, NH = 54, GAP = 62;
+    var cx = SW / 2, cy = PAD + NH + GAP + HH / 2;
+    var H = cy + HH / 2 + GAP + NH + PAD;
+    var spot = {
+      top:    { x: cx - NB / 2, y: PAD },
+      left:   { x: PAD, y: cy - NH / 2 },
+      right:  { x: SW - PAD - NB, y: cy - NH / 2 },
+      bottom: { x: cx - NB / 2, y: H - PAD - NH }
+    };
+    var out = [];
+    /* 線。中央から各ルータの中心へ引き、箱をあとから重ねる */
+    (fig.node || []).forEach(function (n) {
+      var p = spot[n.at];
+      if (!p) return;
+      out.push('<line x1="' + cx + '" y1="' + cy + '" x2="' + (p.x + NB / 2) +
+               '" y2="' + (p.y + NH / 2) + '" class="fg-l" />');
+    });
+    /* 中央 */
+    out.push('<rect x="' + (cx - HB / 2) + '" y="' + (cy - HH / 2) + '" width="' + HB +
+             '" height="' + HH + '" rx="8" class="fg-box" />');
+    out.push('<text x="' + cx + '" y="' + (cy + 4) + '" class="fg-id">' + esc(fig.hub || "") + '</text>');
+    /* まわりのルータ。**名前・優先度・RID の3段** */
+    (fig.node || []).forEach(function (n) {
+      var p = spot[n.at];
+      if (!p) return;
+      out.push('<rect x="' + p.x + '" y="' + p.y + '" width="' + NB + '" height="' + NH +
+               '" rx="8" class="fg-box" />');
+      out.push('<text x="' + (p.x + NB / 2) + '" y="' + (p.y + 16) + '" class="fg-id">' +
+               esc(n.id) + (n.tag ? "（" + esc(n.tag) + "）" : "") + '</text>');
+      out.push('<text x="' + (p.x + NB / 2) + '" y="' + (p.y + 32) +
+               '" class="fg-v">優先度 ' + esc(n.pri) + '</text>');
+      out.push('<text x="' + (p.x + NB / 2) + '" y="' + (p.y + 47) +
+               '" class="fg-v">' + esc(n.rid || n.lo || n.ip || "") + '</text>');
+    });
+    return '<svg viewBox="0 0 ' + SW + ' ' + H + '" class="fg" ' +
+           'preserveAspectRatio="xMidYMid meet" role="img">' + out.join("") + '</svg>';
+  }
+
   function svg(fig) {
-    if (!fig || !fig.sw || !fig.sw.length) return "";
+    if (!fig) return "";
+    if (fig.shape === "star") return star(fig);
+    if (!fig.sw || !fig.sw.length) return "";
     var L = layout(fig);
     var out = [];
 

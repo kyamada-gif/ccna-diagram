@@ -9,7 +9,7 @@
 (function (global) {
   "use strict";
   global.BANKS = global.BANKS || {};
-  var IDS = ["showint", "rootbridge"];
+  var IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr", "log"];
   /* Node から読むときは、ここでブロックごとのファイルを読み込む
      （ブラウザは index.html の <script> で読む） */
   if (typeof require !== "undefined") {

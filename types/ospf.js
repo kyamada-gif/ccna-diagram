@@ -366,10 +366,18 @@
     ask: "この二つを見くらべて、どう直しますか。",
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 5, rules: 5, questions: 7 },
-    /* 目標3.4・束B の13問のうち、このブロックの規則では解けない6問。
-       理由は scripts/ospf_block.py の DROPPED に書いてある */
-    dropped: ["B1-P16-005", "B2-0054-01", "B3-M3-047",
-              "B1-P14-049", "B2-0076-01", "B1-P13-030"]
+    /* **本の答えが出力と食い違っていて使えない問題。**いまは無い */
+    dropped: [],
+    /* 中身が別の題材なので、よそのブロックへ送った問題。
+       使えない問題（dropped）とは分けて書く。理由は scripts/ospf_block.py の MOVED */
+    movedTo: {
+      "B1-P14-049": "ospfdr（DR の決まり方）",
+      "B2-0076-01": "ospfdr（DR の決まり方）",
+      "B1-P16-005": "ログの読み取り（目標1.4）",
+      "B2-0054-01": "ログの読み取り（目標1.4）",
+      "B3-M3-047": "ログの読み取り（目標1.4）",
+      "B1-P13-030": "足りない設定を選ぶ"
+    }
   };
 
   global.SPECS = global.SPECS || {};

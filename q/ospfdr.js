@@ -1,0 +1,10 @@
+/* 「ospfdr」の過去問。手で直さない。scripts/ospf_block.py が作る。 */
+(function (global) {
+  "use strict";
+  var BANKS = global.BANKS = global.BANKS || {};
+  BANKS.ospfdr = [
+  {"qid": "B1-P14-049", "book": "B1", "text": "すべてのデバイスが同時に起動したときに、どのルータが DR となりますか。", "fig": {"shape": "star", "hub": "スイッチ", "title": "OSPF 1", "node": [{"id": "R2", "at": "top", "port": "Gi0/0", "ip": null, "lo": "2.2.2.1", "rid": "192.168.2.1", "pri": 1, "tag": null}, {"id": "R1", "at": "left", "port": "Gi0/1", "ip": "192.168.2.8", "lo": null, "rid": "1.1.1.1", "pri": 108, "tag": "DR"}, {"id": "R4", "at": "right", "port": "Gi0/1", "ip": "192.168.2.4", "lo": null, "rid": "4.4.4.4", "pri": 204, "tag": null}, {"id": "R3", "at": "bottom", "port": "Gi0/0", "ip": "192.168.2.6", "lo": null, "rid": null, "pri": 106, "tag": null}], "maclist": false, "figvals": true}, "choices": ["R1", "R2", "R3", "R4"], "answer": "R4", "explanation": "①プライオリティが最も高いもの → ②同じならルータIDが大きいもの がDRやBDRになる。 【補足】ルートブリッジ（スイッチの話）はプライオリティやMACアドレスが小さいものになる。つまり、「スイッチは小、ルーターは大」と覚えておく。"},
+  {"qid": "B2-0076-01", "book": "B2", "text": "展示品をご参照ください。ネットワーク エンジニアが新しい OSPF ネットワークの設定を確認しています。特に指示がない限り、すべての OSPF 設定ではデフォルト値が使用されます。エンジニアは、すべてのデバイスが同時に起動した場合に、どのルーターが DR として選出されると予想していますか?", "fig": {"shape": "star", "hub": "スイッチ", "title": "OSPF 1", "node": [{"id": "R2", "at": "top", "port": "g0/0", "ip": "192.168.2.1", "lo": "2.2.2.1", "rid": null, "pri": 1, "tag": null}, {"id": "R1", "at": "left", "port": "g0/1", "ip": "192.168.2.8", "lo": null, "rid": "1.1.1.1", "pri": 108, "tag": "DR"}, {"id": "R4", "at": "right", "port": "g0/1", "ip": "192.168.2.4", "lo": null, "rid": "4.4.4.4", "pri": 204, "tag": null}, {"id": "R3", "at": "bottom", "port": "g0/0", "ip": "192.168.2.6", "lo": null, "rid": null, "pri": 106, "tag": null}], "maclist": false, "figvals": true}, "choices": ["R1", "R2", "R3", "R4"], "answer": "R4", "explanation": ""}
+  ];
+  if (typeof module !== "undefined" && module.exports) module.exports = BANKS.ospfdr;
+})(typeof window !== "undefined" ? window : globalThis);

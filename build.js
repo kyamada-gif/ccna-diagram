@@ -168,6 +168,32 @@ BLOCK_IDS.forEach((id) => {
   totalQ += qs.length;
 });
 
+/* ── 引き継ぎの見張り ─────────────────────────
+ * ブロックが「この問題はよそのブロック行き」と言ったら（spec.movedTo）、
+ * **その問題が本当にどこかのブロックに入っているか**を確かめる。
+ * 入っていなければ、まだ宙に浮いている。**取りこぼしはここで見つける。**
+ */
+{
+  const placed = new Set();
+  Object.keys(BANKS).forEach((id) => (BANKS[id] || []).forEach((q) => {
+    placed.add(q.qid);
+    (q.from || []).forEach((f) => placed.add(f));
+  }));
+  const waiting = [];
+  BLOCK_IDS.forEach((id) => {
+    const m = (SPECS[id] || {}).movedTo || {};
+    Object.keys(m).forEach((qid) => {
+      if (!placed.has(qid)) waiting.push(`${qid} → ${m[qid]}（${id} から）`);
+    });
+  });
+  if (waiting.length) {
+    console.log(`引き継ぎ待ち ${waiting.length} 問（まだどのブロックにも入っていない）`);
+    waiting.forEach((w) => console.log("   ・" + w));
+  } else {
+    console.log("引き継ぎ待ちの問題はありません");
+  }
+}
+
 /* 画面に出る1問1問の形（練習・テストとも同じ形か、正解が選択肢の中にあるか） */
 const { run } = require(path.join(__dirname, "selftest.js"));
 run().forEach((b) => bad.push(b));

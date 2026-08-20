@@ -54,7 +54,15 @@ const CARDS = [{
   }, {
     id: "ospf",
     name: "OSPF のとなり関係",
-    n: 13
+    n: 7
+  }, {
+    id: "ospfdr",
+    name: "OSPF の代表ルータ",
+    n: 2
+  }, {
+    id: "log",
+    name: "ログの読み取り",
+    n: 3
   }]
 }, {
   id: "words",
