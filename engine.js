@@ -42,10 +42,14 @@
       if (VERDICTS.indexOf(r.verdict) < 0) VERDICTS.push(r.verdict);
     });
 
-    function read(text) {
+    /* 提示物から値を読む。
+       ふつうはテキストを正規表現で読む。**図の問題は形が違う**ので、
+       その題材が自分の読み方（spec.read）を持っていればそちらを使う */
+    function read(ex) {
+      if (spec.read) return spec.read(ex);
       var out = {};
       Object.keys(PAT).forEach(function (k) {
-        var m = text.match(PAT[k]);
+        var m = ex.match(PAT[k]);
         out[k] = m ? m[1] : null;
       });
       return out;
@@ -183,8 +187,10 @@
       return null;
     }
 
-    /* 決め手の行だけを抜き出す（1行目は必ず残す） */
+    /* 決め手の所だけを残す。テキストなら「決め手の行だけ」。
+       図の問題は形が違うので、その題材の やり方（spec.excerpt）を使う */
     function excerpt(text, look) {
+      if (spec.excerpt) return spec.excerpt(text, look);
       var lines = text.split("\n"), out = [lines[0]];
       for (var i = 1; i < lines.length; i++) {
         for (var j = 0; j < look.length; j++) {
@@ -200,6 +206,10 @@
       read: read, judge: judge, trace: trace, walk: walk, groups: groups,
       blocks: blocks, reach: reach, gloss: gloss, make: make, makeAny: makeAny,
       excerpt: excerpt,
+      /* 答えが決まった言葉ではなく「その場の選択肢の1つ」になる題材で使う。
+         例：ルートブリッジは毎回ちがうスイッチ名が答えになる */
+      answer: spec.answer || null,
+      view: spec.view || "console",
       sample: spec.sample || function () { return ""; },
       shuffle: shuffle, pick: pick
     };

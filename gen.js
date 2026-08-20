@@ -12,7 +12,7 @@
   var E = global.ENGINE ||
     (typeof require !== "undefined" ? require("./engine.js") : null);
 
-  var BLOCK_IDS = ["showint"];
+  var BLOCK_IDS = ["showint", "rootbridge"];
 
   /* Node から読むときは、ここで types を読み込む（ブラウザは index.html の script） */
   if (typeof require !== "undefined") {

@@ -29,7 +29,7 @@ fs.writeFileSync(
 );
 
 const sum = (f) => fs.readFileSync(f, "utf8").length;
-const gv = sum("gen.js") + sum("engine.js") +
+const gv = sum("gen.js") + sum("engine.js") + sum("fig.js") +
   fs.readdirSync("types").reduce((a, f) => a + sum(path.join("types", f)), 0);
 const qv = sum("questions.js");
 let html = fs.readFileSync("index.html", "utf8");
@@ -37,6 +37,7 @@ const next = html
   .replace(/(\.\/app\.js)(\?v=\d+)?/, `$1?v=${code.length}`)
   .replace(/(\.\/gen\.js)(\?v=\d+)?/, `$1?v=${gv}`)
   .replace(/(\.\/engine\.js)(\?v=\d+)?/, `$1?v=${gv}`)
+  .replace(/(\.\/fig\.js)(\?v=\d+)?/, `$1?v=${gv}`)
   .replace(/(\.\/types\/[\w-]+\.js)(\?v=\d+)?/g, `$1?v=${gv}`)
   .replace(/(\.\/questions\.js)(\?v=\d+)?/, `$1?v=${qv}`);
 if (next !== html) if (next !== html) fs.writeFileSync("index.html", next);
@@ -65,12 +66,17 @@ BLOCK_IDS.forEach((id) => {
     bad.push(`${tag}: 過去問が ${qs.length} 問（申告は ${exp.questions}）`);
 
   if (G.kind === "rules") {
-    /* 見本の出力の中に、見る所がすべて出てくるか */
+    /* 見本の出力の中に、見る所がすべて出てくるか。
+       図のブロックは提示物がテキストではないので、この検査はしない */
     const sample = G.sample();
-    G.SPOTS.forEach((s) => {
-      if (!sample.split("\n").some((l) => s.re.test(l)))
-        bad.push(`${tag}: 見本に ${s.name} が無い`);
-    });
+    if (typeof sample === "string") {
+      G.SPOTS.forEach((s) => {
+        if (!sample.split("\n").some((l) => s.re.test(l)))
+          bad.push(`${tag}: 見本に ${s.name} が無い`);
+      });
+    } else if (!G.judge(G.read(sample))) {
+      bad.push(`${tag}: 見本が判定できない`);
+    }
     /* 作った出力が、ねらったルールになるか（各300回） */
     Object.keys(G.MAKERS).forEach((k) => {
       for (let i = 0; i < 300; i++) {
@@ -101,15 +107,24 @@ BLOCK_IDS.forEach((id) => {
   });
 
   /* 判定エンジンがあるブロックは、過去問の判定が本の答えと合うか */
-  if (G.kind === "rules" && spec.same) {
+  if (G.kind === "rules" && (spec.same || G.answer)) {
     let hit = 0;
     qs.forEach((q) => {
-      if (!q.exhibit) { bad.push(`${tag}: ${q.qid} に出力が無い`); return; }
-      const r = G.judge(G.read(q.exhibit));
+      const ex = q.fig || q.exhibit;
+      if (!ex) { bad.push(`${tag}: ${q.qid} に提示物が無い`); return; }
+      const v = G.read(ex);
+      const r = G.judge(v);
       const ans = Array.isArray(q.answer) ? q.answer.join(" ") : q.answer;
-      const ok = r && (spec.same[r.verdict] || []).some(
-        (w) => ans.toLowerCase().indexOf(w.toLowerCase()) >= 0
-      );
+      let ok;
+      if (G.answer) {
+        /* 答えがその場の選択肢になるブロック（例：ルートブリッジ） */
+        const a = G.answer(v);
+        ok = r && a && ans.replace(/\s/g, "").indexOf(a) >= 0;
+      } else {
+        ok = r && (spec.same[r.verdict] || []).some(
+          (w) => ans.toLowerCase().indexOf(w.toLowerCase()) >= 0
+        );
+      }
       if (ok) hit++;
       else bad.push(`${tag}: ${q.qid} の判定が本の答えと合わない（${r ? r.verdict : "判定なし"}）`);
     });

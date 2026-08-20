@@ -171,6 +171,22 @@ function Console({
   }));
 }
 
+/* ── 図を出す ─────────────────────────────
+ * 描くのは fig.js。**React を使わない素の関数**なので、
+ * 本番環境が React でなくても、そのまま持っていける。
+ */
+function Figure({
+  fig
+}) {
+  if (!fig) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "figwrap",
+    dangerouslySetInnerHTML: {
+      __html: FIG.svg(fig)
+    }
+  });
+}
+
 /* ── 練習を組む ───────────────────────────
  * 見る所の表を、上から一個ずつ。
  *   ① その見る所を覚える（説明の札）
@@ -192,15 +208,18 @@ function makePractice(G) {
       const r = G.reach(i, hit);
       if (!r) return;
       const st = r.step;
-      const right = st.hit ? "答えは「" + st.verdict + "」" : "次に " + st.next + " を見る";
+      /* 答えが決まった言葉のブロックは「答えは「◯◯」」。
+         決め手を答えるブロック（ルートブリッジなど）は、その言葉のまま出す */
+      const say = t => G.answer ? t : "答えは「" + t + "」";
+      const right = st.hit ? say(st.verdict) : "次に " + st.next + " を見る";
       const opts = [right];
       if (st.hit) {
         if (st.next) opts.push("次に " + st.next + " を見る");
       } else {
-        opts.push("答えは「" + st.verdict + "」");
+        opts.push(say(st.verdict));
       }
       const other = G.shuffle(G.VERDICTS.filter(v => v !== st.verdict))[0];
-      opts.push("答えは「" + other + "」");
+      if (other) opts.push(say(other));
       out.push({
         kind: "walk",
         text: r.text,
@@ -217,6 +236,22 @@ function makePractice(G) {
     const g = G.makeAny();
     if (!g.text) continue;
     const r = G.RULES.filter(x => x.key === g.key)[0];
+    /* 答えが「その場の選択肢」になるブロック（ルートブリッジなど）は、
+       誤答も同じ図の中の別のスイッチから作る */
+    if (G.answer) {
+      const v = G.read(g.text);
+      const right = G.answer(v);
+      const opts = G.shuffle(v.sw.map(x => x.id));
+      out.push({
+        kind: "judge",
+        text: g.text,
+        i: bs.length,
+        of: bs.length,
+        opts: opts,
+        right: right
+      });
+      continue;
+    }
     const wrong = G.shuffle(G.VERDICTS.filter(v => v !== r.verdict)).slice(0, 3);
     out.push({
       kind: "judge",
@@ -765,11 +800,14 @@ function Drill({
       onClick: next
     }, "\u3053\u306E\u6240\u306E\u554F\u984C\u3078\uFF08Enter\uFF09"));
   }
+  const isFig = G && G.view === "topology";
   let con = null,
     vals = null,
     ask = null;
   if (it.kind === "walk") {
-    con = /*#__PURE__*/React.createElement(Console, {
+    con = isFig ? /*#__PURE__*/React.createElement(Figure, {
+      fig: it.text
+    }) : /*#__PURE__*/React.createElement(Console, {
       text: it.text,
       hits: it.st.look
     });
@@ -786,14 +824,19 @@ function Drill({
     ask = "この値なら、どうしますか。";
   } else if (it.kind === "judge") {
     const r = done ? G.judge(G.read(it.text)) : null;
-    con = /*#__PURE__*/React.createElement(Console, {
+    con = isFig ? /*#__PURE__*/React.createElement(Figure, {
+      fig: it.text
+    }) : /*#__PURE__*/React.createElement(Console, {
       text: it.text,
       hits: r ? r.look : null
     });
-    ask = "この出力で起きていることはどれですか。";
+    ask = isFig ? "この図なら、どれがルートブリッジになりますか。" : "この出力で起きていることはどれですか。";
   } else {
-    const r = done && G ? G.judge(G.read(it.q.exhibit)) : null;
-    con = it.q.exhibit ? /*#__PURE__*/React.createElement(Console, {
+    const ex = it.q.fig || it.q.exhibit;
+    const r = done && G && ex ? G.judge(G.read(ex)) : null;
+    con = it.q.fig ? /*#__PURE__*/React.createElement(Figure, {
+      fig: it.q.fig
+    }) : it.q.exhibit ? /*#__PURE__*/React.createElement(Console, {
       text: it.q.exhibit,
       hits: r ? r.look : null
     }) : null;
@@ -813,11 +856,14 @@ function Drill({
       });
     } else if (it.kind === "judge") note = /*#__PURE__*/React.createElement(Steps, {
       t: G.trace(it.text)
-    });else note = /*#__PURE__*/React.createElement(Steps, {
-      t: G && it.q.exhibit ? G.trace(it.q.exhibit) : null,
-      answer: rights.join(" ／ "),
-      book: it.q.explanation
-    });
+    });else {
+      const ex = it.q.fig || it.q.exhibit;
+      note = /*#__PURE__*/React.createElement(Steps, {
+        t: G && ex ? G.trace(ex) : null,
+        answer: rights.join(" ／ "),
+        book: it.q.explanation
+      });
+    }
   }
   const head = isTest ? "テスト " + (ci + 1) : it.kind === "walk" ? "見る所　" + (it.i + 1) + " / " + it.of : "出力ぜんぶで判定";
   return /*#__PURE__*/React.createElement("div", {

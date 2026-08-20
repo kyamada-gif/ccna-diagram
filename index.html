@@ -72,6 +72,17 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
   min-height:40px;font-size:var(--f2);color:var(--ink2);background:var(--bg1)}
 .tab.on{border-color:var(--blue);color:var(--blue-t);background:var(--blue-bg);font-weight:700}
 .tab-yet{opacity:.55}
+/* 図。線と箱だけ。描くのは fig.js */
+.figwrap{background:var(--sunk);border:1px solid var(--line);border-radius:12px;
+  padding:var(--s3);margin-top:var(--s3);overflow-x:auto}
+.fg{display:block;width:100%;max-width:340px;margin:0 auto;height:auto}
+.fg-l{stroke:var(--ink3);stroke-width:1.5}
+.fg-box{fill:var(--bg-tile);stroke:var(--line);stroke-width:1.5}
+.fg-id{fill:var(--ink);font-size:13px;font-weight:700;text-anchor:middle;
+  font-family:-apple-system,"Hiragino Sans",sans-serif}
+.fg-v{fill:var(--blue-t);font-size:11px;text-anchor:middle;font-family:ui-monospace,Menlo,monospace}
+.fg-host{fill:var(--ink2);font-size:11px;text-anchor:middle;
+  font-family:-apple-system,"Hiragino Sans",sans-serif}
 .tab-n{font-family:var(--mono);font-size:var(--f1);color:var(--ink3);margin-right:6px}
 .tab.on .tab-n{color:var(--blue)}
 .badge{font-size:var(--f1);color:var(--green-t);border:1px solid var(--green-s);
@@ -231,14 +242,16 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <body>
 <div id="root"></div>
 <!-- 共通の仕掛け（判定・道すじ・出力作り）。題材の中身は入っていない -->
-<script src="./engine.js?v=20579" charset="utf-8"></script>
+<script src="./fig.js?v=30416" charset="utf-8"></script>
+<script src="./engine.js?v=30416" charset="utf-8"></script>
 <!-- ブロックごとの中身。ブロックを増やしたら、ここに1行足す -->
-<script src="./types/showint.js?v=20579" charset="utf-8"></script>
+<script src="./types/rootbridge.js?v=30416" charset="utf-8"></script>
+<script src="./types/showint.js?v=30416" charset="utf-8"></script>
 <!-- 上の2つを組み立てる。画面側では判定しない -->
-<script src="./gen.js?v=20579" charset="utf-8"></script>
+<script src="./gen.js?v=30416" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
-<script src="./questions.js?v=51629" charset="utf-8"></script>
+<script src="./questions.js?v=74432" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=33206" charset="utf-8"></script>
+<script src="./app.js?v=34434" charset="utf-8"></script>
 </body>
 </html>
