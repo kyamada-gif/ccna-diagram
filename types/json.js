@@ -1,24 +1,30 @@
-/* 「JSON の読み取り」ブロックの中身（目標6.7・過去問37問）。
+/* 「JSON の読み取り」ブロックの中身（目標6.7・過去問38問）。
  *
- * 見る所5か所と判定ルール8本は、過去問38問とその解説から起こした。思いつきで足さない。
+ * 見る所5か所と判定ルール6本は、過去問38問とその解説から起こした。思いつきで足さない。
  *
- * **このブロックだけの決まり：提示物のいちばん上の1行は「何が聞かれているか」。**
+ * ── 提示物の形 ─────────────────────────────
  * show interface の出力は、出力さえ見れば答えが決まる。JSON はそうではない。
  * 同じ JSON でも「2行目には何が表されるか」と「port は何を表すか」では答えが違う。
- * そこで、提示物の1行目に、聞かれているものを1行で書いてある。
+ * そこで提示物を2つに分けてある。**本には無い行を足さない。**
  *
- *     聞かれているのは 「port」 という言葉
- *     1  [
- *     2  {"IDS": "IPS_pittsburgh", "port":"te8/30"},
- *     …
+ *   { src: "…",  asked: { mode: …, … } }
  *
- * 過去問の1行目は scripts/json_block.py が本の問題文から起こす。練習の問題は build が作る。
- * 1行目の書き方は5通りだけ。
- *     聞かれているのは 「◯◯」 という言葉
- *     聞かれているのは N 行目           ／  聞かれているのは N 行目から M 行目
- *     聞かれているのは 全体
- *     聞かれているのは ◯◯ の数
- *     聞かれているのは オブジェクト と キー と 配列 の数
+ *   src    本の提示物そのまま（行の番号が刷ってあれば、それも入っている）。画面に出るのはこれだけ
+ *   asked  何が聞かれているか。本の問題文から起こす（scripts/json_block.py）
+ *
+ *   mode        いっしょに入るもの            聞いていること
+ *   ─────────────────────────────────────────────
+ *   "word"      word   … 言葉               その言葉が何にあたるか（キー／値／配列）
+ *   "line"      lineno … 行の番号            その行に何が表されるか（オブジェクト／配列）
+ *              （to  … 終わりの行。「1 行目から 5 行目」のときだけ入る）
+ *   "whole"     なし                        全体が何か（オブジェクト／配列）
+ *   "count"     what   … 数えるもの          その数
+ *   "countset"  whats  … 数えるものの並び     まとめて数えた結果
+ *   "type"      word   … 言葉               その言葉のデータの種類
+ *
+ * "type" だけは、判定ルールが答えを出さない（当たるルールが無い）。
+ * 言葉の役目ではなくデータの種類を聞いていて、ほかの20問と同じ規則では答えられないため。
+ * spec.bookOnly に入れてあり、本の答えで出題だけする。
  */
 (function (global) {
   "use strict";
@@ -29,30 +35,25 @@
   /* ── 見る所 ───────────────────────────── */
   var SPOTS = [
     { key: "colon", name: "コロン ( : )",
-      re: /:/,
       mean: "名前と中身を区切る印",
       use: "聞かれた言葉がコロンの左にあれば キー、右にあれば 値。左と右のどちらにあるかだけを見る" },
     { key: "brace", name: "中かっこ { }",
-      re: /[{}]/,
       mean: "名前と中身の組を、ひとまとめにする入れ物",
       use: "聞かれた行が { で始まっていれば、その行はオブジェクト。全体が { で始まっていれば、全体がオブジェクト" },
     { key: "bracket", name: "角かっこ [ ]",
-      re: /\[|\]/,
       mean: "同じ仲間をいくつも並べる入れ物",
       use: "聞かれた行が [ で始まっていれば、その行は配列。聞かれた言葉が [ と ] の間に並んでいれば、その言葉が直接いるのは配列" },
     { key: "lineno", name: "行の番号",
-      re: /^\s*\d+[\s　]/,
       mean: "左の端に打ってある番号",
       use: "N 行目を聞かれたら、この番号でその行を探す。番号が打っていないときは、上から順に数える" },
     { key: "howmany", name: "かっこの組の数",
-      re: /[[{]/,
       mean: "同じかっこが何組あるか",
       use: "数を聞かれたら、開くかっこを上から数える。{ の組の数がオブジェクトの数、[ の組の数が配列の数、コロンの左にある言葉の数がキーの数" }
   ];
 
   /* ── JSON を読む ─────────────────────────
    * 文字を1つずつ見て、引用符でくくられた言葉ごとに、
-   * それが「コロンの左」「コロンの右」「角かっこの中の並び」のどれにいるかを決める。
+   * それが「コロンの左」「コロンの右」「角かっこの中」のどれにいるかを決める。
    * かっこの開いた数も、このときに数える。
    */
   function scan(src) {
@@ -78,86 +79,154 @@
     return { toks: toks, objs: objs, arrs: arrs, keys: keys };
   }
 
+  /* 答えの書き方。本には英語だけで刷ってある問題が3問ある（選択肢が object / key /
+     value / array）。**どちらの言葉で書くかだけの話で、判定は変わらない。**
+     どの言葉で刷ってあるかは asked.lang に入っている（scripts/json_block.py が
+     選択肢から決める。どれが正解かは見ていない） */
+  var SAY = {
+    ja: { key: "キー", value: "値", object: "オブジェクト", array: "配列" },
+    en: { key: "key", value: "value", object: "object", array: "array" }
+  };
+
+  /* 数えるものの言葉 → 数。本は配列を「JSON リスト値」とも書く */
+  function countOf(v, what) {
+    if (/オブジェクト/.test(what)) return v.objs;
+    if (/キー|key/i.test(what)) return v.keys;
+    return v.arrs;                       /* 配列・リスト値 */
+  }
+
   /* 提示物を、判定に使う形にほどく */
   function read(ex) {
-    var text = String(ex == null ? "" : ex);
-    var all = text.split("\n");
-    var head = all[0] || "";
-    var body = all.slice(1);
+    ex = ex || {};
+    var src = String(ex.src == null ? "" : ex.src);
+    var asked = ex.asked || {};
+    var raw = src.split("\n");
     /* 行の番号を外す。番号は「N 行目」を探すのに取っておく */
     var lines = [], nums = [], at = [], numbered = 0, i, m;
-    for (i = 0; i < body.length; i++) {
-      if (!body[i].replace(/\s/g, "")) continue;
-      m = body[i].match(/^\s*(\d+)[\s　]+(.*)$/);
+    for (i = 0; i < raw.length; i++) {
+      if (!raw[i].replace(/\s/g, "")) continue;
+      m = raw[i].match(/^\s*(\d+)[\s　]+(.*)$/);
       if (m) { nums.push(parseInt(m[1], 10)); lines.push(m[2]); numbered++; }
-      else { nums.push(null); lines.push(body[i].replace(/^\s+/, "")); }
+      else { nums.push(null); lines.push(raw[i].replace(/^\s+/, "")); }
       at.push(i);
     }
     /* 全角のコロンで刷られている問題があるので、半角にそろえる */
     var sc = scan(lines.join("\n").replace(/：/g, ":"));
-    var v = { head: head, lines: lines, nums: nums, at: at,
+    var v = { src: src, asked: asked, lines: lines, nums: nums, at: at,
               numbered: numbered * 2 >= lines.length && numbered > 0,
               objs: sc.objs, arrs: sc.arrs, keys: sc.keys,
-              mode: null, word: null, side: null, lineno: null, row: -1,
-              top: "", what: null, num: null };
+              mode: asked.mode || null, word: asked.word || null,
+              lineno: asked.lineno == null ? null : asked.lineno,
+              to: asked.to == null ? null : asked.to,
+              what: asked.what || null, whats: asked.whats || null,
+              lang: asked.lang === "en" ? "en" : "ja",
+              side: null, row: -1, top: "", num: null };
 
-    if ((m = head.match(/「(.+?)」/))) { v.mode = "word"; v.word = m[1]; }
-    else if (/オブジェクト と キー と 配列 の数/.test(head)) { v.mode = "countset"; }
-    else if ((m = head.match(/(オブジェクト|キー|配列)\s*の数/))) {
-      v.mode = "count"; v.what = m[1];
-    } else if ((m = head.match(/(\d+)\s*行目/))) {
-      v.mode = "line"; v.lineno = parseInt(m[1], 10);
-    } else if (/全体/.test(head)) { v.mode = "line"; v.lineno = 0; }
-
-    if (v.mode === "word") {
+    if (v.mode === "word" || v.mode === "type") {
       for (i = 0; i < sc.toks.length; i++) {
         if (sc.toks[i].text === v.word) { v.side = sc.toks[i].role; break; }
       }
     }
-    if (v.mode === "line") {
+    if (v.mode === "line" || v.mode === "whole") {
       var idx = -1;
-      if (v.lineno === 0) idx = 0;
+      if (v.mode === "whole") idx = 0;
       else if (v.numbered) {
         for (i = 0; i < nums.length; i++) { if (nums[i] === v.lineno) { idx = i; break; } }
       }
       if (idx < 0) idx = v.lineno > 0 ? v.lineno - 1 : 0;
       if (idx >= lines.length) idx = lines.length - 1;
+      if (idx < 0) idx = 0;
       v.row = idx;
       v.top = (lines[idx] || "").charAt(0);
     }
-    if (v.mode === "count") {
-      v.num = v.what === "オブジェクト" ? v.objs : v.what === "配列" ? v.arrs : v.keys;
-    }
+    if (v.mode === "count") v.num = countOf(v, v.what);
+    /* 画面が選択肢を作るのに使う。**engine と app.jsx は v.sw を見る**
+       （答えがその場の値になるブロックの決まり。rootbridge はスイッチの一覧） */
+    v.sw = choices(v).map(function (x) { return { id: x }; });
     return v;
+  }
+
+  /* ── 答え。決まった言葉ではなく、その場で計算した値になる ──────── */
+  function answer(v) {
+    var say = SAY[v.lang] || SAY.ja;
+    if (v.mode === "word") {
+      return v.side === "コロンの左" ? say.key
+           : v.side === "コロンの右" ? say.value
+           : v.side === "角かっこの中" ? say.array : "";
+    }
+    if (v.mode === "line" || v.mode === "whole") {
+      return v.top === "{" ? say.object : v.top === "[" ? say.array : "";
+    }
+    /* 数は、数えた結果をそのまま返す。本の答えも数字だけで刷ってある */
+    if (v.mode === "count") return String(v.num);
+    if (v.mode === "countset") {
+      return (v.whats || []).map(function (w) {
+        return countOf(v, w) + "つの" + w.replace(/\s/g, "");
+      }).join("、");
+    }
+    return "";                            /* type … 判定ルールでは答えを出さない */
+  }
+
+  /* 練習で出す選択肢。**正解は必ず入れる。**同じものは入れない */
+  function uniq(list) {
+    var seen = {}, out = [];
+    list.forEach(function (x) { if (x && !seen[x]) { seen[x] = 1; out.push(x); } });
+    return out;
+  }
+  function choices(v) {
+    var a = answer(v);
+    if (!a) return [];
+    var say = SAY[v.lang] || SAY.ja;
+    if (v.mode === "word") {
+      return uniq([a, say.key, say.value, say.array, say.object]).slice(0, 4);
+    }
+    if (v.mode === "line" || v.mode === "whole") {
+      return uniq([a, say.object, say.array, say.key, say.value]).slice(0, 4);
+    }
+    if (v.mode === "count") {
+      var n = v.num;
+      return uniq([String(n), String(n + 1), String(n + 2), String(Math.max(1, n - 1)),
+                   String(n + 3)]).slice(0, 4);
+    }
+    if (v.mode === "countset") {
+      var ws = v.whats || [], out = [a];
+      ws.forEach(function (_, i) {
+        out.push(ws.map(function (w, j) {
+          return (countOf(v, w) + (i === j ? 1 : 0)) + "つの" + w.replace(/\s/g, "");
+        }).join("、"));
+      });
+      return uniq(out).slice(0, 4);
+    }
+    return [];
   }
 
   /* 聞かれているものを、そのまま文にする（答え合わせで見せる） */
   function asked(v) {
     if (v.mode === "word") return "「" + v.word + "」という言葉";
-    if (v.mode === "line") return v.lineno === 0 ? "全体" : v.lineno + " 行目";
+    if (v.mode === "type") return "「" + v.word + "」のデータの種類";
+    if (v.mode === "whole") return "全体";
+    if (v.mode === "line") {
+      return v.to ? v.lineno + " 行目から " + v.to + " 行目" : v.lineno + " 行目";
+    }
     if (v.mode === "count") return v.what + " の数";
-    if (v.mode === "countset") return "オブジェクトとキーと配列の数";
+    if (v.mode === "countset") return (v.whats || []).join("と") + " の数";
     return "（読み取れない）";
   }
   function shownLine(v) {
     return v.row >= 0 ? (v.lines[v.row] || "").slice(0, 40) : "";
   }
-  /* 「聞かれているのが言葉ではない」ときの、消える理由 */
   function notWord(v) {
     return v.mode === "word" ? null :
       "聞かれているのは " + asked(v) + " なので、コロンの左右を見ても決まらない";
   }
   function notLine(v) {
-    return v.mode === "line" ? null :
+    return (v.mode === "line" || v.mode === "whole") ? null :
       "聞かれているのは " + asked(v) + " なので、行の先頭を見ても決まらない";
-  }
-  function notCount(v) {
-    return (v.mode === "count" || v.mode === "countset") ? null :
-      "聞かれているのは " + asked(v) + " で、数ではない";
   }
 
   /* ── 判定ルール。上から順に当てて、最初に当たったところで決まる ──
-   * 1行目で「何が聞かれているか」が分かれているので、当たるルールは必ず1本だけ。
+   * 何が聞かれているかで分かれているので、当たるルールは必ず1本だけ。
+   * 答えそのものは answer(v) が出す。ここで決めるのは「どこを見て決めたか」。
    */
   var RULES = [
     { key: "key", cond: "聞かれた言葉が、コロンの左にある",
@@ -186,7 +255,7 @@
 
     { key: "line_object", cond: "聞かれた行が、中かっこ { で始まっている",
       verdict: "オブジェクト",
-      why: "中かっこで始まって中かっこで閉じているので、その行はひとまとまりの入れ物",
+      why: "中かっこで始まって中かっこで閉じているので、そこはひとまとまりの入れ物",
       look: ["中かっこ { }", "行の番号"],
       steps: function (v) {
         return [["聞かれているもの", asked(v)], ["その行の先頭の記号", v.top || "なし"],
@@ -195,7 +264,9 @@
       no: function (v) {
         return notLine(v) || "その行は " + (v.top || "なし") + " で始まっていて、{ ではない";
       },
-      test: function (v) { return v.mode === "line" && v.top === "{"; } },
+      test: function (v) {
+        return (v.mode === "line" || v.mode === "whole") && v.top === "{";
+      } },
 
     { key: "in_array", cond: "聞かれた言葉が、角かっこの中に並んでいる",
       verdict: "配列",
@@ -220,49 +291,22 @@
       no: function (v) {
         return notLine(v) || "その行は " + (v.top || "なし") + " で始まっていて、[ ではない";
       },
-      test: function (v) { return v.mode === "line" && v.top === "["; } },
+      test: function (v) {
+        return (v.mode === "line" || v.mode === "whole") && v.top === "["; } },
 
-    { key: "one", cond: "数えたら 1 つだった",
-      verdict: "1 つ",
-      why: "開くかっこを上から数えると、1 つしかない",
-      look: ["かっこの組の数"],
-      steps: function (v) {
-        return [["聞かれているもの", asked(v)], ["オブジェクト", v.objs],
-                ["配列", v.arrs], ["キー", v.keys]];
-      },
-      no: function (v) {
-        return notCount(v) || "数えると " + v.num + " つあって、1 つではない";
-      },
-      test: function (v) { return v.mode === "count" && v.num === 1; } },
-
-    { key: "three", cond: "数えたら 3 つだった",
-      verdict: "3 つ",
-      why: "開くかっこを上から数えると、3 つある",
-      look: ["かっこの組の数"],
-      steps: function (v) {
-        return [["聞かれているもの", asked(v)], ["オブジェクト", v.objs],
-                ["配列", v.arrs], ["キー", v.keys]];
-      },
-      no: function (v) {
-        return notCount(v) || "数えると " + v.num + " つあって、3 つではない";
-      },
-      test: function (v) { return v.mode === "count" && v.num === 3; } },
-
-    { key: "set", cond: "外側の中かっこが 1 組で、キーも配列も 3 つある",
-      verdict: "オブジェクト 1 つ、キー 3 つ、配列 3 つ",
-      why: "いちばん外側の中かっこが 1 組。その中に、名前と角かっこの組が 3 つ並んでいる",
+    /* 数える問題は1本。いくつでも数えられる。答えは answer(v) が計算して出す */
+    { key: "count", cond: "数を聞かれている",
+      verdict: "数えた数",
+      why: "開くかっこを上から数える。その数がそのまま答えになる",
       look: ["かっこの組の数"],
       steps: function (v) {
         return [["聞かれているもの", asked(v)], ["オブジェクト", v.objs],
                 ["キー", v.keys], ["配列", v.arrs]];
       },
       no: function (v) {
-        return notCount(v) || "オブジェクトが " + v.objs + " つ、キーが " + v.keys +
-               " つ、配列が " + v.arrs + " つで、この形にならない";
+        return "聞かれているのは " + asked(v) + " で、数ではない";
       },
-      test: function (v) {
-        return v.mode === "countset" && v.objs === 1 && v.keys === 3 && v.arrs === 3;
-      } }
+      test: function (v) { return v.mode === "count" || v.mode === "countset"; } }
   ];
 
   var GLOSS = {
@@ -270,20 +314,17 @@
     "値": "コロンの右に書いてある中身",
     "オブジェクト": "中かっこ { } でひとまとめにしたもの",
     "配列": "角かっこ [ ] に並べたもの",
-    "1 つ": "数えた結果が 1",
-    "3 つ": "数えた結果が 3",
-    "オブジェクト 1 つ、キー 3 つ、配列 3 つ": "外側の中かっこが 1 組で、その中に名前と並びが 3 つある"
+    "数えた数": "かっこの組を上から数えた、その数"
   };
 
-  /* 本の答えとの言い換え表。本には日本語と英語が混ざって刷られている */
+  /* 本の答えとの言い換え表。本には答えが日本語と英語で混ざって刷ってある。
+     いまの答え合わせは answer(v) が受け持つので build.js は使わないが、
+     どの言い方が同じものを指すかの覚え書きとして残す */
   var SAME = {
     "キー": ["キー", "key"],
     "値": ["値", "value", "バリュー"],
     "オブジェクト": ["オブジェクト", "object"],
-    "配列": ["配列", "array", "シーケンス"],
-    "1 つ": ["1"],
-    "3 つ": ["3"],
-    "オブジェクト 1 つ、キー 3 つ、配列 3 つ": ["3 つのキー、3 つの", "3つのキー、3つの"]
+    "配列": ["配列", "array", "シーケンス"]
   };
 
   /* ── JSON を作る ───────────────────────────
@@ -311,6 +352,7 @@
   var WORDS = ["Automation", "Configuration", "CCNA", "CCNP", "Correct", "Incorrect",
                "red", "one", "blue", "rust", "good", "warning", "up", "down",
                "ethernet0/3", "ethernet0/4", "ethernet0/5", "tokyo", "osaka", "nagoya"];
+  var COUNTWORD = ["オブジェクト", "キー", "配列"];
 
   function some(list, n) { return shuffle(list).slice(0, n); }
 
@@ -321,8 +363,9 @@
     });
   }
   function pairsOf(n) {
-    var ks = some(PAIRKEY, n);
-    return ks.map(function (k) { return { key: k, items: some(WORDS, R(2, 3)) }; });
+    return some(PAIRKEY, n).map(function (k) {
+      return { key: k, items: some(WORDS, R(2, 3)) };
+    });
   }
 
   function q(s) { return '"' + s + '"'; }
@@ -348,100 +391,92 @@
     return out;
   }
 
-  function headOf(a) {
-    if (a.kind === "word") return "聞かれているのは 「" + a.word + "」 という言葉";
-    if (a.kind === "line") return "聞かれているのは " + a.line + " 行目";
-    if (a.kind === "range") return "聞かれているのは " + a.from + " 行目から " + a.to + " 行目";
-    if (a.kind === "whole") return "聞かれているのは 全体";
-    if (a.kind === "count") return "聞かれているのは " + a.what + " の数";
-    return "聞かれているのは オブジェクト と キー と 配列 の数";
-  }
-
   function build(v) {
     var body = bodyOf(v);
     if (v.numbered) {
       body = body.map(function (l, i) { return (i + 1) + "  " + l; });
     }
-    return [headOf(v.ask)].concat(body).join("\n");
+    return { src: body.join("\n"), asked: v.asked };
   }
 
   function baseVals() {
-    return { shape: "rows", n: 3, numbered: true, ask: null,
-             rows: rowsOf(4), pairs: pairsOf(4), plain: some(WORDS, R(2, 3)) };
+    return { shape: "rows", n: 3, numbered: true, asked: null,
+             rows: rowsOf(5), pairs: pairsOf(5), plain: some(WORDS, R(2, 3)) };
   }
 
   var MAKERS = {
     /* コロンの左にある言葉を聞く */
     key: function (b) {
-      b.shape = "rows"; b.n = 3; b.numbered = true;
-      var row = pick(b.rows.slice(0, 3));
-      b.ask = { kind: "word", word: pick([row.kind, row.pkey]) };
+      b.shape = "rows"; b.n = R(2, 5); b.numbered = true;
+      var row = pick(b.rows.slice(0, b.n));
+      b.asked = { mode: "word", word: pick([row.kind, row.pkey]) };
       return b;
     },
     /* コロンの右にある言葉を聞く */
     value: function (b) {
-      b.shape = "rows"; b.n = 3; b.numbered = true;
-      var row = pick(b.rows.slice(0, 3));
-      b.ask = { kind: "word", word: pick([row.name, row.pval]) };
+      b.shape = "rows"; b.n = R(2, 5); b.numbered = true;
+      var row = pick(b.rows.slice(0, b.n));
+      b.asked = { mode: "word", word: pick([row.name, row.pval]) };
       return b;
     },
     /* 角かっこの中に並んでいる言葉を聞く */
     in_array: function (b) {
-      b.shape = "pairs"; b.n = R(2, 3); b.numbered = false;
+      b.shape = "pairs"; b.n = R(1, 5); b.numbered = false;
       var p = pick(b.pairs.slice(0, b.n));
-      b.ask = { kind: "word", word: pick(p.items) };
+      b.asked = { mode: "word", word: pick(p.items) };
       return b;
     },
     /* 中かっこで始まる行を聞く */
     line_object: function (b) {
-      b.shape = "rows"; b.n = 3; b.numbered = true;
-      b.ask = { kind: "line", line: R(2, 4) };
+      if (R(0, 1)) {
+        b.shape = "rows"; b.n = R(2, 5); b.numbered = true;
+        b.asked = { mode: "line", lineno: R(2, b.n + 1) };
+      } else {
+        b.shape = "pairs"; b.n = R(1, 5); b.numbered = false;
+        b.asked = { mode: "whole" };
+      }
       return b;
     },
     /* 角かっこで始まる行、または全体を聞く */
     line_array: function (b) {
-      if (R(0, 1)) {
-        b.shape = "rows"; b.n = 3; b.numbered = true;
-        b.ask = R(0, 1) ? { kind: "line", line: 1 }
-                        : { kind: "range", from: 1, to: 5 };
+      var r = R(0, 2);
+      if (r === 0) {
+        b.shape = "rows"; b.n = R(2, 5); b.numbered = true;
+        b.asked = { mode: "line", lineno: 1 };
+      } else if (r === 1) {
+        b.shape = "rows"; b.n = R(2, 5); b.numbered = true;
+        b.asked = { mode: "line", lineno: 1, to: b.n + 2 };
       } else {
         b.shape = "plain"; b.numbered = false;
-        b.ask = { kind: "whole" };
+        b.asked = { mode: "whole" };
       }
       return b;
     },
-    /* 数えると 1 つになる形 */
-    one: function (b) {
+    /* 数える。1つだけ数えるときと、まとめて数えるときがある。
+       数は 1〜9 でばらつく（pairs は オブジェクト1・キーn・配列n、
+       rows は オブジェクトn・キー2n・配列1）。
+       **rows は 4 組まで。**5 組にするとキーが 10 になり、「10つ」という書き方になってしまう */
+    count: function (b) {
       b.numbered = false;
-      if (R(0, 1)) { b.shape = "pairs"; b.n = R(2, 4); b.ask = { kind: "count", what: "オブジェクト" }; }
-      else { b.shape = "pairs"; b.n = 1; b.ask = { kind: "count", what: pick(["配列", "キー"]) }; }
-      return b;
-    },
-    /* 数えると 3 つになる形 */
-    three: function (b) {
-      b.numbered = false;
-      if (R(0, 1)) { b.shape = "pairs"; b.n = 3; b.ask = { kind: "count", what: pick(["配列", "キー"]) }; }
-      else { b.shape = "rows"; b.n = 3; b.ask = { kind: "count", what: "オブジェクト" }; }
-      return b;
-    },
-    /* オブジェクト・キー・配列を、まとめて数える形 */
-    set: function (b) {
-      b.shape = "pairs"; b.n = 3; b.numbered = false;
-      b.ask = { kind: "set" };
+      b.shape = pick(["pairs", "rows"]);
+      b.n = b.shape === "rows" ? R(1, 4) : R(1, 5);
+      b.asked = R(0, 3)
+        ? { mode: "count", what: pick(COUNTWORD) }
+        : { mode: "countset", whats: COUNTWORD.slice() };
       return b;
     }
   };
 
   /* 見本（説明の1枚で使う、いつも同じ JSON） */
   function sample() {
-    return [
-      "聞かれているのは 「port」 という言葉",
-      '1  [',
-      '2  {"switch": "SW18", "port": "ge2/41"},',
-      '3  {"router": "R20", "port": "te5/5"},',
-      '4  {"firewall": "FW42", "port": "fe3/24"}',
-      '5  ]'
-    ].join("\n");
+    return {
+      src: ['1  [',
+            '2  {"switch": "SW18", "port": "ge2/41"},',
+            '3  {"router": "R20", "port": "te5/5"},',
+            '4  {"firewall": "FW42", "port": "fe3/24"}',
+            '5  ]'].join("\n"),
+      asked: { mode: "word", word: "port" }
+    };
   }
 
   /* 決め手の所だけを残す。
@@ -449,18 +484,17 @@
    * 行を聞かれていれば、その行だけ（行の番号はそのまま残すので、探し方は変わらない）。
    * 数を聞かれているときは、1行でも落とすと数が変わるので、そのまま返す。
    */
-  function excerpt(text, look) {
-    var v = read(text);
-    var all = text.split("\n"), body = all.slice(1), keep = [], i;
-    if (v.mode === "word") {
+  function excerpt(ex, look) {
+    var v = read(ex), body = String(ex.src || "").split("\n"), keep = [], i;
+    if (v.mode === "word" || v.mode === "type") {
       for (i = 0; i < body.length; i++) {
         if (body[i].indexOf(v.word) >= 0) keep.push(body[i]);
       }
-    } else if (v.mode === "line" && v.row >= 0) {
+    } else if ((v.mode === "line" || v.mode === "whole") && v.row >= 0) {
       keep.push(body[v.at[v.row]]);
     }
-    if (!keep.length) return text;
-    return [all[0]].concat(keep).join("\n");
+    if (!keep.length) return ex;
+    return { src: keep.join("\n"), asked: v.asked };
   }
 
   /* ── 練習の問題文と選択肢 ─────────────────────
@@ -471,51 +505,50 @@
   RULES.forEach(function (r) {
     if (VERDICTS.indexOf(r.verdict) < 0) VERDICTS.push(r.verdict);
   });
-
-  /* 誤答に使う答え。**聞かれているものに合うものだけ。**
-     「言葉は何か」を聞いているのに「3 つ」を並べると、見ただけで消えてしまう */
-  var NEARBY = {
-    word: ["キー", "値", "配列"],
-    line: ["オブジェクト", "配列"],
-    count: ["1 つ", "3 つ", "オブジェクト 1 つ、キー 3 つ、配列 3 つ"],
-    countset: ["オブジェクト 1 つ、キー 3 つ、配列 3 つ", "1 つ", "3 つ"]
-  };
-
   function walkQ(st, v, sh) {
     var look = st.look.join(" と ");
-    var near = NEARBY[v.mode] || VERDICTS;
-    var others = shuffle(near.filter(function (x) { return x !== st.verdict; }));
-    if (!others.length) {
-      others = shuffle(VERDICTS.filter(function (x) { return x !== st.verdict; }));
+    /* 誤答に使う答え。**聞かれているものに合うものだけ。**
+       ここで答えが決まるときは、同じ提示物の選択肢から取る（数なら別の数）。
+       決まらないときは、次に見る所の答えを取る。
+       「言葉は何か」を聞いているのに「数えた数」を並べると、見ただけで消えてしまう */
+    var a = answer(v);
+    var other = st.hit
+      ? shuffle(choices(v).filter(function (x) { return x !== a; }))[0]
+      : (st.nextVerdict && st.nextVerdict !== st.verdict ? st.nextVerdict : null);
+    if (!other) {
+      other = shuffle(VERDICTS.filter(function (x) { return x !== st.verdict; }))[0];
     }
-    var yes = look + " を見ると、答えは " + st.verdict;
-    /* 次に見る所が、いま見ている所と同じ名前になることがある。
-       （コロンの左と右、かっこの数と数）そのときは「次に◯◯を見る」と書かない */
-    var no = (st.next && st.next !== look)
-      ? look + " だけでは決まらない。次に " + st.next + " を見る"
+    /* 当たったときは、その場で出した答えをそのまま見せる（数なら数字） */
+    var yes = look + " を見ると、答えは " + (st.hit ? (a || st.verdict) : st.verdict);
+    /* 次に見る所が、いま見ている所と同じ名前になることがある（コロンの左と右）。
+       そのときは「次に◯◯を見る」と書かない。最後の見る所には、次が無い */
+    var no = !st.next ? look + " を見ても決まらない"
+      : st.next !== look ? look + " だけでは決まらない。次に " + st.next + " を見る"
       : "答えは " + st.verdict + " にはならない";
     var right = st.hit ? yes : no;
-    var opts = [yes, no, look + " を見ると、答えは " + others[0]];
-    var seen = {}, uniq = [];
-    opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; uniq.push(o); } });
+    var opts = [yes, no, look + " を見ると、答えは " + other];
+    var seen = {}, u = [];
+    opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; u.push(o); } });
     return { ask: look + " を見ます。ここで答えは決まりますか。",
-             opts: sh(uniq), right: right };
+             opts: sh(u), right: right };
   }
 
   var spec = {
     id: "json",
     kind: "rules",
+    view: "json",              /* 画面は src を そのまま文字で出す */
     card: "read",
     name: "JSON の読み取り",
     note: "JSON を見て、どこが名前で、どこが中身かを読む",
     obj: "6.7",
     spots: SPOTS, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt, walk: walkQ,
-    /* 提示物ぜんぶを見て答える問題の、聞き方。
-       聞かれているものは提示物のいちばん上の行に書いてある */
-    ask: "いちばん上の行で聞かれていることの答えは、どれですか。",
+    /* 答えは決まった言葉ではなく、その場で計算した値になる */
+    answer: answer, choices: choices,
+    /* 提示物ぜんぶを見て答える問題の、聞き方 */
+    ask: "聞かれていることの答えは、どれですか。",
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
-    expect: { spots: 5, rules: 8, questions: 38 },
+    expect: { spots: 5, rules: 6, questions: 38 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。
        B2-0031-03 は「apple は何を表しますか」に対して、選択肢が
        配列／オブジェクト／番号／文字列 で、キーも値も無い。本の答えは「文字列」。

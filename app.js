@@ -257,20 +257,33 @@ function item(o) {
     note: o.note || null
   };
 }
-/* 提示物を1つの形にする。文字列なら出力、それ以外は図 */
+/* 提示物を1つの形にする。
+     文字列        → 出力（そのまま出す）
+     src を持つ    → JSON など、**画面に出すのは src だけ**で、
+                     判定にはほかの中身（何を聞かれているか）も要るもの
+     それ以外      → 図 */
 function asExhibit(x) {
   if (x == null) return null;
-  return typeof x === "string" ? {
+  if (typeof x === "string") return {
     kind: "console",
     text: x
-  } : {
+  };
+  if (x.src !== undefined) return {
+    kind: "json",
+    text: x.src,
+    data: x
+  };
+  return {
     kind: "topology",
     fig: x
   };
 }
-/* 判定エンジンに渡す中身を取り出す */
+/* 判定エンジンに渡す中身を取り出す。**画面に出すものとは限らない** */
 function exValue(ex) {
-  return ex ? ex.kind === "console" ? ex.text : ex.fig : null;
+  if (!ex) return null;
+  if (ex.kind === "console") return ex.text;
+  if (ex.kind === "json") return ex.data;
+  return ex.fig;
 }
 
 /* ── 練習を組む ───────────────────────────
