@@ -631,6 +631,17 @@
     return NEAR.some(function (w) { return ln.indexOf(w) >= 0; });
   }
 
+  /* その値が、どの行に書いてあるか。**答え合わせに出すのはこれだけ。**
+     確認項目の説明（use）は初めての人向けに長く書いてあるので、
+     答え合わせにそのまま出すと、答えるのに要らない話まで並ぶ */
+  var WHERE = {
+    run: "設定では router ospf の行。show の出力では Process ID の行",
+    area: "設定では network の行の末尾。show の出力では Internet address の行の末尾",
+    hello: "設定では ip ospf hello-interval の行。show の出力では Timer intervals configured の行の1つめの数字",
+    dead: "設定では ip ospf dead-interval の行。show の出力では Timer intervals configured の行の2つめの数字",
+    rid: "設定では router-id の行。show の出力では Process ID の行の中"
+  };
+
   function lineQ(spot, shuffle) {
     var hs = hits(spot.name);
     var isHit = function (ln) {
@@ -705,8 +716,12 @@
         ask: "「" + sp[n].name + "」を確かめるには、" + q.host + " のどの行を見ますか。",
         exhibit: q.text, opts: q.opts, right: q.right,
         /* look を空にしておく。**問題を出している間に、答えの行を光らせない** */
+        /* 答え合わせに出す文。**その値がどこに書いてあるかだけ。**
+           確認項目の説明文をそのまま出すと長すぎて、
+           答えるのに要らない話まで並んでしまう */
         extra: { step: { look: [], values: [], hit: false, verdict: b.verdict,
-                         why: sp[n].use, next: null, nextVerdict: null,
+                         why: WHERE[sp[n].key] || sp[n].use,
+                         next: null, nextVerdict: null,
                          step: i + 1, of: bs.length }, i: i } };
     }
     /* ②③ その行を見て、ここで決まるか */

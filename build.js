@@ -413,6 +413,38 @@ BLOCK_IDS.forEach((id) => {
   });
 }
 
+/* ── 答え合わせが長すぎないか ──────────────────
+ * **答え合わせに書くのは、答えるのに必要な判断のもとだけ。**
+ * 判定ルールの理由（why）をそのまま出すと、要らない話まで並ぶ。
+ * 「show の出力では Timer intervals configured で始まる行に数字が4つ並ぶ。
+ *   その1つめが Hello。すぐ下にある Hello due in の行は…」のような長文が出ていた。
+ * 説明の1枚（brief）は初めての人向けに詳しく書いてよいが、答え合わせは短く。
+ */
+{
+  const LIMIT = 90;
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id], G = GENS[id];
+    if (!sp || !G || G.kind !== "rules") return;
+    if (G.begin) G.begin();
+    const per = sp.perSpot > 0 ? sp.perSpot : 2;
+    const bs = G.blocks();
+    const over = [];
+    for (let i = 0; i < bs.length; i++) {
+      for (let n = 0; n < per; n++) {
+        const q = G.stepQ(i, n);
+        if (!q || !q.extra || !q.extra.step) continue;
+        const st = q.extra.step;
+        const nt = typeof sp.answerNote === "function"
+          ? sp.answerNote(G.read(q.exhibit), st) : null;
+        const shown = nt ? String(nt.body || "") : String(st.why || "");
+        if (shown.length > LIMIT && over.indexOf(shown) < 0) over.push(shown);
+      }
+    }
+    over.forEach((t) => bad.push(
+      `${sp.name}: 答え合わせが長い（${t.length} 字）… ${t.slice(0, 30)}…`));
+  });
+}
+
 /* ── 正解が2つある問題を作っていないか ────────────
  * 上から順に見る分野では、「◯◯だけでは決められない」が正解の問題を作る。
  * ところが**提示物には後の決め手も写っている**ので、

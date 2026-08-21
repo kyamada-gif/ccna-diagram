@@ -271,6 +271,13 @@
       if (spec.walk) {
         var w = spec.walk(st, read(r.text), shuffle, n);
         ask = w.ask; opts = w.opts; right = w.right;
+        /* 答え合わせに出す文も、問いを作る側が決められるようにする。
+           **判定ルールの理由（why）は長い。**答えるのに要らない話まで並ぶので、
+           判断のもとになった所だけを短く差し替える */
+        /* null なら、その分野が持っている一言の説明を出す */
+        if (w.why !== undefined) {
+          st.why = (w.why === null) ? gloss(st.verdict) : w.why;
+        }
       } else {
         /* 上から順に確認していく題材の、共通の聞き方。
          * **問いは、その分野が最後に答えるべき本物の問い。**
@@ -607,7 +614,8 @@
         sh(rules.filter(function (r) { return r.cue && r.cue !== me.cue; }))
           .slice(0, 3).forEach(function (r) { opts.push(r.cue); });
         return { ask: "この問題文の中に、答えを決める言葉があります。どれですか。",
-                 opts: sh(opts), right: me.cue };
+                 opts: sh(opts), right: me.cue,
+                 why: "問題文の中の「" + me.cue + "」が決め手" };
       }
       var opts2 = [step.verdict];
       sh(rules.filter(function (r) { return r.verdict !== step.verdict; }))
@@ -615,8 +623,11 @@
       var seen2 = {}, uq2 = [];
       opts2.forEach(function (o) { if (!seen2[o]) { seen2[o] = 1; uq2.push(o); } });
       var tail = ask2 || "この要件を満たす設定はどれですか。";
+      /* 決め手は問いにもう書いてある。答えも上に出る。
+         **ここに判定ルールの理由をそのまま出さない。**
+         一言の説明（gloss）だけが、答えの下に出ればよい */
       return { ask: me.cue ? "決め手は「" + me.cue + "」です。" + tail : tail,
-               opts: sh(uq2), right: step.verdict };
+               opts: sh(uq2), right: step.verdict, why: null };
     };
   }
 
