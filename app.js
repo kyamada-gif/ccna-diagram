@@ -49,7 +49,7 @@ const CARDS = [{
     n: 23
   }, {
     id: "ospf",
-    name: "OSPF のとなり関係",
+    name: "OSPF の隣接関係",
     n: 7
   }, {
     id: "ospfdr",

@@ -35,7 +35,7 @@ const CARDS = [
       { id: "showint", name: "show interface の障害", n: 17 },
       { id: "json", name: "JSON の読み取り", n: 25 },
       { id: "rootbridge", name: "ルートブリッジの決まり方", n: 23 },
-      { id: "ospf", name: "OSPF のとなり関係", n: 7 },
+      { id: "ospf", name: "OSPF の隣接関係", n: 7 },
       { id: "ospfdr", name: "OSPF の代表ルータ", n: 2 },
       { id: "log", name: "ログの読み取り", n: 3 }
     ] },

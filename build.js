@@ -427,10 +427,13 @@ BLOCK_IDS.forEach((id) => {
     if (!sp || !G || G.kind !== "rules") return;
     if (G.begin) G.begin();
     const bs = G.blocks();
+    /* **1項目あたりの問題数ぶん、全部見る。**
+       n=0,1 だけ見ていると、3問以上出す分野（JSON・OSPF）で死角ができる */
+    const per = sp.perSpot > 0 ? sp.perSpot : 2;
     let ng = 0, seen = 0;
     for (let i = 0; i < bs.length; i++) {
       for (let k = 0; k < 40; k++) {
-        const q = G.stepQ(i, 1);
+        const q = G.stepQ(i, 1 + (k % Math.max(1, per - 1)));
         if (!q || !/だけでは決められない/.test(String(q.right))) continue;
         seen++;
         const v = G.read(q.exhibit);
@@ -458,9 +461,10 @@ BLOCK_IDS.forEach((id) => {
     if (!sp || !G || G.kind !== "rules" || typeof sp.answerNote !== "function") return;
     if (G.begin) G.begin();
     const bs = G.blocks();
+    const per = sp.perSpot > 0 ? sp.perSpot : 2;
     let ng = 0;
     for (let i = 0; i < bs.length; i++) {
-      for (const n of [0, 1]) {
+      for (let n = 0; n < per; n++) {
         const q = G.stepQ(i, n);
         if (!q || !q.extra || !q.extra.step) continue;
         const st = q.extra.step;
