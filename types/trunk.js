@@ -29,28 +29,28 @@
   var SPOTS = [
     { key: "where", name: "どこにつなぐか（問題文）",
       re: /(サブインターフェース|IP Phone|電話|DTP|タグ|スイッチ|プリンタ|VLAN)/,
-      mean: "相手がルータか、電話か、スイッチか、タグに対応しない機器か",
-      use: "ルータに接続するならサブインターフェース。電話なら音声VLAN。相手で打つコマンドが変わるので、まずここを見る" },
+      mean: "接続する相手が、ルータか、IP 電話か、スイッチか、VLAN タグに対応しない機器か",
+      use: "ルータに接続するならサブインターフェース、IP 電話なら音声VLAN を使う。接続する相手によって入力するコマンドが変わるので、まずここを見る" },
 
     { key: "encap", name: "カプセル化（Encapsulation）",
       re: /(Encapsulation|encapsulation)\s*[:：]?\s*(isl|dot1q|dot1Q|negotiate)/i,
-      mean: "VLAN のタグの付け方。dot1q が標準、isl は シスコだけの古いやり方",
-      use: "両側で同じでないと、トランクとして成立しない。片方が isl なら、no で消してから dot1q にする" },
+      mean: "VLAN タグの付け方。dot1q が標準規格で、isl はシスコ独自の古い方式",
+      use: "両側で同じ方式にしないと、トランクとして成立しない。片方が isl なら、no で削除してから dot1q に設定し直す" },
 
     { key: "mode", name: "現在のモード（Administrative Mode）",
       re: /Administrative Mode\s*[:：]\s*(static access|trunk|dynamic \w+)/i,
-      mean: "そのインターフェースが現在アクセスかトランクか、相手まかせ（dynamic）か",
-      use: "static access のままなら、トランクにならない。mode trunk にする" },
+      mean: "そのインターフェースが、いまアクセスかトランクか、相手との交渉に任せる設定（dynamic）か",
+      use: "static access のままではトランクにならない。switchport mode trunk で切り替える" },
 
     { key: "native", name: "ネイティブVLAN",
       re: /(Trunking Native Mode VLAN|native vlan|ネイティブ\s*VLAN)/i,
-      mean: "タグを付けずに転送する VLAN。既定は 1",
-      use: "「既定以外にする」と書いてあったら、1 以外の番号にする。両側でそろえる" },
+      mean: "VLAN タグを付けずに転送する VLAN。既定は 1",
+      use: "「既定以外にする」と書かれていたら、1 以外の番号にする。番号は両側でそろえる" },
 
     { key: "allow", name: "通してよい VLAN の一覧（Trunking VLANs Enabled）",
       re: /(Trunking VLANs Enabled|allowed vlan)/i,
       mean: "そのトランクで転送してよい VLAN の番号",
-      use: "通したい番号が入っていなければ足す。add を付けないと、現在の一覧が消える" }
+      use: "転送したい番号が一覧に無ければ追加する。add を付けないと、いまの一覧が置き換わって消えてしまう" }
   ];
 
   /* **問題文と提示物を1つにつないでから読む。**決め手が問題文にあるため */
@@ -106,8 +106,8 @@
       test: function (v) { return !!v.sub; } },
 
     { key: "voice", cue: "IP Phone をつなぐ", cond: "電話をつなぐ",
-      verdict: "switchport access vlan と switchport voice vlan を打つ",
-      why: "電話とパソコンを1本の線でつなぐときは、トランクにしない。データ用に access vlan、音声用に voice vlan を打つ",
+      verdict: "switchport access vlan と switchport voice vlan を設定する",
+      why: "IP 電話とパソコンを1本のケーブルで接続するときは、トランクにしない。データ用に access vlan、音声用に voice vlan を設定する",
       look: ["どこにつなぐか（問題文）"],
       steps: function (v) { return [["問題文のことば", v.voice || "-"]]; },
       no: function () { return "電話の話ではない"; },
@@ -115,7 +115,7 @@
 
     { key: "dtp", cue: "DTP を使う", cond: "DTP に任せる、と書いてある",
       verdict: "switchport mode dynamic desirable にする",
-      why: "DTP は「相手と話し合ってトランクにする」仕組み。desirable は自分から話しかける側",
+      why: "DTP は、相手と交渉してトランクにするかどうかを決める仕組み。desirable は、自分から交渉を始める側",
       look: ["どこにつなぐか（問題文）"],
       steps: function (v) { return [["問題文のことば", v.dtp || "-"]]; },
       no: function () { return "DTP を使えとは書かれていない"; },
@@ -123,7 +123,7 @@
 
     { key: "notag", cue: "タグに対応していない機器", cond: "相手が VLAN のタグに対応していない",
       verdict: "ネイティブVLAN として、タグなしで転送する",
-      why: "タグ付きフレームを扱えない機器には、タグを付けない VLAN（ネイティブVLAN）で転送する",
+      why: "VLAN タグの付いたフレームを扱えない機器には、タグを付けない VLAN（ネイティブVLAN）で転送する",
       look: ["どこにつなぐか（問題文）"],
       steps: function (v) { return [["問題文のことば", v.notag || "-"]]; },
       no: function () { return "札に対応しない機器の話ではない"; },
@@ -131,23 +131,23 @@
 
     { key: "access2trunk", cue: "Administrative Mode が static access", cond: "いまアクセスのままになっている",
       verdict: "switchport mode trunk にして、カプセル化を dot1q にする",
-      why: "Administrative Mode が static access のままだと、VLAN をいくつも通せない。カプセル化より先に、まず mode trunk にする",
+      why: "Administrative Mode が static access のままでは、複数の VLAN を転送できない。カプセル化の設定より先に、まず mode trunk にする",
       look: ["現在のモード（Administrative Mode）"],
       steps: function (v) { return [["現在のモード", v.access || "-"]]; },
       no: function () { return "アクセスのままではない"; },
       test: function (v) { return !!v.access; } },
 
     { key: "isl", cue: "カプセル化が isl", cond: "トランクだが、カプセル化が isl になっている",
-      verdict: "isl を消して dot1q にし、足りない VLAN を add で足す",
-      why: "isl は シスコだけの古いやり方。両側でそろえないとトランクにならないので、標準の dot1q に直す",
+      verdict: "isl を削除して dot1q にし、足りない VLAN を add で追加する",
+      why: "isl はシスコ独自の古い方式。両側で同じにしないとトランクにならないので、標準の dot1q に直す",
       look: ["カプセル化（Encapsulation）"],
       steps: function (v) { return [["現在のカプセル化", v.isl || "-"]]; },
       no: function () { return "カプセル化は isl ではない"; },
       test: function (v) { return !!v.isl; } },
 
     { key: "addvlan", cue: "新しい VLAN を通す", cond: "新しい VLAN を、そのトランクで転送したい",
-      verdict: "switchport trunk allowed vlan add で足す",
-      why: "add を付けないと、いま通っている VLAN が消える。一覧に足すつもりで打つ",
+      verdict: "switchport trunk allowed vlan add で追加する",
+      why: "add を付けないと、いま転送している VLAN が一覧から消える。置き換えではなく追加するつもりで設定する",
       look: ["通してよい VLAN の一覧（Trunking VLANs Enabled）"],
       steps: function (v) { return [["現在の一覧", v.enabled || "-"]]; },
       no: function () { return "新しい VLAN を足す話ではない"; },
@@ -155,7 +155,7 @@
 
     { key: "native", cue: "ネイティブVLAN を既定以外にする", cond: "ネイティブVLAN を既定（1）以外にする、と書いてある",
       verdict: "switchport trunk native vlan を 1 以外にする",
-      why: "ネイティブVLAN が 1 のままだと、タグなしのフレームが既定の VLAN に流れる。守りのために 1 以外にする",
+      why: "ネイティブVLAN が 1 のままだと、タグの付いていないフレームが既定の VLAN に流れ込む。安全のために 1 以外にする",
       look: ["ネイティブVLAN"],
       steps: function (v) { return [["現在のネイティブVLAN", v.nativeNo || "1（既定）"]]; },
       no: function () { return "ネイティブVLAN を変える話ではない"; },
@@ -163,7 +163,7 @@
 
     { key: "role", cue: "スイッチ間と端末側の両方を設定する", cond: "スイッチ間と、端末側の両方を設定する",
       verdict: "スイッチ間はトランク、端末側はアクセスにする",
-      why: "スイッチどうしの線だけがトランク。パソコンやサーバをつなぐ口はアクセスにする",
+      why: "トランクにするのはスイッチどうしをつなぐ線だけ。パソコンやサーバを接続するインターフェースはアクセスにする",
       look: ["どこにつなぐか（問題文）"],
       steps: function (v) { return [["問題文のことば", v.role || "-"]]; },
       no: function () { return "両方を設定する話ではない"; },
@@ -171,7 +171,7 @@
 
     { key: "totrunk", cue: "対向の出力に合わせる", cond: "そのほか（いまアクセスのままなので、トランクにする）",
       verdict: "switchport mode trunk にして、カプセル化を dot1q にする",
-      why: "Administrative Mode が static access のままだと、VLAN をいくつも通せない。まず mode trunk にする",
+      why: "Administrative Mode が static access のままでは、複数の VLAN を転送できない。まず mode trunk にする",
       look: ["現在のモード（Administrative Mode）", "カプセル化（Encapsulation）"],
       steps: function (v) {
         return [["現在のモード", v.access || v.mode || "（出力に無い）"],
@@ -183,24 +183,24 @@
 
   var GLOSS = {
     "ルータにサブインターフェースを作り、encapsulation dot1Q と IP アドレスを設定する": "VLAN ごとに、ルータ側の受け口を1つずつ作る",
-    "switchport access vlan と switchport voice vlan を打つ": "1本の線で、パソコンと電話を別々の VLAN に分ける",
-    "switchport mode dynamic desirable にする": "自分から話しかけて、相手とトランクを作る",
-    "ネイティブVLAN として、タグなしで転送する": "タグを扱えない機器には、タグを付けずに転送する",
-    "isl を消して dot1q にし、足りない VLAN を add で足す": "古いやり方をやめて、標準の付け方にそろえる",
-    "switchport trunk allowed vlan add で足す": "add を忘れると、現在の一覧が消える",
-    "switchport trunk native vlan を 1 以外にする": "既定のままだと、タグなしのフレームが既定の VLAN に流れる",
-    "スイッチ間はトランク、端末側はアクセスにする": "トランクにするのはスイッチどうしの線だけ",
-    "switchport mode trunk にして、カプセル化を dot1q にする": "アクセスのままでは、VLAN をいくつも通せない"
+    "switchport access vlan と switchport voice vlan を設定する": "1本のケーブルで、パソコンと IP 電話を別々の VLAN に分ける",
+    "switchport mode dynamic desirable にする": "自分から交渉を始めて、相手とトランクを組む",
+    "ネイティブVLAN として、タグなしで転送する": "VLAN タグを扱えない機器には、タグを付けずに転送する",
+    "isl を削除して dot1q にし、足りない VLAN を add で追加する": "シスコ独自の古い方式をやめて、標準の方式にそろえる",
+    "switchport trunk allowed vlan add で追加する": "add を忘れると、いまの一覧が置き換わって消える",
+    "switchport trunk native vlan を 1 以外にする": "既定のままだと、タグの付いていないフレームが既定の VLAN に流れ込む",
+    "スイッチ間はトランク、端末側はアクセスにする": "トランクにするのは、スイッチどうしをつなぐ線だけ",
+    "switchport mode trunk にして、カプセル化を dot1q にする": "アクセスのままでは、複数の VLAN を転送できない"
   };
 
   /* 本の答えの言い回しと突き合わせるための言葉 */
   var SAME = {
     "ルータにサブインターフェースを作り、encapsulation dot1Q と IP アドレスを設定する": ["encapsulation dot1"],
-    "switchport access vlan と switchport voice vlan を打つ": ["voice vlan"],
+    "switchport access vlan と switchport voice vlan を設定する": ["voice vlan"],
     "switchport mode dynamic desirable にする": ["dynamic desirable"],
     "ネイティブVLAN として、タグなしで転送する": ["native vlan"],
-    "isl を消して dot1q にし、足りない VLAN を add で足す": ["no switchport trunk encapsulation isl"],
-    "switchport trunk allowed vlan add で足す": ["allowed vlan add"],
+    "isl を削除して dot1q にし、足りない VLAN を add で追加する": ["no switchport trunk encapsulation isl"],
+    "switchport trunk allowed vlan add で追加する": ["allowed vlan add"],
     "switchport trunk native vlan を 1 以外にする": ["native vlan"],
     "スイッチ間はトランク、端末側はアクセスにする": ["switchport mode access"],
     "switchport mode trunk にして、カプセル化を dot1q にする": ["mode trunk"]

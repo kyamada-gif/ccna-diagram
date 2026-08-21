@@ -23,28 +23,28 @@
   var SPOTS = [
     { key: "need", name: "要件の言葉（問題文）",
       re: /(要件|許可|アクセス|設定|削除)/,
-      mean: "「SSH だけ」「Telnet のみ」「パスワードを隠す」など、問題文が出している条件",
-      use: "まず要件を読む。打つコマンドは、要件の言葉とほぼ1対1で決まる" },
+      mean: "「SSH だけ許可する」「Telnet のみ」「パスワードを隠す」など、問題文に書かれた条件",
+      use: "まず要件を読む。入力するコマンドは、要件に書かれた言葉とほぼ1対1で決まる" },
 
     { key: "pw", name: "パスワードの入れ方（password か secret か）",
       re: /(password|secret)/i,
-      mean: "password はそのまま保存、secret は取り出せない形にして保存",
-      use: "「安全に保存する」なら secret。`service password-encryption` は隠すだけで、secret ほど強くない" },
+      mean: "password は入力した文字がそのまま設定に残る。secret は元に戻せない形に変換して保存される",
+      use: "「安全に保存する」と書かれていれば secret。service password-encryption は見た目を隠すだけで、secret ほど強くない" },
 
     { key: "trans", name: "接続方式の許可（transport input）",
       re: /transport input\s*(ssh|telnet|all|none)?/i,
-      mean: "そのインターフェースに、どのやり方で入ってよいか",
+      mean: "その回線に、どの方式で接続してよいか",
       use: "指定しないと Telnet だけが許可される。SSH だけにするなら transport input ssh を設定する" },
 
     { key: "login", name: "ログインの確かめ方（login local）",
       re: /(login local|login)/i,
-      mean: "接続時に、機器に登録したユーザー名とパスワードで認証するかどうか",
+      mean: "接続してきた相手を、機器に登録したユーザー名とパスワードで認証するかどうか",
       use: "username を作成したら、vty 側にも login local が必要。どちらか一方だけでは接続できない" },
 
     { key: "sshparts", name: "SSH に必要な設定",
       re: /(hostname|ip domain-name|crypto key|ip ssh version)/i,
-      mean: "SSH を使うには、名前・ドメイン名・鍵の3つがそろっている必要がある",
-      use: "hostname → ip domain-name → crypto key generate rsa の順。鍵がすでにあるなら作り直さない" }
+      mean: "SSH を使うには、ホスト名・ドメイン名・暗号鍵の3つがそろっている必要がある",
+      use: "hostname → ip domain-name → crypto key generate rsa の順に設定する。鍵がすでに作られていれば、作り直さない" }
   ];
 
   function join(x) {
@@ -86,49 +86,49 @@
 
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
-    { key: "remove", cue: "必要のないコマンドを削除する", cond: "要らないコマンドを消す、と書いてある",
+    { key: "remove", cue: "必要のないコマンドを削除する", cond: "不要なコマンドを削除する、と書かれている",
       verdict: "SSH に関係のないコマンドを no で削除する",
-      why: "名前を引く設定（ip name-server）や、secret を使っているのに要らない service password-encryption は、SSH には関係がない",
+      why: "名前解決の設定（ip name-server）や、secret を使っているのに残っている service password-encryption は、SSH の動作には関係がない",
       look: ["要件の言葉（問題文）"],
       steps: function (v) { return [["問題文のことば", v.remove || "-"]]; },
       no: function () { return "消す話ではない"; },
       test: function (v) { return !!v.remove; } },
 
     { key: "sshsetup", cue: "SSH を使えるようにする", cond: "SSH を使えるようにしたい",
-      verdict: "hostname・ip domain-name・crypto key generate rsa をそろえる",
-      why: "鍵を作るには、機器の名前とドメイン名が先に必要。この3つがそろって、はじめて SSH が使える",
+      verdict: "hostname・ip domain-name・crypto key generate rsa の3つを設定する",
+      why: "暗号鍵を作るには、ホスト名とドメイン名が先に必要。この3つがそろって、はじめて SSH が使える",
       look: ["SSH に必要な設定"],
       steps: function (v) { return [["いまある鍵", v.haskey || "（無し）"]]; },
       no: function () { return "SSH を使えるようにする話ではない"; },
       test: function (v) { return !!v.sshsetup; } },
 
     { key: "sshonly", cue: "SSH だけ許可する", cond: "SSH だけ許して、パスワードを隠したい",
-      verdict: "transport input ssh と service password-encryption を打つ",
-      why: "書かないと Telnet が通る。transport input ssh で SSH だけにする。パスワードの見え方は service password-encryption で隠す",
+      verdict: "transport input ssh と service password-encryption を設定する",
+      why: "指定しないと Telnet での接続が通ってしまう。transport input ssh で SSH だけに限定し、設定に残るパスワードは service password-encryption で見えない形にする",
       look: ["接続方式の許可（transport input）", "パスワードの入れ方（password か secret か）"],
       steps: function (v) { return [["現在の入口", v.curTrans || "（書いていない＝Telnet）"]]; },
       no: function () { return "SSH だけにする話ではない"; },
       test: function (v) { return !!v.sshonly; } },
 
     { key: "priv", cue: "入ったらすぐ特権モード", cond: "入ったらすぐ特権モードにしたい",
-      verdict: "username に privilege 15 を付け、vty 側に login local を打つ",
-      why: "privilege 15 を付けたユーザーで入ると、そのまま特権モードになる。vty 側に login local が無いと、そのユーザーで確かめてくれない",
+      verdict: "username に privilege 15 を付け、vty 側に login local を設定する",
+      why: "privilege 15 を付けたユーザーで接続すると、その時点で特権モードになる。vty 側に login local が無いと、そのユーザー名とパスワードで認証されない",
       look: ["ログインの確かめ方（login local）"],
       steps: function (v) { return [["問題文のことば", v.priv || "-"], ["いるユーザー", v.user || "-"]]; },
       no: function () { return "特権モードの話ではない"; },
       test: function (v) { return !!v.priv; } },
 
     { key: "telnetonly", cue: "Telnet だけ許可する", cond: "Telnet だけ許して、enable を安全にしたい",
-      verdict: "transport input telnet と enable secret を打つ",
-      why: "Telnet だけにするなら transport input telnet。enable のパスワードは secret で、取り出せない形にする",
+      verdict: "transport input telnet と enable secret を設定する",
+      why: "Telnet だけに限定するなら transport input telnet。enable のパスワードは secret で、元に戻せない形にして保存する",
       look: ["接続方式の許可（transport input）", "パスワードの入れ方（password か secret か）"],
       steps: function (v) { return [["問題文のことば", v.telnetonly || "-"]]; },
       no: function () { return "Telnet だけにする話ではない"; },
       test: function (v) { return !!v.telnetonly; } },
 
-    { key: "secret", cue: "パスワードを取り出せない形で保存する", cond: "そのほか（ユーザー名とパスワードを作る）",
-      verdict: "username（名前）secret（パスワード）で作る",
-      why: "secret は、取り出せない形にして保存する。password で作ると、そのままの形で残る",
+    { key: "secret", cue: "パスワードを取り出せない形で保存する", cond: "そのほか（ユーザー名とパスワードを作成する）",
+      verdict: "username（名前）secret（パスワード）で作成する",
+      why: "secret は元に戻せない形に変換して保存される。password で作成すると、入力した文字がそのまま設定に残る",
       look: ["パスワードの入れ方（password か secret か）"],
       steps: function (v) { return [["要件", (v.all || "").split("\n")[0]]]; },
       no: function () { return "ここまでで決まっている"; },
@@ -136,21 +136,21 @@
   ];
 
   var GLOSS = {
-    "SSH に関係のないコマンドを no で削除する": "名前を引く設定などは、SSH には要らない",
-    "hostname・ip domain-name・crypto key generate rsa をそろえる": "この3つがそろって、はじめて SSH が使える",
-    "transport input ssh と service password-encryption を打つ": "接続方式を SSH だけにし、設定上のパスワードを見えない形にする",
-    "username に privilege 15 を付け、vty 側に login local を打つ": "入った瞬間から、何でもできる状態になる",
-    "transport input telnet と enable secret を打つ": "入口は Telnet だけ。enable は取り出せない形で保存",
-    "username（名前）secret（パスワード）で作る": "secret は取り出せない形。password はそのまま残る"
+    "SSH に関係のないコマンドを no で削除する": "名前解決の設定などは、SSH の動作には関係がない",
+    "hostname・ip domain-name・crypto key generate rsa の3つを設定する": "この3つがそろって、はじめて SSH が使える",
+    "transport input ssh と service password-encryption を設定する": "接続方式を SSH だけに限定し、設定に残るパスワードを見えない形にする",
+    "username に privilege 15 を付け、vty 側に login local を設定する": "接続した時点で、すべての操作ができる状態になる",
+    "transport input telnet と enable secret を設定する": "接続方式は Telnet だけ。enable のパスワードは元に戻せない形で保存する",
+    "username（名前）secret（パスワード）で作成する": "secret は元に戻せない形で保存される。password は入力した文字がそのまま残る"
   };
 
   var SAME = {
     "SSH に関係のないコマンドを no で削除する": ["no ip name-server", "no service password-encryption"],
-    "hostname・ip domain-name・crypto key generate rsa をそろえる": ["crypto key generate rsa"],
-    "transport input ssh と service password-encryption を打つ": ["transport input ssh"],
-    "username に privilege 15 を付け、vty 側に login local を打つ": ["privilege 15"],
-    "transport input telnet と enable secret を打つ": ["transport input telnet"],
-    "username（名前）secret（パスワード）で作る": ["secret"]
+    "hostname・ip domain-name・crypto key generate rsa の3つを設定する": ["crypto key generate rsa"],
+    "transport input ssh と service password-encryption を設定する": ["transport input ssh"],
+    "username に privilege 15 を付け、vty 側に login local を設定する": ["privilege 15"],
+    "transport input telnet と enable secret を設定する": ["transport input telnet"],
+    "username（名前）secret（パスワード）で作成する": ["secret"]
   };
 
   /* ── 出力を作る ─────────────────────────── */

@@ -27,7 +27,7 @@
     { key: "need", name: "要件の行（問題文）",
       re: /要件|したい|しますか|ますか/,
       mean: "問題文に書かれた要件。この分野では、答えを決める手がかりの多くが問題文にある",
-      use: "最初に問題文を読む。「別のベンダー」「応答するが開始しない」「ダウンしたとき」「新しいメンバー」のいずれかがあれば、その時点で打つコマンドが決まる" },
+      use: "最初に問題文を読む。「別のベンダー」「応答するが開始しない」「ダウンしたとき」「新しいメンバー」のいずれかがあれば、その時点で入力するコマンドが決まる" },
 
     { key: "add", name: "メンバーポートの追加かどうか",
       re: /新しいメンバー|バンドルに追加|メンバーとして/,
@@ -114,7 +114,7 @@
       test: function (v) { return !!v.bundle; } },
 
     { key: "l3add", cue: "新しいメンバーとして追加する", cond: "メンバーポートを追加する。ポートチャネルはレイヤ3（Po1(RU)）",
-      verdict: "no switchport のあとに channel-group を打つ",
+      verdict: "no switchport のあとに channel-group を入力する",
       why: "R はレイヤ3のポートチャネルを表す。レイヤ2のままのインターフェースは参加できないため、先に no switchport でレイヤ3に切り替える",
       look: ["メンバーを足す話か", "ポートチャネルの階層（Po1(RU) か Po1(SU) か）"],
       steps: function (v) { return [["足す話か", v.add || "-"], ["ポートチャネルの階層", v.layer || "-"]]; },
@@ -156,7 +156,7 @@
 
   var GLOSS = {
     "不足しているインターフェース側に、許可VLAN を追加する": "ポートチャネル側に設定しても解決しない",
-    "no switchport のあとに channel-group を打つ": "レイヤ3のポートチャネルには、レイヤ3にしたインターフェースしか参加できない",
+    "no switchport のあとに channel-group を入力する": "レイヤ3のポートチャネルには、レイヤ3にしたインターフェースしか参加できない",
     "port-channel min-links で、必要な最小リンク数を指定する": "この数を下回ると、ポートチャネル全体が停止する",
     "channel-group（番号）mode active": "自分から交渉を開始する。LACP で使う",
     "channel-group（番号）mode passive": "対向から交渉を受けたときだけ応答する"
@@ -165,7 +165,7 @@
   /* 本の答えの言い回しと突き合わせるための言葉 */
   var SAME = {
     "不足しているインターフェース側に、許可VLAN を追加する": ["allowed vlan add"],
-    "no switchport のあとに channel-group を打つ": ["no switchport"],
+    "no switchport のあとに channel-group を入力する": ["no switchport"],
     "port-channel min-links で、必要な最小リンク数を指定する": ["min-links"],
     "channel-group（番号）mode active": ["mode active"],
     "channel-group（番号）mode passive": ["mode passive"]

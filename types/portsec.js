@@ -21,18 +21,18 @@
   var SPOTS = [
     { key: "what", name: "何を守る話か（問題文）",
       re: /(MAC|DHCP|ARP|台|接続)/,
-      mean: "つないでよい機器の数の話か、不正な DHCP サーバの話か",
-      use: "MAC アドレスや台数の話なら port-security。不正な DHCP や ARP の話なら dhcp snooping" },
+      mean: "接続してよい機器の台数についてか、不正な DHCP サーバについてか",
+      use: "MAC アドレスや台数について問われていれば port-security。不正な DHCP や ARP について問われていれば dhcp snooping" },
 
     { key: "max", name: "何台まで許すか（maximum）",
       re: /(port-security maximum|\d+\s*台|\d+\s*つ)/,
       mean: "そのインターフェースに接続してよい機器の台数",
       use: "「2台に制限」なら maximum 2。既定値は1台のため、指定しなければ1台しか通信できない" },
 
-    { key: "learn", name: "覚え方（sticky か手打ちか）",
+    { key: "learn", name: "MAC アドレスの覚え方（sticky か手動か）",
       re: /(sticky|動的に学習|手動)/,
-      mean: "つながった機器の MAC を自動で覚えるか、手で書くか",
-      use: "「動的に学習して、設定に残す」なら sticky。手で全部書くのは大変なので、ふつうは sticky" },
+      mean: "接続された機器の MAC アドレスを自動で学習するか、手動で設定するか",
+      use: "「動的に学習して設定に残す」と書かれていれば sticky。台数が多いと手動では現実的でないので、通常は sticky を使う" },
 
     { key: "viol", name: "違反したときの動き（violation）",
       re: /(violation|shutdown|restrict|protect|ログ|記録)/,
@@ -82,7 +82,7 @@
 
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
-    { key: "viol", cue: "違反時にログだけ残す", cond: "違反したときの動きが書いてある",
+    { key: "viol", cue: "違反時にログだけ残す", cond: "違反したときの動きが書かれている",
       verdict: "violation restrict にして、通信を遮断しつつログを残す",
       why: "restrict は、通信は遮断するがインターフェースは有効なままで、違反をログに残す。shutdown はインターフェースごと停止し、protect はログも残さない",
       look: ["違反したときの動き（violation）"],
@@ -92,8 +92,8 @@
 
     { key: "snoop", cue: "不正な DHCP サーバ", cond: "不正な DHCP サーバや ARP のなりすましを止めたい",
       verdict: "DHCP スヌーピングを有効にし、上流のインターフェースだけを trust にする",
-      why: "信頼するのは、正規のサーバが接続された側のインターフェースだけ。クライアント側を信頼しないため、不正なサーバの返事が通らなくなる",
-      look: ["信じてよい口はどこか（dhcp snooping）"],
+      why: "信頼するのは、正規のサーバが接続された側のインターフェースだけ。クライアント側を信頼しないので、不正なサーバからの応答は転送されない",
+      look: ["信頼するインターフェース（DHCP スヌーピング）"],
       steps: function (v) { return [["信じる口", v.uplink || "-"]]; },
       no: function () { return "不正なサーバの話ではない"; },
       test: function (v) { return !!v.snoop; } },
@@ -108,7 +108,7 @@
   ];
 
   var GLOSS = {
-    "DHCP スヌーピングを有効にし、上流のインターフェースだけを trust にする": "信頼するのは、正規のサーバがある側のインターフェースだけ",
+    "DHCP スヌーピングを有効にし、上流のインターフェースだけを trust にする": "信頼するのは、正規のサーバが接続された側のインターフェースだけ",
     "violation restrict にして、通信を遮断しつつログを残す": "インターフェースは有効なまま。違反はログに記録される",
     "switchport port-security maximum で、接続を許可する台数を指定する": "既定値は1台。指定しなければ1台しか通信できない"
   };

@@ -291,6 +291,53 @@ BLOCK_IDS.forEach((id) => {
   found.forEach((f) => bad.push(`古い言い回しが残っている … ${f}`));
 }
 
+/* ── 画面の言葉が、自然な日本語になっているか ──────────
+ * **講義でそのまま使える文にする。**
+ * 分かりやすくするつもりで、ふだん使わない言い方に置きかえない。
+ *   ・常用漢字はひらがなにしない（くらべる → 比べる）
+ *   ・自分で作った言いかえを使わない（住所 → IP アドレス、合言葉 → 事前共有キー）
+ *   ・話し言葉に寄せない（打つ → 入力する、〜の話 → 〜について）
+ * `` はコード用の記号で、画面にはそのまま文字として出る。
+ */
+{
+  const NG = {
+    "くらべ": "比べ",
+    "こわれ": "壊れ",
+    "しくじ": "失敗",
+    "ちがう": "違う",
+    "ちがい": "違い",
+    "住所": "IP アドレス",
+    "合言葉": "事前共有キー",
+    "載せる先": "所属させるインターフェース",
+    "なりたい度合い": "選ばれやすさを決める設定値",
+    "を打つ": "を入力する",
+    "けた違い": "桁違い",
+    "`": "（画面にそのまま出るので使わない）"
+  };
+  const found = [];
+  const look = (v, where) => {
+    if (typeof v === "string") {
+      Object.keys(NG).forEach((k) => {
+        if (v.indexOf(k) >= 0) found.push(`${where}: 「${k}」→「${NG[k]}」（${v.slice(0, 26)}…）`);
+      });
+      return;
+    }
+    if (Array.isArray(v)) { v.forEach((x, i) => look(x, `${where}[${i}]`)); return; }
+    if (v && typeof v === "object") {
+      Object.keys(v).forEach((k) => {
+        if (k === "re" || k === "pat" || typeof v[k] === "function") return;
+        look(v[k], `${where}.${k}`);
+      });
+    }
+  };
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id];
+    if (!sp) return;
+    ["spots", "rules", "gloss", "name", "note", "ask"].forEach((k) => look(sp[k], `${id}.${k}`));
+  });
+  found.forEach((f) => bad.push(`画面の言葉が不自然 … ${f}`));
+}
+
 /* ── 絵の問題に、紙面の画像があるか ─────────────────
  * **絵（ネットワーク図・機器の画面・表）は、言葉で作り直さない。紙面の実物を出す。**
  * 元データ（master.jsonl）で提示物に図が入っている問題は、

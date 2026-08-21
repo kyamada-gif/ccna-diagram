@@ -515,27 +515,13 @@ function Home({ prog, go, open, setOpen }) {
                 {on && (
                   <div className="row-p">
                     {ready ? (
-                      <>
-                        <div className="row-d">
-                          {bs.length === 0
-                            ? "この分野の練習は、まだ用意できていません。テストだけ受けられます。"
-                            : G.kind === "match"
-                              ? "用語 " + bs.length + " 個。用語ごとに説明を1枚とその用語の問題を2問。"
-                                + "最後に、覚えた組み合わせを結ぶ問題が3問あります。"
-                              : "確認項目 " + bs.length + " 個。項目ごとに説明を1枚とその項目の問題を2問。"
-                                + "最後に、出力全体から答えを決める問題が3問あります。"}
-                        </div>
-                        <div className="row-d">
-                          テストに出るのは、本に載っている問題そのもの {n} 問です。
-                          {passLine(n)} 問正解でバッジが付きます。
-                        </div>
-                        <div className="row-go">
-                          <button className="go next" disabled={bs.length === 0}
-                            onClick={() => go(b.id, "practice")}>練習をする</button>
-                          <button className="go ghost"
-                            onClick={() => go(b.id, "test:0")}>テストを受ける</button>
-                        </div>
-                      </>
+                      /* **説明は書かない。**押せば分かることを、押す前に読ませない */
+                      <div className="row-go">
+                        <button className="go next" disabled={bs.length === 0}
+                          onClick={() => go(b.id, "practice")}>練習をする</button>
+                        <button className="go ghost"
+                          onClick={() => go(b.id, "test:0")}>テストを受ける</button>
+                      </div>
                     ) : (
                       <div className="row-d">
                         この分野の「確認項目」と「決め方」を、本の問題と解説から書き起こす作業がこれからです。
@@ -919,7 +905,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
             <div className="sec">
               <span className="sec-l">どう使うか</span>
               <div className="brief-b">
-                ここに挙げた {lb.learn.length} 個の説明は、すべて「{lb.name}」を指します。
+                ここに挙げた {lb.learn.length} 個の説明は、いずれも「{lb.name}」を指しています。
                 {li + 1 < lof ? "次の用語へ進みます。" : "これが最後の用語です。"}
               </div>
             </div>
@@ -953,12 +939,14 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
           </div>
           <div className="gloss">{G.gloss(lb.verdict)}</div>
           <div className="brief-b">
-            {li + 1 < lof ? "決まらなければ、次の所を見ます。" : "ここまでで決まらないときの、最後の所です。"}
+            {li + 1 < lof
+              ? "ここで決まらなければ、次の確認項目へ進みます。"
+              : "ここまでで決まらなかったときに見る、最後の確認項目です。"}
           </div>
         </div>
         </>
         )}
-        <button className="go" onClick={next}>この所の問題へ（Enter）</button>
+        <button className="go" onClick={next}>この確認項目の問題へ（Enter）</button>
       </div>
     );
   }

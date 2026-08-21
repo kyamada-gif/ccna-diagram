@@ -742,11 +742,10 @@ function Home({
       className: "row-v" + (on ? " row-v-on" : "")
     }, "\u25BE")), on && /*#__PURE__*/React.createElement("div", {
       className: "row-p"
-    }, ready ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-      className: "row-d"
-    }, bs.length === 0 ? "この分野の練習は、まだ用意できていません。テストだけ受けられます。" : G.kind === "match" ? "用語 " + bs.length + " 個。用語ごとに説明を1枚とその用語の問題を2問。" + "最後に、覚えた組み合わせを結ぶ問題が3問あります。" : "確認項目 " + bs.length + " 個。項目ごとに説明を1枚とその項目の問題を2問。" + "最後に、出力全体から答えを決める問題が3問あります。"), /*#__PURE__*/React.createElement("div", {
-      className: "row-d"
-    }, "\u30C6\u30B9\u30C8\u306B\u51FA\u308B\u306E\u306F\u3001\u672C\u306B\u8F09\u3063\u3066\u3044\u308B\u554F\u984C\u305D\u306E\u3082\u306E ", n, " \u554F\u3067\u3059\u3002", passLine(n), " \u554F\u6B63\u89E3\u3067\u30D0\u30C3\u30B8\u304C\u4ED8\u304D\u307E\u3059\u3002"), /*#__PURE__*/React.createElement("div", {
+    }, ready ?
+    /*#__PURE__*/
+    /* **説明は書かない。**押せば分かることを、押す前に読ませない */
+    React.createElement("div", {
       className: "row-go"
     }, /*#__PURE__*/React.createElement("button", {
       className: "go next",
@@ -755,7 +754,7 @@ function Home({
     }, "\u7DF4\u7FD2\u3092\u3059\u308B"), /*#__PURE__*/React.createElement("button", {
       className: "go ghost",
       onClick: () => go(b.id, "test:0")
-    }, "\u30C6\u30B9\u30C8\u3092\u53D7\u3051\u308B"))) : /*#__PURE__*/React.createElement("div", {
+    }, "\u30C6\u30B9\u30C8\u3092\u53D7\u3051\u308B")) : /*#__PURE__*/React.createElement("div", {
       className: "row-d"
     }, "\u3053\u306E\u5206\u91CE\u306E\u300C\u78BA\u8A8D\u9805\u76EE\u300D\u3068\u300C\u6C7A\u3081\u65B9\u300D\u3092\u3001\u672C\u306E\u554F\u984C\u3068\u89E3\u8AAC\u304B\u3089\u66F8\u304D\u8D77\u3053\u3059\u4F5C\u696D\u304C\u3053\u308C\u304B\u3089\u3067\u3059\u3002 \u3067\u304D\u308B\u3068\u3001\u307B\u304B\u306E\u5206\u91CE\u3068\u540C\u3058\u3088\u3046\u306B\u3001\u7DF4\u7FD2\u3067\u899A\u3048\u3066\u304B\u3089\u30C6\u30B9\u30C8\u306B\u9032\u3081\u307E\u3059\u3002")));
   }))), /*#__PURE__*/React.createElement("div", {
@@ -1212,7 +1211,7 @@ function Drill({
       className: "sec-l"
     }, "\u3069\u3046\u4F7F\u3046\u304B"), /*#__PURE__*/React.createElement("div", {
       className: "brief-b"
-    }, "\u3053\u3053\u306B\u6319\u3052\u305F ", lb.learn.length, " \u500B\u306E\u8AAC\u660E\u306F\u3001\u3059\u3079\u3066\u300C", lb.name, "\u300D\u3092\u6307\u3057\u307E\u3059\u3002", li + 1 < lof ? "次の用語へ進みます。" : "これが最後の用語です。"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    }, "\u3053\u3053\u306B\u6319\u3052\u305F ", lb.learn.length, " \u500B\u306E\u8AAC\u660E\u306F\u3001\u3044\u305A\u308C\u3082\u300C", lb.name, "\u300D\u3092\u6307\u3057\u3066\u3044\u307E\u3059\u3002", li + 1 < lof ? "次の用語へ進みます。" : "これが最後の用語です。"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
@@ -1251,10 +1250,10 @@ function Drill({
       className: "gloss"
     }, G.gloss(lb.verdict)), /*#__PURE__*/React.createElement("div", {
       className: "brief-b"
-    }, li + 1 < lof ? "決まらなければ、次の所を見ます。" : "ここまでで決まらないときの、最後の所です。"))), /*#__PURE__*/React.createElement("button", {
+    }, li + 1 < lof ? "ここで決まらなければ、次の確認項目へ進みます。" : "ここまでで決まらなかったときに見る、最後の確認項目です。"))), /*#__PURE__*/React.createElement("button", {
       className: "go",
       onClick: next
-    }, "\u3053\u306E\u6240\u306E\u554F\u984C\u3078\uFF08Enter\uFF09"));
+    }, "\u3053\u306E\u78BA\u8A8D\u9805\u76EE\u306E\u554F\u984C\u3078\uFF08Enter\uFF09"));
   }
 
   /* **kind で場合分けしない。**あるものを出すだけ */

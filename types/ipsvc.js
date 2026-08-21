@@ -24,27 +24,27 @@
     { key: "what", name: "何の話か（問題文）",
       re: /(DHCP|NAT|NTP|LLDP)/,
       mean: "DHCP か NAT か NTP か LLDP か",
-      use: "まずこれで、打つコマンドの種類が決まる。DHCP なら ip helper-address、NAT なら ip nat、NTP なら ntp server、LLDP なら lldp timer" },
+      use: "まずここで、入力するコマンドの種類が決まる。DHCP なら ip helper-address、NAT なら ip nat、NTP なら ntp server、LLDP なら lldp timer" },
 
     { key: "side", name: "どちら側のインターフェースか（DHCP）",
       re: /(クライアント|サーバ|helper-address)/,
       mean: "クライアント側のインターフェースか、サーバ側のインターフェースか",
-      use: "ip helper-address は、クライアント側のインターフェースに設定する。指定する相手は DHCP サーバの IP アドレス" },
+      use: "ip helper-address は、クライアント側のインターフェースに設定する。指定するのは DHCP サーバの IP アドレス" },
 
     { key: "nat", name: "NAT の内側と外側",
       re: /(ip nat inside|ip nat outside|overload|pool)/i,
-      mean: "どのインターフェースが内側で、どれが外側か。アドレスプールを使うか、1つのアドレスに集約するか",
-      use: "内側と外側の両方を指定しないと動作しない。多数の通信を少ないアドレスで扱うなら overload を付ける" },
+      mean: "どのインターフェースが内側で、どれが外側か。複数のアドレスを使うか、1つのアドレスにまとめるか",
+      use: "内側と外側の両方を指定しないと動作しない。少ないアドレスで多数の通信を扱うなら overload を付ける" },
 
-    { key: "unit", name: "入れる単位（LLDP）",
+    { key: "unit", name: "指定する単位（LLDP）",
       re: /(lldp timer|lldp holdtime|秒|分)/,
-      mean: "送る間隔と、覚えておく時間",
-      use: "どちらも秒で入れる。「1分ごと」なら 60、「3分」なら 180" },
+      mean: "通知を送る間隔と、受け取った情報を保持する時間",
+      use: "どちらも秒で指定する。「1分ごと」なら 60、「3分」なら 180" },
 
-    { key: "src", name: "写しもとの出力（NTP）",
+    { key: "src", name: "参照先が書かれている行（NTP）",
       re: /(ntp server|address\s+ref clock|show ntp)/i,
-      mean: "いま見に行っている相手が書いてある行",
-      use: "`show ntp associations` の address の列が、見に行っている相手。ref clock の列は、その相手が見ている先なので写さない" }
+      mean: "いま時刻を問い合わせている相手が書かれている行",
+      use: "show ntp associations の address の列が、時刻を問い合わせている相手。ref clock の列は、その相手がさらに参照している先なので、ここには書かない" }
   ];
 
   function join(x) {
@@ -86,23 +86,23 @@
 
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
-    { key: "lldp", cue: "LLDP の送信間隔", cond: "LLDP の間隔の話",
-      verdict: "lldp timer と lldp holdtime を、秒で入れる",
-      why: "どちらも秒。「1分ごとに送る」なら 60、「3分で更新」なら 180。分のつもりで 1 と入れると、1秒ごとになる",
+    { key: "lldp", cue: "LLDP の送信間隔", cond: "LLDP の間隔について問われている",
+      verdict: "lldp timer と lldp holdtime を、秒で指定する",
+      why: "どちらも単位は秒。「1分ごとに送る」なら 60、「3分で更新」なら 180 と指定する。分のつもりで 1 と入力すると、1秒ごとになってしまう",
       look: ["入れる単位（LLDP）"],
       steps: function (v) { return [["問題文のことば", v.minutes ? v.minutes + " 分" : "-"]]; },
       no: function () { return "LLDP の話ではない"; },
       test: function (v) { return !!v.lldp; } },
 
-    { key: "ntp", cue: "NTP の設定を複製する", cond: "NTP の相手を写す話",
-      verdict: "ntp server に、いま見に行っている相手を書く",
-      why: "`show ntp associations` の address の列が、見に行っている相手。ref clock はその先なので写さない",
+    { key: "ntp", cue: "NTP の設定を複製する", cond: "NTP の参照先について問われている",
+      verdict: "ntp server に、いま時刻を問い合わせている相手を指定する",
+      why: "show ntp associations の address の列が、時刻を問い合わせている相手。ref clock はその先なので、ここには書かない",
       look: ["写しもとの出力（NTP）"],
       steps: function (v) { return [["写す相手", v.server || "-"]]; },
       no: function () { return "NTP の話ではない"; },
       test: function (v) { return !!v.ntp; } },
 
-    { key: "nat", cue: "アドレスの節約と同時接続数", cond: "NAT の話",
+    { key: "nat", cue: "アドレスの節約と同時接続数", cond: "NAT について問われている",
       verdict: "内側と外側を指定し、足りなければ overload を付ける",
       why: "内側のインターフェースに ip nat inside、外側に ip nat outside を設定する。両方そろわないと動作しない。少ないアドレスで多数の通信を扱うなら overload を付ける",
       look: ["NAT の内側と外側"],
@@ -112,7 +112,7 @@
 
     { key: "helper", cue: "DHCP サーバが別のネットワークにある", cond: "そのほか（DHCP の中継）",
       verdict: "クライアント側のインターフェースに ip helper-address を設定し、サーバの IP アドレスを指定する",
-      why: "パソコンが出す最初の呼びかけは、網をまたげない。パソコン側の口で受け取って、サーバまで運んでもらう",
+      why: "パソコンが最初に送る要求はブロードキャストなので、ルータを越えられない。クライアント側のインターフェースで受け取って、サーバまで転送してもらう",
       look: ["どちら側の口か（DHCP）"],
       steps: function (v) { return [["現在の中継先", v.helper || "（まだ無い）"]]; },
       no: function () { return "ここまでで決まっている"; },
@@ -120,15 +120,15 @@
   ];
 
   var GLOSS = {
-    "lldp timer と lldp holdtime を、秒で入れる": "分のつもりで 1 と入れると、1秒ごとになる",
-    "ntp server に、いま見に行っている相手を書く": "address の列を写す。ref clock はその先",
-    "内側と外側を指定し、足りなければ overload を付ける": "両方そろわないと動かない",
-    "クライアント側のインターフェースに ip helper-address を設定し、サーバの IP アドレスを指定する": "サーバ側のインターフェースに設定しても届かない"
+    "lldp timer と lldp holdtime を、秒で指定する": "分のつもりで 1 と入力すると、1秒ごとになってしまう",
+    "ntp server に、いま時刻を問い合わせている相手を指定する": "address の列を指定する。ref clock はその先の参照先",
+    "内側と外側を指定し、足りなければ overload を付ける": "内側と外側の両方がそろわないと動作しない",
+    "クライアント側のインターフェースに ip helper-address を設定し、サーバの IP アドレスを指定する": "サーバ側のインターフェースに設定しても、要求は届かない"
   };
 
   var SAME = {
-    "lldp timer と lldp holdtime を、秒で入れる": ["lldp timer"],
-    "ntp server に、いま見に行っている相手を書く": ["ntp server"],
+    "lldp timer と lldp holdtime を、秒で指定する": ["lldp timer"],
+    "ntp server に、いま時刻を問い合わせている相手を指定する": ["ntp server"],
     "内側と外側を指定し、足りなければ overload を付ける": ["NAT", "nat"],
     "クライアント側のインターフェースに ip helper-address を設定し、サーバの IP アドレスを指定する": ["helper-address"]
   };

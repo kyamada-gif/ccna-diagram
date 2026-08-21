@@ -23,28 +23,28 @@
   var SPOTS = [
     { key: "run", name: "OSPF が動いているか",
       re: /Process ID \d+|router ospf \d+/,
-      mean: "そのつなぎ目で OSPF が動いているかどうか",
-      use: "Process ID の行か router ospf の行があれば動いている。片方に無ければ、そちらで OSPF を動かすのが答え" },
+      mean: "そのインターフェースで OSPF が動いているかどうか",
+      use: "Process ID の行か router ospf の行があれば動いている。片方に無ければ、そちら側で OSPF を動かす設定を追加する" },
 
     { key: "area", name: "エリアの番号",
       re: /[Aa]rea \d+/,
-      mean: "OSPF を area いくつで動かしているか",
-      use: "OSPF を動かすときは、番号を相手と同じにする。show の出力では Internet address の行のうしろ、設定では network の行の終わりに書いてある" },
+      mean: "そのインターフェースを、どのエリアに所属させているか",
+      use: "エリア番号が相手と違うと、隣接関係にならない。show の出力では Internet address の行の後ろ、設定では network の行の末尾に書かれている" },
 
     { key: "hello", name: "Hello",
       re: /Hello \d+|hello-interval \d+/,
-      mean: "何秒おきに、生きていますというあいさつを送るか",
-      use: "Timer intervals の行の Hello を、二つ並べてくらべる。数がちがえば、その秒数を相手に合わせるのが答え。設定に書いていないときは 10" },
+      mean: "何秒おきに「動いています」という通知を送るか",
+      use: "Timer intervals の行にある Hello の値を、両側で比べる。値が違っていれば、片方を相手に合わせる。設定に書かれていないときは 10 秒" },
 
     { key: "dead", name: "Dead",
       re: /Dead \d+|dead-interval \d+/,
-      mean: "あいさつが何秒とどかなかったら、相手が居なくなったと決めるか",
-      use: "Timer intervals の行の Dead を、二つ並べてくらべる。数がちがえば、その秒数を相手に合わせるのが答え。設定に書いていないときは 40" },
+      mean: "通知が何秒届かなかったら、相手が停止したと判断するか",
+      use: "Timer intervals の行にある Dead の値を、両側で比べる。値が違っていれば、片方を相手に合わせる。設定に書かれていないときは 40 秒" },
 
     { key: "rid", name: "Router ID",
       re: /Router ID [\d.]+|router-id [\d.]+/,
-      mean: "そのルータに割り当てられた識別番号",
-      use: "二つの Router ID をくらべる。同じ番号なら、片方の router-id の設定を消すのが答え。Hello と Dead が合っているのにつながらないときに見る" }
+      mean: "OSPF がそのルータを見分けるための番号",
+      use: "両側の Router ID を比べる。同じ番号なら、片方の router-id の設定を削除する。Hello と Dead がそろっているのに隣接関係にならないときは、ここを見る" }
   ];
 
   /* ── 提示物から値を読む ───────────────────────
@@ -121,9 +121,9 @@
    * 前の組ほど強い（数まで見る）。前が合わなければ次の組で見る。
    */
   var RULES = [
-    { key: "off", cond: "片方で OSPF が動いていない",
-      verdict: "OSPF が動いていない方で、相手と同じエリアの OSPF を動かす",
-      why: "片方だけが話しかけても、相手が黙っていればとなりにはならない",
+    { key: "off", cond: "片側で OSPF が動いていない",
+      verdict: "動いていない側で、相手と同じエリア番号の OSPF を有効にする",
+      why: "片側だけが動いていても、相手が応答しなければ隣接関係にはならない",
       look: ["OSPF が動いているか", "エリアの番号"],
       steps: function (v) {
         return [[v.A.host + " の OSPF", v.A.on ? "動いている" : "動いていない"],
@@ -137,9 +137,9 @@
         return [["area " + a]];
       } },
 
-    { key: "both", cond: "Hello も Dead も、二つの数がちがう",
-      verdict: "Hello と Dead を、どちらも相手と同じ数にする",
-      why: "二つとも数がちがうので、二つとも直さないとそろわない",
+    { key: "both", cond: "Hello と Dead の両方が、両側で違う",
+      verdict: "Hello と Dead の両方を、相手と同じ値にそろえる",
+      why: "二つとも値が違うので、片方だけ直しても隣接関係にならない",
       look: ["Hello", "Dead"],
       steps: function (v) { return [["Hello", pair(v, "hello")], ["Dead", pair(v, "dead")]]; },
       no: function (v) {
@@ -153,9 +153,9 @@
                 ["hello", "dead"]];
       } },
 
-    { key: "hello", cond: "Hello だけ、二つの数がちがう",
-      verdict: "Hello を、相手と同じ数にする",
-      why: "あいさつを送る間隔がそろっていないと、相手をとなりだと思えない",
+    { key: "hello", cond: "Hello だけが、両側で違う",
+      verdict: "Hello を、相手と同じ値にそろえる",
+      why: "通知を送る間隔がそろっていないと、相手を隣として認識できない",
       look: ["Hello"],
       steps: function (v) { return [["Hello", pair(v, "hello")], ["Dead", pair(v, "dead")]]; },
       no: function (v) {
@@ -166,9 +166,9 @@
       test: function (v) { return diff(v.A.hello, v.B.hello); },
       frag: function (v) { return [["hello-interval " + v.A.hello], ["hello"]]; } },
 
-    { key: "dead", cond: "Dead だけ、二つの数がちがう",
-      verdict: "Dead を、相手と同じ数にする",
-      why: "返事を待つ時間がそろっていないと、となりにはなれない",
+    { key: "dead", cond: "Dead だけが、両側で違う",
+      verdict: "Dead を、相手と同じ値にそろえる",
+      why: "相手の停止を判断するまでの時間がそろっていないと、隣接関係になれない",
       look: ["Dead"],
       steps: function (v) { return [["Dead", pair(v, "dead")], ["Hello", pair(v, "hello")]]; },
       no: function (v) {
@@ -179,9 +179,9 @@
       test: function (v) { return diff(v.A.dead, v.B.dead); },
       frag: function (v) { return [["dead-interval " + v.A.dead], ["dead"]]; } },
 
-    { key: "rid", cond: "Router ID が、二つとも同じ番号",
-      verdict: "Router ID が二つとも同じ。片方の設定を消す",
-      why: "識別番号が同じだと、相手と自分を区別できない",
+    { key: "rid", cond: "両側の Router ID が同じ番号",
+      verdict: "両側の Router ID が同じなので、片方の設定を削除する",
+      why: "見分けるための番号が同じだと、相手と自分を区別できない",
       look: ["Router ID"],
       steps: function (v) { return [["Router ID", pair(v, "rid")]]; },
       no: function (v) {
@@ -194,25 +194,25 @@
   ];
 
   var GLOSS = {
-    "OSPF が動いていない方で、相手と同じエリアの OSPF を動かす":
-      "OSPF は、両側で動いていて、はじめて相手を見つけられる",
-    "Hello と Dead を、どちらも相手と同じ数にする":
-      "二つの秒数がどちらもちがうので、二つとも書きかえる",
-    "Hello を、相手と同じ数にする":
-      "あいさつを送る間隔。ここがちがうと、となりになれない",
-    "Dead を、相手と同じ数にする":
-      "返事を待つ時間。ここがちがうと、となりになれない",
-    "Router ID が二つとも同じ。片方の設定を消す":
-      "設定を消すと、そのルータのアドレスから自動で番号が付き直る"
+    "動いていない側で、相手と同じエリア番号の OSPF を有効にする":
+      "OSPF は両側で動いて、はじめて相手を見つけられる",
+    "Hello と Dead の両方を、相手と同じ値にそろえる":
+      "二つの秒数がどちらも違うので、両方とも書き換える",
+    "Hello を、相手と同じ値にそろえる":
+      "通知を送る間隔。ここが違うと隣接関係になれない",
+    "Dead を、相手と同じ値にそろえる":
+      "相手の停止を判断するまでの時間。ここが違うと隣接関係になれない",
+    "両側の Router ID が同じなので、片方の設定を削除する":
+      "設定を削除すると、そのルータのアドレスから番号が自動で付け直される"
   };
 
   /* 本の答えとの言い換え表。本に印刷された文言と突き合わせるのに使う */
   var SAME = {
-    "OSPF が動いていない方で、相手と同じエリアの OSPF を動かす": ["area", "エリア"],
-    "Hello と Dead を、どちらも相手と同じ数にする": ["hello-interval", "hello"],
-    "Hello を、相手と同じ数にする": ["hello-interval", "hello"],
-    "Dead を、相手と同じ数にする": ["dead-interval", "dead"],
-    "Router ID が二つとも同じ。片方の設定を消す": ["router-id", "ルータ ID", "ルーター ID"]
+    "動いていない側で、相手と同じエリア番号の OSPF を有効にする": ["area", "エリア"],
+    "Hello と Dead の両方を、相手と同じ値にそろえる": ["hello-interval", "hello"],
+    "Hello を、相手と同じ値にそろえる": ["hello-interval", "hello"],
+    "Dead を、相手と同じ値にそろえる": ["dead-interval", "dead"],
+    "両側の Router ID が同じなので、片方の設定を削除する": ["router-id", "ルータ ID", "ルーター ID"]
   };
 
   /* ── 出力を作る ─────────────────────────────
@@ -359,11 +359,11 @@
     kind: "rules",
     card: "read",
     name: "OSPF のとなり関係",
-    note: "二つのルータを見くらべて、となりになれない所を直す",
+    note: "両側のルータの設定を見比べて、隣接関係になれない原因を直す",
     obj: "3.4",
     spots: SPOTS, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt, walk: walkQ,
-    ask: "この二つを見くらべて、どう直しますか。",
+    ask: "両側の設定を見比べて、どこをどう直しますか。",
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 5, rules: 5, questions: 7 },
     /* **本の答えが出力と食い違っていて使えない問題。**いまは無い */

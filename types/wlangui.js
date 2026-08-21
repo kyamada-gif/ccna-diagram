@@ -26,28 +26,28 @@
   var SPOTS = [
     { key: "need", name: "要件の言葉（問題文）",
       re: /(したい|しますか|ますか|要件|設定)/,
-      mean: "「合言葉で」「決めた機器だけ」「台数を制限」など、やりたいこと",
-      use: "この画面の問題は、要件の言葉と画面の行が1対1で決まる。まず要件を読む" },
+      mean: "「事前共有キーで接続させる」「特定の機器だけ許可する」「接続台数を制限する」など、問題文に書かれた条件",
+      use: "この種類の問題は、要件の言葉と設定画面の項目がほぼ1対1で対応する。まず要件を読む" },
 
     { key: "tab", name: "どのタブか",
       re: /(General|Security|QoS|Policy-Mapping|Advanced|Commands)/,
-      mean: "General は名前と載せる先、Security は守り、Advanced は細かい動き",
-      use: "守りの話なら Security、載せる先なら General、端末どうしの通信や周波数なら Advanced" },
+      mean: "General は SSID 名と所属させるインターフェース、Security はセキュリティ、Advanced は細かい動作の設定",
+      use: "セキュリティについてなら Security、所属させるインターフェースなら General、端末どうしの通信や周波数帯なら Advanced" },
 
-    { key: "l2", name: "Layer 2 の守り",
+    { key: "l2", name: "Layer 2 のセキュリティ",
       re: /(Layer 2 Security|WPA|MAC Filtering|PSK|802\.1X|CCKM|SAE)/i,
-      mean: "合言葉（PSK）で入るか、認証サーバ（802.1X）で入るか。決めた機器だけにするか（MAC Filtering）",
-      use: "「サーバの代わりに合言葉」なら PSK。「決めた機器だけ」なら MAC Filtering。CCKM や FT はローミングを速くするもので、入る手段ではない" },
+      mean: "事前共有キー（PSK）で認証するか、認証サーバ（802.1X）で認証するか。特定の機器だけを許可するか（MAC Filtering）",
+      use: "「認証サーバの代わりに事前共有キーを使う」なら PSK。「特定の機器だけ許可する」なら MAC Filtering。CCKM や FT はローミングを速くする仕組みで、認証の方式ではない" },
 
-    { key: "l3", name: "Layer 3 の守り",
+    { key: "l3", name: "Layer 3 のセキュリティ",
       re: /(Layer 3|Web ポリシー|Web Policy|認証)/i,
-      mean: "先にブラウザで認証させてから、通信を許す仕組み",
-      use: "先に DHCP と DNS だけ通して、認証の画面に飛ばしたいときは、ここの Web ポリシーを使う" },
+      mean: "先にブラウザ上で認証させてから、通信を許可する仕組み",
+      use: "認証が済むまで DHCP と DNS だけ通し、認証画面へ誘導したいときは、ここの Web ポリシーを使う" },
 
     { key: "adv", name: "Advanced の行",
       re: /(P2P Blocking|Client Band Select|AAA Override|Maximum Allowed Clients|Fast Transition)/i,
-      mean: "端末どうしの通信・周波数の選び方・台数の上限・ローミングの速さ",
-      use: "名前の似ている行が並んでいる。端末どうしを止めるのは P2P Blocking Action。Wi-Fi Direct の行ではない" }
+      mean: "端末どうしの通信、周波数帯の選び方、接続台数の上限、ローミングの速さ",
+      use: "名前の似た項目が並んでいる。端末どうしの通信を遮断するのは P2P Blocking Action で、Wi-Fi Direct の項目ではない" }
   ];
 
   function join(x) {
@@ -104,73 +104,73 @@
 
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
-    { key: "clients", cue: "接続できる台数を制限する", cond: "つなげる台数を決めたい",
-      verdict: "Maximum Allowed Clients に、その数を入れる",
-      why: "台数の上限は Advanced タブの Maximum Allowed Clients。Maximum Allowed Clients Per AP Radio は、親機1台あたりの数で別もの",
+    { key: "clients", cue: "接続できる台数を制限する", cond: "接続できる台数を制限したい",
+      verdict: "Maximum Allowed Clients に、許可する台数を指定する",
+      why: "接続台数の上限は Advanced タブの Maximum Allowed Clients。Maximum Allowed Clients Per AP Radio はアクセスポイント1台あたりの上限で、別の設定",
       look: ["Advanced の行"],
       steps: function (v) { return [["要件のことば", v.clients || "-"]]; },
       no: function () { return "台数の話ではない"; },
       test: function (v) { return !!v.clients; } },
 
-    { key: "weblogin", cue: "DHCP と DNS だけ許可する", cond: "先に DHCP と DNS だけ通したい",
+    { key: "weblogin", cue: "DHCP と DNS だけ許可する", cond: "認証前に DHCP と DNS だけ通したい",
       verdict: "Layer 3 の Web ポリシーと認証を有効にする",
-      why: "先にブラウザの画面で認証させたいときの形。認証が済むまでは、住所をもらう（DHCP）と名前を引く（DNS）だけ通す",
+      why: "先にブラウザ上で認証させたいときの設定。認証が済むまでは、IP アドレスの取得（DHCP）と名前解決（DNS）だけを通す",
       look: ["Layer 3 の守り"],
       steps: function (v) { return [["要件のことば", v.weblogin || "-"]]; },
       no: function () { return "先に一部だけ通す話ではない"; },
       test: function (v) { return !!v.weblogin; } },
 
-    { key: "macf", cue: "特定のクライアントのみ参加させる", cond: "決めた機器だけ入れたい",
+    { key: "macf", cue: "特定のクライアントのみ参加させる", cond: "特定の機器だけ接続させたい",
       verdict: "WPA2 Policy を有効にし、MAC フィルタリングも有効にする",
-      why: "合言葉だけでは、合言葉を知っている機器はどれでも入れる。機器を名指しで絞るのが MAC フィルタリング",
+      why: "事前共有キーだけでは、キーを知っている機器はすべて接続できてしまう。接続できる機器を MAC アドレスで限定するのが MAC フィルタリング",
       look: ["Layer 2 の守り"],
       steps: function (v) { return [["要件のことば", v.macf || "-"], ["現在の守り", v.l2sec || "-"]]; },
       no: function () { return "機器を名指しで絞る話ではない"; },
       test: function (v) { return !!v.macf; } },
 
-    { key: "download", cue: "ソフトウェアをインストールする", cond: "ソフトを入れたい",
-      verdict: "File Type を Code、Transfer Mode を SFTP にして、サーバの住所を入れる",
-      why: "ポート22 を使うのは SFTP。入れるのがソフト本体なので、File Type は Code",
+    { key: "download", cue: "ソフトウェアをインストールする", cond: "ソフトウェアを転送したい",
+      verdict: "File Type を Code、Transfer Mode を SFTP にして、サーバの IP アドレスを指定する",
+      why: "ポート 22 を使うのは SFTP。転送するのがソフトウェア本体なので、File Type は Code を選ぶ",
       look: ["どのタブか"],
       steps: function (v) { return [["要件のことば", v.download || "-"]]; },
       no: function () { return "ソフトを入れる話ではない"; },
       test: function (v) { return !!v.download; } },
 
-    { key: "p2p", cue: "クライアント同士の通信を止める", cond: "端末どうしの通信を止めたい",
+    { key: "p2p", cue: "クライアント同士の通信を止める", cond: "端末どうしの通信を遮断したい",
       verdict: "P2P Blocking Action を Drop にする",
-      why: "同じ SSID につながった端末どうしの通信を落とす。Wi-Fi Direct Clients Policy は名前が似ているだけの別の行",
+      why: "同じ SSID に接続した端末どうしの通信を破棄する。Wi-Fi Direct Clients Policy は名前が似ているだけの別の設定",
       look: ["Advanced の行"],
       steps: function (v) { return [["要件のことば", v.p2p || "-"]]; },
       no: function () { return "端末どうしの通信の話ではない"; },
       test: function (v) { return !!v.p2p; } },
 
-    { key: "band", cue: "デュアルバンドのクライアント", cond: "2つの周波数を使い分けたい",
+    { key: "band", cue: "デュアルバンドのクライアント", cond: "2つの周波数帯を使い分けたい",
       verdict: "Client Band Select と AAA Override を有効にする",
-      why: "両方の周波数に対応する端末を、空いている側へ誘導する。接続ごとに設定を変えるには AAA Override も要る",
+      why: "両方の周波数帯に対応する端末を、空いている側へ誘導する。接続ごとに設定を変えるには AAA Override も必要",
       look: ["Advanced の行"],
       steps: function (v) { return [["要件のことば", v.band || "-"]]; },
       no: function () { return "周波数の話ではない"; },
       test: function (v) { return !!v.band; } },
 
-    { key: "subnet", cue: "別のサブネットに接続させる", cond: "別のサブネットに載せたい",
-      verdict: "Status を有効にして、Interface/Interface Group で載せる先を選ぶ",
-      why: "どのサブネットに載せるかは General タブ。守りの設定は Security タブなので、ここでは触れない",
+    { key: "subnet", cue: "別のサブネットに接続させる", cond: "別のサブネットに所属させたい",
+      verdict: "Status を有効にして、Interface/Interface Group で所属させる先を選ぶ",
+      why: "どのサブネットに所属させるかは General タブで設定する。セキュリティは Security タブなので、ここでは扱わない",
       look: ["どのタブか"],
       steps: function (v) { return [["要件のことば", v.subnet || "-"]]; },
       no: function () { return "載せる先の話ではない"; },
       test: function (v) { return !!v.subnet; } },
 
-    { key: "aes", cue: "暗号化の種類を選ぶ", cond: "暗号の種類を選びたい",
-      verdict: "AES（CCMP128）を選び、認証の鍵は PSK にする",
-      why: "WPA2 で合言葉を使うときの決まった組み合わせ。CCMP256 や GCMP は WPA3 のもの",
+    { key: "aes", cue: "暗号化の種類を選ぶ", cond: "暗号化方式を選びたい",
+      verdict: "AES（CCMP128）を選び、認証方式は PSK にする",
+      why: "WPA2 で事前共有キーを使うときの、決まった組み合わせ。CCMP256 や GCMP は WPA3 で使うもの",
       look: ["Layer 2 の守り"],
       steps: function (v) { return [["要件のことば", v.aes || "-"]]; },
       no: function () { return "暗号の種類の話ではない"; },
       test: function (v) { return !!v.aes; } },
 
-    { key: "psk", cue: "RADIUS サーバの代わりに事前共有キー", cond: "そのほか（合言葉で入れるようにする）",
+    { key: "psk", cue: "RADIUS サーバの代わりに事前共有キー", cond: "そのほか（事前共有キーで接続させる）",
       verdict: "WPA2 Policy を有効にし、PSK を有効にする",
-      why: "「認証サーバの代わりに合言葉」なら PSK。802.1X はサーバを使うやり方なので、ここでは選ばない",
+      why: "「認証サーバの代わりに事前共有キーを使う」なら PSK。802.1X は認証サーバを使う方式なので、ここでは選ばない",
       look: ["Layer 2 の守り"],
       steps: function (v) { return [["現在の守り", v.l2sec || "-"]]; },
       no: function () { return "ここまでで決まっている"; },
@@ -178,26 +178,26 @@
   ];
 
   var GLOSS = {
-    "Maximum Allowed Clients に、その数を入れる": "Per AP Radio は親機1台あたりの数。別もの",
-    "Layer 3 の Web ポリシーと認証を有効にする": "先にブラウザで認証させる形",
-    "WPA2 Policy を有効にし、MAC フィルタリングも有効にする": "合言葉に加えて、機器を名指しで絞る",
-    "File Type を Code、Transfer Mode を SFTP にして、サーバの住所を入れる": "ポート22 は SFTP",
-    "P2P Blocking Action を Drop にする": "Wi-Fi Direct の行と間違えやすい",
-    "Client Band Select と AAA Override を有効にする": "すいている周波数へ寄せる",
-    "Status を有効にして、Interface/Interface Group で載せる先を選ぶ": "載せる先は General タブ",
-    "AES（CCMP128）を選び、認証の鍵は PSK にする": "CCMP256 や GCMP は WPA3 のもの",
-    "WPA2 Policy を有効にし、PSK を有効にする": "802.1X はサーバを使うやり方"
+    "Maximum Allowed Clients に、許可する台数を指定する": "Per AP Radio はアクセスポイント1台あたりの上限で、別の設定",
+    "Layer 3 の Web ポリシーと認証を有効にする": "先にブラウザ上で認証させる設定",
+    "WPA2 Policy を有効にし、MAC フィルタリングも有効にする": "事前共有キーに加えて、接続できる機器を MAC アドレスで限定する",
+    "File Type を Code、Transfer Mode を SFTP にして、サーバの IP アドレスを指定する": "ポート 22 を使うのは SFTP",
+    "P2P Blocking Action を Drop にする": "Wi-Fi Direct の設定と間違えやすい",
+    "Client Band Select と AAA Override を有効にする": "空いている周波数帯へ端末を誘導する",
+    "Status を有効にして、Interface/Interface Group で所属させる先を選ぶ": "所属させる先は General タブで設定する",
+    "AES（CCMP128）を選び、認証方式は PSK にする": "CCMP256 や GCMP は WPA3 で使うもの",
+    "WPA2 Policy を有効にし、PSK を有効にする": "802.1X は認証サーバを使う方式"
   };
 
   var SAME = {
-    "Maximum Allowed Clients に、その数を入れる": ["Maximam Allowed Clients", "Maximum Allowed Clients"],
+    "Maximum Allowed Clients に、許可する台数を指定する": ["Maximam Allowed Clients", "Maximum Allowed Clients"],
     "Layer 3 の Web ポリシーと認証を有効にする": ["Web ポリシー"],
     "WPA2 Policy を有効にし、MAC フィルタリングも有効にする": ["MAC フィルタリング"],
-    "File Type を Code、Transfer Mode を SFTP にして、サーバの住所を入れる": ["SFTP"],
+    "File Type を Code、Transfer Mode を SFTP にして、サーバの IP アドレスを指定する": ["SFTP"],
     "P2P Blocking Action を Drop にする": ["P2P Blocking Action"],
     "Client Band Select と AAA Override を有効にする": ["バンド選択"],
-    "Status を有効にして、Interface/Interface Group で載せる先を選ぶ": ["Interface/Interface Group"],
-    "AES（CCMP128）を選び、認証の鍵は PSK にする": ["AES"],
+    "Status を有効にして、Interface/Interface Group で所属させる先を選ぶ": ["Interface/Interface Group"],
+    "AES（CCMP128）を選び、認証方式は PSK にする": ["AES"],
     "WPA2 Policy を有効にし、PSK を有効にする": ["PSK"]
   };
 
