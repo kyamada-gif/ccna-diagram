@@ -176,9 +176,9 @@
   };
 
   /* ── 練習の問題文と選択肢 ─────────────────────
-   *   OSPF の優先度 を確認します。ここで DR は決まりますか。
+   *   OSPF の優先度 を確認しました。次にどうしますか。
    *     ・OSPF の優先度 で R4 に決まる
-   *     ・OSPF の優先度 だけでは決まらない。次に ルータ ID を見る
+   *     ・ここでは決まらない。次に ルータ ID を確認する
    */
   function walkQ(st, v, shuffle) {
     var look = st.look.join(" と ");
@@ -186,18 +186,22 @@
     var others = v.node.map(function (x) { return x.id; })
       .filter(function (id) { return id !== ans; });
     var right, opts;
+    /* **「ここで決まりますか」とは聞かない。**
+       何も起きていない所でそう聞かれても、何を答えればよいのか分からない。
+       値は図に書いてあるので、「次にどうするか」だけを聞く */
     if (st.hit) {
-      right = look + " で " + ans + " に決まる";
-      opts = [right, look + " だけでは決まらない",
-              look + " で " + pick(others) + " に決まる"];
+      right = "ここで決まる。答えは " + ans;
+      opts = [right,
+              "ここでは決まらない。次に " + (st.next || "ほかの所") + " を確認する",
+              "ここで決まる。答えは " + pick(others)];
     } else {
-      right = look + " だけでは決まらない。次に " + st.next + " を見る";
-      opts = [right, look + " で " + ans + " に決まる",
-              look + " で " + pick(others) + " に決まる"];
+      right = "ここでは決まらない。次に " + st.next + " を確認する";
+      opts = [right, "ここで決まる。答えは " + ans,
+              "ここで決まる。答えは " + pick(others)];
     }
     var seen = {}, uniq = [];
     opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; uniq.push(o); } });
-    return { ask: look + " を確認します。ここで DR は決まりますか。",
+    return { ask: look + " を確認しました。次にどうしますか。",
              opts: shuffle(uniq), right: right };
   }
 

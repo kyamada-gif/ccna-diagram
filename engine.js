@@ -276,24 +276,27 @@
            **「答えは何か」ではなく「ここで決まるか、次を確認するか」を問う。**
            解くときに頭の中でたどる順番を、そのまま問いにする */
         var look = (st.look && st.look.length) ? st.look.join(" と ") : "この値";
-        var hitTxt = look + " で「" + st.verdict + "」と決まる";
-        var nextTxt = look + " だけでは決まらない。次に " + st.next + " を確認する";
+        /* **「ここで答えは決まりますか」とは聞かない。**
+           何も起きていない所でそう聞かれても、何を答えればよいのか分からない。
+           値はすでに問題文の上に出ているので、「次にどうするか」だけを聞く */
+        var hitTxt = "ここで決まる。答えは「" + st.verdict + "」";
+        var nextTxt = "ここでは決まらない。次に " + st.next + " を確認する";
         right = st.hit ? hitTxt : nextTxt;
         opts = [right];
         if (st.hit) { if (st.next) opts.push(nextTxt); }
         else { opts.push(hitTxt); }
         var other = shuffle(VERDICTS.filter(function (v) { return v !== st.verdict; }))[0];
-        if (other) opts.push(look + " で「" + other + "」と決まる");
+        if (other) opts.push("ここで決まる。答えは「" + other + "」");
         /* 決め方が1つしかない分野は、ここで選択肢が1つになってしまう。
            そのときだけ、本の誤答を同じ言い回しに包んで足す */
         spareWrongs().forEach(function (w) {
           if (opts.length >= 3) return;
-          opts.push(look + " で「" + w + "」と決まる");
+          opts.push("ここで決まる。答えは「" + w + "」");
         });
         var seen1 = {}, uq = [];
         opts.forEach(function (o) { if (!seen1[o]) { seen1[o] = 1; uq.push(o); } });
         opts = shuffle(uq.slice(0, 3));
-        ask = look + " を確認します。ここで答えは決まりますか。";
+        ask = look + " を確認しました。次にどうしますか。";
       }
       return { kind: "step", ask: ask, exhibit: r.text,
                opts: opts, right: right, extra: { step: st, i: i } };

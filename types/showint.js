@@ -314,8 +314,35 @@
      書いても、同じことを2回読ませるだけになる */
   var NONUM = { linkdown: 1, half_only: 1 };
 
-  function answerNote(v) {
+  /* 答え合わせの言葉。
+   * **いま見ている確認項目のことだけを書く。**
+   * 提示物ぜんぶを見て最後の答えを出すと、
+   * まだ見ていない所の解説が出てしまう（runts の話が1つ目の項目で出るなど）。
+   *   ここで決まったとき   … その決まりと、この出力の数字
+   *   ここで決まらないとき … 見た値と、なぜ決まらないか
+   */
+  function answerNote(v, st) {
     if (!v) return null;
+    /* 練習の1問ずつ（st がある）。**その項目のルールだけを見る** */
+    if (st && st.look) {
+      var mine = RULES.filter(function (r) {
+        return (r.look || []).join(" と ") === st.look.join(" と ");
+      });
+      if (!mine.length) return null;
+      var fired = mine.filter(function (r) { return r.test(v); })[0];
+      var nums = (fired || mine[0]).steps(v).map(function (x) {
+        return x[0] + " は " + x[1];
+      }).join("、");
+      if (st.hit && fired && IF[fired.key]) {
+        return { gloss: IF[fired.key] + " ＝ " + fired.verdict,
+                 body: NONUM[fired.key] ? "" : nums };
+      }
+      /* 決まらなかったとき。**次にどうするかは、答えの行にもう書いてある。**
+         ここに書くのは「なぜ決まらないか」だけ。同じことを2回書かない */
+      var why = mine[0].no ? mine[0].no(v) : "";
+      return { gloss: "", body: why || nums };
+    }
+    /* 提示物ぜんぶを見て答える問題（練習の最後・テストの答え合わせ） */
     var hit = null;
     for (var i = 0; i < RULES.length; i++) {
       if (RULES[i].test(v)) { hit = RULES[i]; break; }
@@ -323,9 +350,7 @@
     if (!hit || !IF[hit.key]) return null;
     var body = "";
     if (!NONUM[hit.key]) {
-      body = hit.steps(v).map(function (x) {
-        return x[0] + " は " + x[1];
-      }).join("、");
+      body = hit.steps(v).map(function (x) { return x[0] + " は " + x[1]; }).join("、");
     }
     return { gloss: IF[hit.key] + " ＝ " + hit.verdict, body: body };
   }

@@ -413,6 +413,34 @@ BLOCK_IDS.forEach((id) => {
   });
 }
 
+/* ── 答え合わせが、先の答えを見せていないか ──────────
+ * 上から順に見ていく分野では、**まだ見ていない所の答えを先に出してはいけない。**
+ * 「line protocol を確認しました」の答え合わせに
+ * 「runts があり、CRC も collisions も 0 ＝ 不良 NIC」が出ていた。
+ * 提示物ぜんぶを見て最後の答えを出していたため。
+ * ここで決まらない問題の答え合わせに「＝」（決まりの形）が出ていたら止める。
+ */
+{
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id], G = GENS[id];
+    if (!sp || !G || G.kind !== "rules" || typeof sp.answerNote !== "function") return;
+    if (G.begin) G.begin();
+    const bs = G.blocks();
+    let ng = 0;
+    for (let i = 0; i < bs.length; i++) {
+      for (const n of [0, 1]) {
+        const q = G.stepQ(i, n);
+        if (!q || !q.extra || !q.extra.step) continue;
+        const st = q.extra.step;
+        if (st.hit) continue;
+        const nt = sp.answerNote(G.read(q.exhibit), st);
+        if (nt && /＝/.test(String(nt.gloss))) ng++;
+      }
+    }
+    if (ng) bad.push(`${sp.name}: 決まらない問題の答え合わせに、先の答えが出ている（${ng} か所）`);
+  });
+}
+
 /* ── 出題パターンの見張り ─────────────────────
  * **同じ聞かれ方の問題が何問も並んでいると、テストが長いだけで身に付かない。**
  * そこで分野ごとに上限を決めて絞っている（JSON は 41 → 25 問）。

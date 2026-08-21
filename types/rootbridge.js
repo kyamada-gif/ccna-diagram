@@ -155,9 +155,9 @@
   /* ── 練習の問題文と選択肢 ─────────────────────
    * **「この値なら、どうしますか」では何を聞かれているか分からない。**
    * 何を見て、何が決まるのかを、そのまま文にする。
-   *   ブリッジ優先度を確認します。ここでルートブリッジは決まりますか。
+   *   ブリッジ優先度 を確認しました。次にどうしますか。
    *     ・ブリッジ優先度 で SW4 に決まる
-   *     ・ブリッジ優先度 だけでは決まらない。次に MACアドレス を見る
+   *     ・ここでは決まらない。次に MACアドレス を確認する
    */
   function walkQ(st, v, shuffle) {
     /* 問題文の上に出る値の表は空にする。
@@ -169,21 +169,24 @@
     var others = v.sw.map(function (s) { return s.id; })
       .filter(function (id) { return id !== ans; });
     var right, opts;
+    /* **「ここで決まりますか」とは聞かない。**
+       何も起きていない所でそう聞かれても、何を答えればよいのか分からない。
+       値は図に書いてあるので、「次にどうするか」だけを聞く */
     if (st.hit) {
-      right = look + " で " + ans + " に決まる";
+      right = "ここで決まる。答えは " + ans;
       opts = [right,
-              look + " だけでは決まらない",
-              look + " で " + pick(others) + " に決まる"];
+              "ここでは決まらない。次に " + (st.next || "ほかの所") + " を確認する",
+              "ここで決まる。答えは " + pick(others)];
     } else {
-      right = look + " だけでは決まらない。次に " + st.next + " を見る";
+      right = "ここでは決まらない。次に " + st.next + " を確認する";
       opts = [right,
-              look + " で " + ans + " に決まる",
-              look + " で " + pick(others) + " に決まる"];
+              "ここで決まる。答えは " + ans,
+              "ここで決まる。答えは " + pick(others)];
     }
     /* 同じ文が2つ出ないようにする */
     var seen = {}, uniq = [];
     opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; uniq.push(o); } });
-    return { ask: look + "を確認します。ここでルートブリッジは決まりますか。",
+    return { ask: look + " を確認しました。次にどうしますか。",
              opts: shuffle(uniq), right: right };
   }
 
@@ -278,14 +281,28 @@
    *   この図  「優先度 4096 は SW2 だけ」
    * 説明の1枚（brief）と同じ書き方にそろえてある。
    */
-  function answerNote(v) {
+  /* 答え合わせの言葉。
+   * **いま見ている確認項目のことだけを書く。**
+   * 優先度の所で決まらなかったのに「MACアドレスが小さいほう」まで書くと、
+   * まだ見ていない所の答えを先に見せてしまう。
+   */
+  function answerNote(v, st) {
     if (!v || !v.sw.length || !v.win) return null;
-    if (v.tied.length === 1) {
+    var tied = v.tied.length;
+    /* 練習の1問ずつ。決まらなかったときは、次に何を見るかまで */
+    /* 決まらなかったとき。**次にどうするかは、答えの行にもう書いてある。**
+       ここに書くのは「なぜ決まらないか」だけ */
+    if (st && !st.hit) {
+      return { gloss: "",
+               body: "優先度 " + v.lowest + " のスイッチが " + tied +
+                     " 台あるので、優先度だけでは決まらない" };
+    }
+    if (tied === 1) {
       return { gloss: "優先度が最も小さいスイッチが1台 ＝ そのスイッチがルートブリッジ",
                body: "優先度 " + v.lowest + " は " + v.win.id + " だけ" };
     }
     return { gloss: "優先度が並んだ ＝ MACアドレスが小さいほう",
-             body: "優先度 " + v.lowest + " が " + v.tied.length + " 台。" + listMac(v) };
+             body: "優先度 " + v.lowest + " が " + tied + " 台。" + listMac(v) };
   }
 
   var spec = {

@@ -1122,8 +1122,10 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
       /* 答え合わせの言葉。分野が answerNote() を持っていれば、そちらを使う。
          **決まりと、この場合の数字を、別々の行に出す。**
          持っていない分野は、いままでどおり判定ルールの文をそのまま出す */
+      /* **いま見ている確認項目も渡す。**渡さないと、提示物ぜんぶを見て
+         最後の答えを出してしまい、まだ見ていない所の解説が出てしまう */
       const sn = (G && G.spec && typeof G.spec.answerNote === "function" && exv)
-        ? G.spec.answerNote(G.read(exv)) : null;
+        ? G.spec.answerNote(G.read(exv), st) : null;
       note = <Note title={it.right[0]}
         body={sn ? sn.body : st.why}
         gloss={sn ? sn.gloss : (st.hit ? G.gloss(st.verdict) : "")} />;
