@@ -31,8 +31,9 @@ fs.writeFileSync(
 const sum = (f) => fs.readFileSync(f, "utf8").length;
 const gv = sum("gen.js") + sum("engine.js") + sum("fig.js") + sum("store.js") +
   fs.readdirSync("types").reduce((a, f) => a + sum(path.join("types", f)), 0);
-const qv = sum("questions.js") +
-  fs.readdirSync("q").reduce((a, f) => a + sum(path.join("q", f)), 0);
+const js = (dir) => fs.readdirSync(dir).filter((f) => f.endsWith(".js"))
+  .map((f) => path.join(dir, f));
+const qv = sum("questions.js") + js("q").reduce((a, f) => a + sum(f), 0);
 let html = fs.readFileSync("index.html", "utf8");
 const next = html
   .replace(/(\.\/app\.js)(\?v=\d+)?/, `$1?v=${code.length}`)
@@ -42,7 +43,7 @@ const next = html
   .replace(/(\.\/store\.js)(\?v=\d+)?/, `$1?v=${gv}`)
   .replace(/(\.\/types\/[\w-]+\.js)(\?v=\d+)?/g, `$1?v=${gv}`)
   .replace(/(\.\/questions\.js)(\?v=\d+)?/, `$1?v=${qv}`)
-  .replace(/(\.\/q\/[\w-]+\.js)(\?v=\d+)?/g, `$1?v=${qv}`);
+  .replace(/(\.\/q\/(?:practice\/)?[\w-]+\.js)(\?v=\d+)?/g, `$1?v=${qv}`);
 if (next !== html) if (next !== html) fs.writeFileSync("index.html", next);
 console.log(`built app.js (${code.length} bytes)`);
 
@@ -52,11 +53,18 @@ const { BANKS } = require(path.join(__dirname, "questions.js"));
 const bad = [];
 let totalQ = 0;
 
+/* **まだ練習を作っていないブロック。**
+   ここに載っている間は「練習が無い」ことを止める理由にしない。
+   1つ作るたびに、この行から消していく。**空にするのが仕上がり。**
+   決まり：テストは本の問題そのまま、練習はそれを解くための生成問題。
+   だから「練習に本の問題を出す」で穴を埋めることはしない */
+const YET = [];
+
 BLOCK_IDS.forEach((id) => {
   const G = GENS[id];
-  const spec = SPECS[id];
+  const spec = SPECS[id] || {};
   const qs = BANKS[id] || [];
-  const tag = spec ? spec.name : id;
+  const tag = spec.name || id;
   if (!G) { bad.push(`${id} のエンジンが作れていない`); return; }
   const exp = spec.expect || {};
 
@@ -127,12 +135,25 @@ BLOCK_IDS.forEach((id) => {
   }
   const seen = {};
   qs.forEach((q) => {
-    const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
     if (seen[q.qid]) bad.push(`${tag}: ${q.qid} が2回入っている`);
     seen[q.qid] = 1;
+    /* 左と右を結ぶ問題は、選ぶ形ではないので確かめる所が違う */
+    if (q.pairs) {
+      if (q.pairs.length < 2) bad.push(`${tag}: ${q.qid} の組が2つに満たない`);
+      if (!q.targets || !q.targets.length) bad.push(`${tag}: ${q.qid} に入れ先が無い`);
+      q.pairs.forEach((p) => {
+        if (!p.l || !p.r) bad.push(`${tag}: ${q.qid} の組の中身が欠けている`);
+        else if ((q.targets || []).indexOf(p.r) < 0)
+          bad.push(`${tag}: ${q.qid} の入れ先「${p.r}」が一覧に無い`);
+      });
+      if (new Set(q.targets || []).size !== (q.targets || []).length)
+        bad.push(`${tag}: ${q.qid} の入れ先が重複している`);
+      return;
+    }
+    const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
     if (!q.choices || !q.choices.length) bad.push(`${tag}: ${q.qid} に選択肢が無い`);
     if (!ans.length || !ans[0]) bad.push(`${tag}: ${q.qid} に答えが無い`);
-    ans.forEach((a) => {
+    (q.choices || []).length && ans.forEach((a) => {
       if (q.choices.indexOf(a) < 0) bad.push(`${tag}: ${q.qid} の答えが選択肢に無い`);
     });
   });
@@ -147,8 +168,13 @@ BLOCK_IDS.forEach((id) => {
     qs.forEach((q) => {
       if (skip.indexOf(q.qid) >= 0) { only++; return; }
       const ex = q.fig || q.exhibit;
-      if (!ex) { bad.push(`${tag}: ${q.qid} に提示物が無い`); return; }
-      const v = G.read(ex);
+      /* 問題文だけで決まる題材（wantsQuestion）は、提示物が無くてもよい。
+         例「2つのスイッチはすべて既定の設定です。トランクにするには」 */
+      if (!ex && !spec.wantsQuestion) { bad.push(`${tag}: ${q.qid} に提示物が無い`); return; }
+      /* 「足りない設定を選ぶ」系は、決め手が**問題文のほう**にある
+         （例「別のベンダーと」「応答するが開始しない」）。
+         その題材は問題文もいっしょに渡す（spec.wantsQuestion） */
+      const v = G.read(spec.wantsQuestion ? { text: q.text, exhibit: ex } : ex);
       const r = G.judge(v);
       const ans = Array.isArray(q.answer) ? q.answer.join(" ") : q.answer;
       let ok;
@@ -172,6 +198,152 @@ BLOCK_IDS.forEach((id) => {
   }
   totalQ += qs.length;
 });
+
+/* ── 画面に出る言葉に、書きかけの印が残っていないか ──────
+ * `**ここが大事**` のような書き方は、覚え書き（コメント）の中だけ。
+ * spec の文字列は**そのまま画面に出る**ので、印が残っていると
+ * 「**この題材は…**」と、記号ごと表示されてしまう。
+ */
+{
+  const bad2 = [];
+  const look = (v, where) => {
+    if (typeof v === "string") {
+      if (v.indexOf("**") >= 0) bad2.push(`${where}: ${v.slice(0, 40)}…`);
+      return;
+    }
+    if (Array.isArray(v)) { v.forEach((x, i) => look(x, `${where}[${i}]`)); return; }
+    if (v && typeof v === "object") {
+      Object.keys(v).forEach((k) => {
+        if (k === "re" || k === "pat" || typeof v[k] === "function") return;
+        look(v[k], `${where}.${k}`);
+      });
+    }
+  };
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id];
+    if (!sp) return;
+    ["spots", "rules", "gloss", "name", "note", "ask"].forEach((k) => look(sp[k], `${id}.${k}`));
+  });
+  bad2.forEach((b) => bad.push(`画面の言葉に ** が残っている … ${b}`));
+}
+
+/* ── 画面の言葉が、決めた用語で書かれているか ──────────
+ * こちらで作った言い回しは使わない。**講義でそのまま使える言葉にそろえる。**
+ *
+ *   見る所   → 確認項目        入れ先 → 用語
+ *   札・束・ブロック → 分野      印   → バッジ
+ *   覚える1枚 → （使わない。構成をそのまま書く）
+ */
+{
+  const OLD = {
+    "見る所": "確認項目",
+    "入れ先": "用語",
+    "覚える1枚": "説明の1枚（構成をそのまま書く）",
+    "印が付": "バッジが付",
+    "ブロック": "分野",
+    "この題材": "この分野"
+  };
+  const found = [];
+  const look = (v, where) => {
+    if (typeof v === "string") {
+      Object.keys(OLD).forEach((k) => {
+        if (v.indexOf(k) >= 0) found.push(`${where}: 「${k}」→「${OLD[k]}」（${v.slice(0, 26)}…）`);
+      });
+      return;
+    }
+    if (Array.isArray(v)) { v.forEach((x, i) => look(x, `${where}[${i}]`)); return; }
+    if (v && typeof v === "object") {
+      Object.keys(v).forEach((k) => {
+        if (k === "re" || k === "pat" || typeof v[k] === "function") return;
+        look(v[k], `${where}.${k}`);
+      });
+    }
+  };
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id];
+    if (!sp) return;
+    ["spots", "rules", "gloss", "name", "note", "ask"].forEach((k) => look(sp[k], `${id}.${k}`));
+  });
+  /* 画面そのもの（app.jsx）も見る。文字列の中だけを見て、覚え書きは見ない */
+  const jsx = fs.readFileSync(path.join(__dirname, "app.jsx"), "utf8").split("\n");
+  let inC = false;
+  jsx.forEach((line, i) => {
+    const t = line.trim();
+    if (!inC && t.startsWith("/*") && t.indexOf("*/") < 0) { inC = true; return; }
+    if (inC) { if (t.indexOf("*/") >= 0) inC = false; return; }
+    if (t.startsWith("//") || t.startsWith("*")) return;
+    (line.match(/"(?:[^"\\]|\\.)*"/g) || []).forEach((lit) => {
+      if (lit.indexOf("className") >= 0) return;
+      Object.keys(OLD).forEach((k) => {
+        if (lit.indexOf(k) >= 0) found.push(`app.jsx:${i + 1}: 「${k}」→「${OLD[k]}」`);
+      });
+    });
+    /* JSX の中に、囲みなしで直接書いた文（<div>…</div> の中身）も見る。
+       文字列の中だけを見ていたときは、ここが素通りしていた */
+    const plain = line
+      .replace(/\/\*[\s\S]*?\*\//g, "")            /* 1行で閉じている覚え書き */
+      .replace(/"(?:[^"\\]|\\.)*"/g, "")
+      .replace(/\/\/.*$/, "");
+    Object.keys(OLD).forEach((k) => {
+      if (plain.indexOf(k) >= 0) found.push(`app.jsx:${i + 1}: 「${k}」→「${OLD[k]}」`);
+    });
+  });
+  found.forEach((f) => bad.push(`古い言い回しが残っている … ${f}`));
+}
+
+/* ── 絵の問題に、紙面の画像があるか ─────────────────
+ * **絵（ネットワーク図・機器の画面・表）は、言葉で作り直さない。紙面の実物を出す。**
+ * 元データ（master.jsonl）で提示物に図が入っている問題は、
+ * showread/img/index.js に切り出しが無ければ止める。
+ */
+{
+  const scans = fs.existsSync(path.join(__dirname, "img", "index.js"))
+    ? require(path.join(__dirname, "img", "index.js")) : {};
+  const mp = path.join(__dirname, "..", "out", "full", "master.jsonl");
+  if (fs.existsSync(mp)) {
+    const kind = {};
+    fs.readFileSync(mp, "utf8").split("\n").forEach((l) => {
+      if (!l.trim()) return;
+      const r = JSON.parse(l);
+      kind[r.qid] = r.exhibit || "none";
+    });
+    const hasFig = (k) => /topology|gui|table/.test(k);
+    const missing = [];
+    Object.keys(BANKS).forEach((id) => (BANKS[id] || []).forEach((q) => {
+      const from = q.from || [String(q.qid).replace(/#\d+$/, "")];
+      if (!from.some((f) => hasFig(kind[f] || "none"))) return;
+      if (!scans[String(q.qid).replace(/#\d+$/, "")]) missing.push(`${id}: ${q.qid}`);
+    }));
+    if (missing.length) {
+      bad.push(`絵をふくむ問題 ${missing.length} 問に、紙面の切り出しが無い` +
+        `（${missing.slice(0, 3).join(" / ")}…）`);
+    }
+    /* 台帳にあるのに、ファイルが置かれていない */
+    Object.keys(scans).forEach((qid) => {
+      if (!fs.existsSync(path.join(__dirname, scans[qid].src)))
+        bad.push(`${qid} の切り出しが無い（${scans[qid].src}）`);
+      if (!/^(fig|all)$/.test(scans[qid].covers))
+        bad.push(`${qid} の covers が fig でも all でもない`);
+    });
+    console.log(`紙面から切り出した提示物 ${Object.keys(scans).length} 枚`);
+  }
+}
+
+/* ── 本の1問が、画面の1問として出ているか ─────────────
+ * **テストは、問題集に載っている問題そのものを出す。**
+ * こちらの都合で1問を2問以上に分けたら、それはもう本の問題ではない。
+ * 分けたものは練習用（q/practice/）に置く。テストの入れ物には入れない。
+ */
+{
+  const split = [];
+  Object.keys(BANKS).forEach((id) => (BANKS[id] || []).forEach((q) => {
+    if (/#\d+$/.test(String(q.qid))) split.push(`${id}: ${q.qid}`);
+  }));
+  if (split.length) {
+    bad.push(`テストの入れ物に、本の1問を分けたものが ${split.length} 問ある` +
+      `（${split.slice(0, 3).join(" / ")}…）`);
+  }
+}
 
 /* ── 同じ問題が2つのブロックに入っていないか ───────────
  * ブロックを分けて作っていると、同じ問題が別々のブロックに入ることがある。

@@ -22,17 +22,22 @@
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);height:100%}
+html,body{margin:0;padding:0;background:var(--bg)}
 body{color:var(--ink);font-size:var(--f3);line-height:1.7;
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
-  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow:hidden}
-#root{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+#root{min-height:100dvh;display:flex;flex-direction:column}
 button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer}
-/* 動くのは本文の段だけ。下のボタンの段は動かない */
-.wrap{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
-  width:100%;max-width:460px;margin:0 auto;
+/* ── 動くのはページそのもの ──────────────────
+ * **中に別のスクロールを作らない。**
+ * 前は画面の高さに固定した箱の中だけを動かしていた。
+ * その形だと、画面を拡大したときにページ自体が動かせず、
+ * **本文のいちばん上まで戻れなくなる**（拡大すると、見えている範囲が
+ * 箱より小さくなるのに、箱は画面の高さのままなので動かす先が無い）。
+ * ふつうのページと同じように、ページ全体が動くようにしてある。
+ * いちばん下のボタン（.dock）は sticky なので、これでも下に貼りついたままになる */
+.wrap{flex:1 1 auto;width:100%;max-width:460px;margin:0 auto;
   padding:var(--s4) var(--s2) calc(var(--s6) + env(safe-area-inset-bottom))}
-.wrap.has-dock{padding-bottom:var(--s4)}
 
 /* ホーム */
 .hero{padding:var(--s4) var(--s1) var(--s5)}
@@ -42,36 +47,52 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .bar-in{height:100%;background:linear-gradient(90deg,var(--green),var(--green-t));
   border-radius:99px;transition:width .4s}
 @media (prefers-reduced-motion:reduce){.bar-in{transition:none}}
-.road{margin-bottom:var(--s2)}
-.link{width:2px;height:16px;background:var(--line);margin:0 auto}
-/* 札。**はじめは札だけ。押した札にだけ、2つのボタンが出る**（ipcalc2 と同じ）。
-   8つのボタンが最初から並んでいると、どこを見ればいいのか分からなくなる */
-.tile{display:block;width:100%;text-align:left;
-  background:var(--bg-tile);border:1px solid var(--line);border-radius:12px;
-  padding:var(--s3) var(--s4);transition:.15s}
-.tile.pick{border-color:var(--blue)}
-.tile-clear{border-color:var(--green-s)}
-.t-top{display:flex;align-items:center;gap:var(--s3)}
-.t-h{display:flex;align-items:center;gap:var(--s3);flex:1;min-width:0;
-  text-align:left;min-height:48px}
-.t-h:active{opacity:.7}
-.tile-n{font-family:var(--mono);font-size:var(--f4);color:var(--ink2);flex:0 0 auto;
-  width:22px;text-align:center}
-.tile-b{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
-.tile-t{font-size:var(--f3);font-weight:700}
-.tile-s{font-size:var(--f2);color:var(--ink2);line-height:1.5}
-/* 札の中に出る2つのボタン。ここでは緑にしない（札の列の中で目立ちすぎる） */
-.t-go{display:flex;gap:var(--s2);margin-top:var(--s3)}
-.t-go .go{flex:1;min-height:44px;margin-top:0;padding:10px 6px;
-  background:var(--bg);border:1px solid var(--line);
-  font-size:var(--f3);font-weight:700;color:var(--ink)}
+/* ── ホーム ──────────────────────────────
+ * 分野が21行。**行を押すと、その行の中に2つのボタンが出る。**
+ * 42個のボタンを最初から並べると、どこを見ればいいのか分からなくなる。
+ * 4つの札は、押せない小見出しとして行のかたまりを区切るだけ。
+ */
+.grp{margin-bottom:var(--s5)}
+.grp-h{display:flex;align-items:center;gap:var(--s3);
+  padding:0 var(--s1) var(--s2);margin-bottom:var(--s2);
+  border-bottom:1px solid var(--line)}
+.grp-n{font-family:var(--mono);font-size:var(--f4);color:var(--ink3);
+  flex:0 0 auto;width:22px;text-align:center}
+.grp-b{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.grp-t{font-size:var(--f3);font-weight:700}
+.grp-s{font-size:var(--f1);color:var(--ink3);line-height:1.5}
 
-/* どの分野をやるか選ぶタブ */
-.tabs{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0 var(--s4)}
-.tab{border:1px solid var(--line);border-radius:99px;padding:8px var(--s4);
-  min-height:40px;font-size:var(--f2);color:var(--ink2);background:var(--bg1)}
-.tab.on{border-color:var(--blue);color:var(--blue-t);background:var(--blue-bg);font-weight:700}
-.tab-yet{opacity:.55}
+.row{background:var(--bg-tile);border:1px solid var(--line);border-radius:12px;
+  margin-bottom:var(--s2);overflow:hidden;transition:border-color .15s}
+.row-on{border-color:var(--blue)}
+.row-yet{opacity:.55}
+.row-h{display:flex;align-items:center;gap:var(--s3);width:100%;
+  min-height:52px;padding:var(--s2) var(--s4);
+  text-align:left;background:transparent;border:0;color:inherit}
+.row-h:active{opacity:.7}
+.row-n{font-family:var(--mono);font-size:var(--f2);color:var(--ink3);
+  flex:0 0 auto;width:26px}
+.row-b{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.row-t{font-size:var(--f3);font-weight:700}
+.row-s{font-family:var(--mono);font-size:var(--f1);color:var(--ink3)}
+.row-v{flex:0 0 auto;color:var(--ink3);font-size:var(--f2);
+  transition:transform .2s}
+.row-v-on{transform:rotate(180deg);color:var(--blue)}
+
+/* 開いた中身。上から降りてくる */
+.row-p{padding:0 var(--s4) var(--s3);animation:panelin .2s ease}
+@keyframes panelin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.row-p{animation:none}}
+.row-d{font-size:var(--f2);color:var(--ink2);line-height:1.7;margin-bottom:var(--s2)}
+.row-go{display:flex;gap:var(--s2);margin-top:var(--s3)}
+.row-go .go{flex:1;min-height:44px;margin-top:0;padding:10px 6px;
+  font-size:var(--f3);font-weight:700}
+
+/* 記録を消す。押し間違えないように、文字だけで下に置く */
+.wipe{display:block;margin:var(--s5) auto 0;padding:var(--s2) var(--s4);
+  background:transparent;border:0;color:var(--ink3);
+  font-size:var(--f1);text-decoration:underline}
+
 /* 紙面から切り出した図。白地なので、暗い画面でも見えるよう地を白のままにする */
 .scan{background:#fff;border:1px solid var(--line);border-radius:12px;
   padding:var(--s2);margin-top:var(--s3);overflow-x:auto}
@@ -96,8 +117,6 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .fg-v{fill:var(--blue-t);font-size:11px;text-anchor:middle;font-family:ui-monospace,Menlo,monospace}
 .fg-host{fill:var(--ink2);font-size:11px;text-anchor:middle;
   font-family:-apple-system,"Hiragino Sans",sans-serif}
-.tab-n{font-family:var(--mono);font-size:var(--f1);color:var(--ink3);margin-right:6px}
-.tab.on .tab-n{color:var(--blue)}
 .badge{font-size:var(--f1);color:var(--green-t);border:1px solid var(--green-s);
   border-radius:99px;padding:2px 8px;flex:0 0 auto}
 .foot{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--line);
@@ -127,50 +146,55 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .brief-hit{color:var(--green-t);font-weight:700}
 .gsec{margin:var(--s5) 0 var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);
   font-size:var(--f1);color:var(--ink2);letter-spacing:.08em}
-.order-r{display:flex;gap:var(--s3);padding:4px 0;border-bottom:1px solid var(--line);
-  font-size:var(--f2)}
-.order-r:last-child{border-bottom:0}
-.order-n{font-family:var(--mono);color:var(--ink3);flex:0 0 auto;width:14px}
-.order-k{font-family:var(--mono);color:var(--blue-t);flex:1 1 auto;min-width:0}
-.order-v{color:var(--ink2);flex:0 0 auto}
+/* 見る所の名前が長いと、右の答えとぶつかって読めなくなる。
+   **横に並べるのをやめて、名前を上・答えを下にする。** */
 .acts{display:flex;flex-direction:column;gap:var(--s2);margin-top:var(--s5)}
-.has-dock{padding-bottom:120px}
+
 .acts .go{margin-top:0}
 .go-retry{background:linear-gradient(180deg,#27406b,#1d3052);
   color:#dbe8ff;border:1px solid #3f6aa8}
 .opt-off{opacity:.45}
-.tile-soon{opacity:.5}
-.tile[disabled]{cursor:default}
 .badge-soon{color:var(--ink2);border-color:var(--line)}
-.order{margin-top:var(--s1)}
-.order-v{display:flex;flex-direction:column;gap:1px;text-align:right}
-.order-g{font-size:var(--f1);color:var(--ink3);line-height:1.5}
 .gloss{font-size:var(--f2);color:var(--gold);margin-top:var(--s1);line-height:1.6}
 
 /* テストの回の並び */
-.sec-tests{margin-top:var(--s4)}
-.trow{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;
-  background:var(--bg-tile);border:1px solid var(--line);border-radius:10px;
-  padding:var(--s3) var(--s4);min-height:44px;margin-bottom:var(--s2)}
-.trow:active{background:var(--bg2)}
-.trow-n{font-family:var(--mono);font-size:var(--f3);color:var(--ink2);
-  flex:0 0 auto;width:18px;text-align:center}
-.trow-b{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
-.trow-t{font-size:var(--f3);font-weight:700}
-.trow-s{font-family:var(--mono);font-size:var(--f1);color:var(--ink3)}
-.trow-p{font-family:var(--mono);font-size:var(--f2);color:var(--ink2);flex:0 0 auto}
-.trow-yet{color:var(--ink3)}
-.trow-soon{opacity:.5;cursor:default}
 
-/* 画面のいちばん下の段。**いつも見えている。**本文がどれだけ長くても隠れない。
-   本文の段とは別の段なので、position:fixed に頼らない（スマホでもずれない） */
-.dock{flex:0 0 auto;width:100%;max-width:460px;margin:0 auto;
-  padding:var(--s3) var(--s2) calc(var(--s4) + env(safe-area-inset-bottom));
-  display:flex;gap:var(--s2);background:var(--bg);
-  box-shadow:0 -16px 20px -8px var(--bg)}
+/* バッジ。**どの画面でも同じ見た目。**ipcalc2 と同じ形にそろえてある。
+   空の枠（破線）が置いてあり、バッジが付くと金色の枠になって 🏅 が入る。
+   「まだ何も無い」ではなく「ここに入る場所がある」と見せるための形 */
+.slot{flex:0 0 auto;width:44px;height:44px;border:1.5px dashed var(--line);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:var(--f5);line-height:1}
+.slot.got{border-style:solid;border-color:var(--gold);background:var(--gold-bg)}
+/* 小さい枠。回の一覧やタブなど、行が細い所で使う */
+.slot.sm{width:32px;height:32px;border-radius:8px;font-size:var(--f3)}
+/* 途中の点数。枠の下に小さく出す */
+.slot-n{flex:0 0 auto;font-family:var(--mono);font-size:var(--f1);color:var(--ink3);
+  text-align:center;margin-top:2px}
+.slot-w{display:flex;flex-direction:column;align-items:center;flex:0 0 auto}
+/* バッジの読み方。ホームのいちばん下に1行だけ置く */
+.legend{display:flex;align-items:center;gap:var(--s3);margin-top:var(--s5);
+  padding:var(--s3) var(--s2);border-top:1px solid var(--line)}
+.legend-t{font-size:var(--f2);color:var(--ink2);line-height:1.7}
+
+/* 先へ進むボタンの段。
+   **本文のすぐ下に置き、本文が長いときだけ画面の下に貼りつく**（position:sticky）。
+   前は画面の下の段に固定していたが、本文が短いと
+   「ぽつんと下に離れたボタン」になって、何のボタんか分かりにくかった。
+   sticky は本文の流れの中にいるので、fixed のようにスマホでずれることもない */
+.dock{position:sticky;bottom:0;z-index:2;
+  width:100%;margin:var(--s5) 0 0;
+  padding:var(--s3) 0 calc(var(--s3) + env(safe-area-inset-bottom));
+  display:flex;gap:var(--s2);background:var(--bg)}
+/* 本文が下に続いているときだけ、境目の線を出す */
+.dock::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  background:var(--line);opacity:.6}
+.dock .go{flex:1 1 0;width:auto;min-width:0;margin-top:0}
+/* 進む方を広く、戻る方を狭くして、どちらが本筋かを幅で示す */
+.dock .go.ghost{flex:0 0 auto;width:auto;padding-left:var(--s4);padding-right:var(--s4)}
 .dock .next{flex:1;min-width:0;margin-top:0;box-shadow:0 6px 18px var(--shadow)}
 /* 緑は「いま進む道」1つだけ。テストは灰の枠にして、どちらが先かを見た目で言う */
-.next.ghost{background:var(--bg1);border:1.5px solid var(--line);color:var(--ink)}
+.next.ghost,.go.ghost{background:var(--bg1);border:1.5px solid var(--line);color:var(--ink)}
 
 /* 見る所の値（読む順番） */
 .vals{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)}
@@ -215,6 +239,37 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .opt-ng{background:var(--red-bg);border-color:var(--red);color:var(--red-t);opacity:.75}
 .opt-ng .opt-k{color:var(--red-t)}
 
+/* 左と右を結ぶ問題。上に説明の札、下に入れ先 */
+.mt{display:flex;flex-direction:column;gap:var(--s4)}
+.mt-cards{display:flex;flex-direction:column;gap:var(--s2)}
+.mt-card{display:flex;align-items:flex-start;gap:var(--s3);width:100%;text-align:left;
+  background:var(--bg-tile);border:1px solid var(--line);border-radius:10px;
+  padding:var(--s3) var(--s4);min-height:44px;line-height:1.55}
+.mt-card:active{background:var(--bg2)}
+.mt-card[disabled]{cursor:default}
+.mt-l{flex:1 1 auto;min-width:0;font-size:var(--f3)}
+.mt-at{flex:0 0 auto;font-size:var(--f2);font-weight:700;color:var(--ink2);
+  background:var(--bg2);border-radius:99px;padding:2px var(--s3)}
+.mt-m{flex:0 0 auto;font-size:var(--f2)}
+/* いま持ち上げている札 */
+.mt-hold{border-color:var(--green-s);border-width:2px;background:var(--green-bg)}
+/* 入れ先が決まった札 */
+.mt-set{background:var(--sunk)}
+.mt-ok{background:var(--green-bg);border-color:var(--green-s);color:var(--green-t)}
+.mt-ng{background:var(--red-bg);border-color:var(--red);color:var(--red-t)}
+/* 入れ先のボタン */
+.mt-targets{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.mt-t{flex:1 1 40%;min-height:52px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg1);padding:var(--s3);font-size:var(--f3);font-weight:700;
+  color:var(--ink);line-height:1.4}
+.mt-t[disabled]{opacity:.5}
+.mt-t-on{border-color:var(--green-s);background:var(--green-bg);color:var(--green-t);opacity:1}
+/* 答え合わせで出す「正しい組み合わせ」。組ごとに1行 */
+.mt-ans{margin-top:var(--s2)}
+.mt-ans-r{display:flex;align-items:baseline;gap:var(--s3);padding:4px 0}
+.mt-ans-k{flex:0 0 34%;font-size:var(--f2);font-weight:700;color:var(--green-t)}
+.mt-ans-v{flex:1 1 auto;min-width:0;font-size:var(--f2);color:var(--ink)}
+
 .note{margin-top:var(--s4);border-left:3px solid var(--green-s);
   background:var(--green-bg);border-radius:0 8px 8px 0;padding:var(--s3) var(--s4)}
 .note-bad{border-left-color:var(--red);background:var(--red-bg)}
@@ -255,42 +310,55 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <body>
 <div id="root"></div>
 <!-- 共通の仕掛け（判定・道すじ・出力作り）。題材の中身は入っていない -->
-<script src="./store.js?v=85794" charset="utf-8"></script>
-<script src="./fig.js?v=85794" charset="utf-8"></script>
-<script src="./engine.js?v=85794" charset="utf-8"></script>
+<script src="./store.js?v=173305" charset="utf-8"></script>
+<script src="./fig.js?v=173305" charset="utf-8"></script>
+<script src="./engine.js?v=173305" charset="utf-8"></script>
 <!-- ブロックごとの中身。ブロックを増やしたら、ここに1行足す -->
-<script src="./types/rootbridge.js?v=85794" charset="utf-8"></script>
-<script src="./types/log.js?v=85794" charset="utf-8"></script>
-<script src="./types/ospf.js?v=85794" charset="utf-8"></script>
-<script src="./types/ospfdr.js?v=85794" charset="utf-8"></script>
-<script src="./types/json.js?v=85794" charset="utf-8"></script>
-<script src="./types/showint.js?v=85794" charset="utf-8"></script>
-<!-- 上の2つを組み立てる。画面側では判定しない -->
-<script src="./gen.js?v=85794" charset="utf-8"></script>
+<script src="./types/rootbridge.js?v=173305" charset="utf-8"></script>
+<script src="./types/log.js?v=173305" charset="utf-8"></script>
+<script src="./types/ospf.js?v=173305" charset="utf-8"></script>
+<script src="./types/ospfdr.js?v=173305" charset="utf-8"></script>
+<script src="./types/json.js?v=173305" charset="utf-8"></script>
+<script src="./types/showint.js?v=173305" charset="utf-8"></script>
+<script src="./types/etherchannel.js?v=173305" charset="utf-8"></script>
+<script src="./types/trunk.js?v=173305" charset="utf-8"></script>
+<script src="./types/access.js?v=173305" charset="utf-8"></script>
+<script src="./types/ipsvc.js?v=173305" charset="utf-8"></script>
+<script src="./types/portsec.js?v=173305" charset="utf-8"></script>
+<script src="./types/wlangui.js?v=173305" charset="utf-8"></script>
+<script src="./types/nolink.js?v=173305" charset="utf-8"></script>
+<script src="./types/misc.js?v=173305" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
-<script src="./q/showint.js?v=296030" charset="utf-8"></script>
-<script src="./q/parts.js?v=296030" charset="utf-8"></script>
-<script src="./q/autoword.js?v=296030" charset="utf-8"></script>
-<script src="./q/ipv6word.js?v=296030" charset="utf-8"></script>
-<script src="./q/cable.js?v=296030" charset="utf-8"></script>
-<script src="./q/aaa.js?v=296030" charset="utf-8"></script>
-<script src="./q/guardword.js?v=296030" charset="utf-8"></script>
-<script src="./q/dhcpword.js?v=296030" charset="utf-8"></script>
-<script src="./q/etherchannel.js?v=296030" charset="utf-8"></script>
-<script src="./q/trunk.js?v=296030" charset="utf-8"></script>
-<script src="./q/access.js?v=296030" charset="utf-8"></script>
-<script src="./q/vlan.js?v=296030" charset="utf-8"></script>
-<script src="./q/othercfg.js?v=296030" charset="utf-8"></script>
-<script src="./q/wlangui.js?v=296030" charset="utf-8"></script>
-<script src="./q/nolink.js?v=296030" charset="utf-8"></script>
-<script src="./q/misc.js?v=296030" charset="utf-8"></script>
-<script src="./q/log.js?v=296030" charset="utf-8"></script>
-<script src="./q/ospf.js?v=296030" charset="utf-8"></script>
-<script src="./q/ospfdr.js?v=296030" charset="utf-8"></script>
-<script src="./q/json.js?v=296030" charset="utf-8"></script>
-<script src="./q/rootbridge.js?v=296030" charset="utf-8"></script>
-<script src="./questions.js?v=296030" charset="utf-8"></script>
+<script src="./q/showint.js?v=251725" charset="utf-8"></script>
+<script src="./q/parts.js?v=251725" charset="utf-8"></script>
+<script src="./q/autoword.js?v=251725" charset="utf-8"></script>
+<script src="./q/ipv6word.js?v=251725" charset="utf-8"></script>
+<script src="./q/cable.js?v=251725" charset="utf-8"></script>
+<script src="./q/aaa.js?v=251725" charset="utf-8"></script>
+<script src="./q/guardword.js?v=251725" charset="utf-8"></script>
+<script src="./q/dhcpword.js?v=251725" charset="utf-8"></script>
+<script src="./q/etherchannel.js?v=251725" charset="utf-8"></script>
+<script src="./q/trunk.js?v=251725" charset="utf-8"></script>
+<script src="./q/access.js?v=251725" charset="utf-8"></script>
+<script src="./q/ipsvc.js?v=251725" charset="utf-8"></script>
+<script src="./q/portsec.js?v=251725" charset="utf-8"></script>
+<script src="./q/wlangui.js?v=251725" charset="utf-8"></script>
+<script src="./q/nolink.js?v=251725" charset="utf-8"></script>
+<script src="./q/misc.js?v=251725" charset="utf-8"></script>
+<script src="./q/log.js?v=251725" charset="utf-8"></script>
+<script src="./q/ospf.js?v=251725" charset="utf-8"></script>
+<script src="./q/ospfdr.js?v=251725" charset="utf-8"></script>
+<script src="./q/json.js?v=251725" charset="utf-8"></script>
+<script src="./q/rootbridge.js?v=251725" charset="utf-8"></script>
+<!-- 紙面から切り出した提示物。qid で引く -->
+<script src="./img/index.js?v=1" charset="utf-8"></script>
+<!-- 言い換え表。練習で「同じものを指す言い方」を1つにまとめるのに使う -->
+<script src="./q/synonym.js?v=251725" charset="utf-8"></script>
+<script src="./questions.js?v=251725" charset="utf-8"></script>
+<!-- 上のものを組み立てる。画面側では判定しない。
+     **questions.js より後に読むこと。**対応づけのエンジンは過去問の対から組む -->
+<script src="./gen.js?v=173305" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=38642" charset="utf-8"></script>
+<script src="./app.js?v=47372" charset="utf-8"></script>
 </body>
 </html>

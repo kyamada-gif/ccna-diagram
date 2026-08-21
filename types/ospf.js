@@ -43,7 +43,7 @@
 
     { key: "rid", name: "Router ID",
       re: /Router ID [\d.]+|router-id [\d.]+/,
-      mean: "そのルータに付いている名札の番号",
+      mean: "そのルータに割り当てられた識別番号",
       use: "二つの Router ID をくらべる。同じ番号なら、片方の router-id の設定を消すのが答え。Hello と Dead が合っているのにつながらないときに見る" }
   ];
 
@@ -181,7 +181,7 @@
 
     { key: "rid", cond: "Router ID が、二つとも同じ番号",
       verdict: "Router ID が二つとも同じ。片方の設定を消す",
-      why: "名札が同じだと、相手と自分の区別が付かない",
+      why: "識別番号が同じだと、相手と自分を区別できない",
       look: ["Router ID"],
       steps: function (v) { return [["Router ID", pair(v, "rid")]]; },
       no: function (v) {
@@ -341,7 +341,7 @@
     if (wrong) opts.push("はい。" + wrong);
     var seen = {}, uniq = [];
     opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; uniq.push(o); } });
-    return { ask: st.look.join(" と ") + " を見ます。「" + condOf(st.verdict) +
+    return { ask: st.look.join(" と ") + " を確認します。「" + condOf(st.verdict) +
                   "」になっていますか。",
              opts: shuffle(uniq), right: right };
   }

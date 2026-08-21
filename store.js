@@ -27,7 +27,9 @@
  *   { no       1                     何問目か
  *     kind     "past"|"step"|"whole" 過去問／見る所ごと／ぜんぶ見て
  *     qid      "B1-P15-007" | null   過去問だけ。作った問題は null
- *     spot     "ブリッジ優先度"|null  練習のとき、どの見る所か
+ *     spot     "ブリッジ優先度"|null  練習のとき、どの確認項目か（画面に出す名前）
+ *     spotNo   0|null                その確認項目の番号。名前は重なることがあるので、
+ *                                    「間違えた所だけもう一度」はこの番号で引く
  *     firstOk  true                  **最初の答えが合っていたか。点になるのはこれ**
  *     tries    1                     何回で正解したか
  *     picked   [...]                 最初に押したもの
@@ -128,7 +130,12 @@
       if (!b) return;
       if (a.mode === "practice") { b.practiced = true; return; }
       var r = b.rounds[a.set];
-      if (!r) { r = b.rounds[a.set] = { best: null, of: null, passed: false, at: null }; }
+      /* いまの区切りに無い回の記録は、数えない。
+         **問題を足したり形を変えたりすると、回の区切りが変わる。**
+         そのとき古い記録を足してしまうと、いまは存在しない回に印が付き、
+         「ぜんぶの回ができたらメダル」の数え方が狂う。
+         記録そのものは消さない（追記だけの履歴として残す）。数に入れないだけ */
+      if (!r) return;
       if (r.best === null || a.score > r.best) { r.best = a.score; r.of = a.of; }
       if (a.passed) r.passed = true;
       r.at = a.endedAt || a.startedAt;
@@ -140,8 +147,15 @@
     return { blocks: out };
   }
 
+  /* 記録を全部消す。ホームの「記録を消す」から呼ぶ。
+     **消すのはこのアプリの記録だけ。**ほかのキーには触らない */
+  function wipe() {
+    try { global.localStorage.removeItem(KEY); } catch (e) { /* 使えない所では何もしない */ }
+  }
+
   var API = { KEY: KEY, uid: uid, setKey: setKey, load: load, save: save, add: add,
-              start: start, answer: answer, finish: finish, summarize: summarize };
+              start: start, answer: answer, finish: finish, summarize: summarize,
+              wipe: wipe };
   global.STORE = API;
   if (typeof module !== "undefined" && module.exports) module.exports = API;
 })(typeof window !== "undefined" ? window : globalThis);

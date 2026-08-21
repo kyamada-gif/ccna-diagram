@@ -1,0 +1,331 @@
+/* 「トランクと VLAN」ブロック（過去問19問）。
+ *
+ * スイッチどうしの線に、複数の VLAN を通すための設定。
+ * もとは「トランク11問」と「VLAN 10問」に分かれていたが、
+ * VLAN の8問は同じ話題だったので1つにまとめた（2026-08-21）。
+ *
+ * 本の19問を読むと、決め方は9つ。
+ *
+ *   ① ルータにぶら下げる（サブインターフェース）      2問
+ *   ② 電話をつなぐ（音声VLAN）                      2問
+ *   ③ DTP に任せる                                  1問
+ *   ④ タグに対応していない相手 → ネイティブVLANで通す 1問
+ *   ⑤ カプセル化が isl → dot1q に直す                2問
+ *   ⑥ 通したい VLAN が許可の一覧に無い → add で足す   1問
+ *   ⑦ ネイティブVLANを既定（1）以外にする             2問
+ *   ⑧ つなぐ相手で決める（スイッチ間＝トランク）      1問
+ *   ⑨ アクセスのままなので、トランクにする            6問
+ *
+ * **決め手は問題文と、相手側の出力の両方にある。**
+ * だから read は問題文と提示物をつないでから読む（etherchannel と同じ）。
+ */
+(function (global) {
+  "use strict";
+  var E = global.ENGINE ||
+    (typeof require !== "undefined" ? require("../engine.js") : null);
+  var R = E.R, pick = E.pick, shuffle = E.shuffle;
+
+  /* ── 見る所 ───────────────────────────── */
+  var SPOTS = [
+    { key: "where", name: "どこにつなぐか（問題文）",
+      re: /(サブインターフェース|IP Phone|電話|DTP|タグ|スイッチ|プリンタ|VLAN)/,
+      mean: "相手がルータか、電話か、スイッチか、タグに対応しない機器か",
+      use: "ルータに接続するならサブインターフェース。電話なら音声VLAN。相手で打つコマンドが変わるので、まずここを見る" },
+
+    { key: "encap", name: "カプセル化（Encapsulation）",
+      re: /(Encapsulation|encapsulation)\s*[:：]?\s*(isl|dot1q|dot1Q|negotiate)/i,
+      mean: "VLAN のタグの付け方。dot1q が標準、isl は シスコだけの古いやり方",
+      use: "両側で同じでないと、トランクとして成立しない。片方が isl なら、no で消してから dot1q にする" },
+
+    { key: "mode", name: "現在のモード（Administrative Mode）",
+      re: /Administrative Mode\s*[:：]\s*(static access|trunk|dynamic \w+)/i,
+      mean: "そのインターフェースが現在アクセスかトランクか、相手まかせ（dynamic）か",
+      use: "static access のままなら、トランクにならない。mode trunk にする" },
+
+    { key: "native", name: "ネイティブVLAN",
+      re: /(Trunking Native Mode VLAN|native vlan|ネイティブ\s*VLAN)/i,
+      mean: "タグを付けずに転送する VLAN。既定は 1",
+      use: "「既定以外にする」と書いてあったら、1 以外の番号にする。両側でそろえる" },
+
+    { key: "allow", name: "通してよい VLAN の一覧（Trunking VLANs Enabled）",
+      re: /(Trunking VLANs Enabled|allowed vlan)/i,
+      mean: "そのトランクで転送してよい VLAN の番号",
+      use: "通したい番号が入っていなければ足す。add を付けないと、現在の一覧が消える" }
+  ];
+
+  /* **問題文と提示物を1つにつないでから読む。**決め手が問題文にあるため */
+  function join(x) {
+    if (x && typeof x === "object" && x.exhibit !== undefined) {
+      return String(x.text || "") + "\n" + String(x.exhibit || "");
+    }
+    return String(x || "");
+  }
+
+  var PAT = {
+    sub: /(サブインターフェース|相互に通信できる)/,
+    voice: /(IP Phone|音声|VoIP|ボイス)/i,
+    dtp: /(DTP)/,
+    notag: /(トランク\s*ポートをサポートしていない|タグ.*対応していない|サードパーティ)/,
+    isl: /(?:Encapsulation|encapsulation)\s*[:：]?\s*isl/i,
+    addvlan: /(新しく\s*VLAN\s*\d+|VLAN\s*\d+\s*を実装)/i,
+    native1: /(ネイティブ\s*VLAN\s*を\s*デフォルト以外|デフォルト以外の値)/,
+    role: /(完全な接続|両方のスイッチに接続)/,
+    access: /Administrative Mode\s*[:：]\s*static access/i,
+    enabled: /Trunking VLANs Enabled\s*[:：]\s*([\d,\- ]+)/i,
+    nativeNo: /Trunking Native Mode VLAN\s*[:：]\s*(\d+)/i,
+    ifname: /(?:interface|インターフェイス|インターフェース)\s*([A-Za-z]+[\d\/]+)/
+  };
+
+  function read(x) {
+    var t = join(x), out = {};
+    Object.keys(PAT).forEach(function (k) {
+      var m = t.match(PAT[k]);
+      out[k] = m ? (m[1] || m[0]) : null;
+    });
+    out.all = t;
+    return out;
+  }
+
+  function excerpt(x) {
+    var t = join(x), lines = t.split("\n"), out = [lines[0]];
+    lines.slice(1).forEach(function (l) {
+      if (/サブインターフェース|相互に通信|Router-on-a-stick|IP Phone|音声|VoIP|DTP|サポートしていない|サードパーティ|デフォルト以外|新しく\s*VLAN|完全な接続/.test(l)
+          || /Administrative Mode|Encapsulation|Trunking VLANs Enabled|Trunking Native Mode VLAN/i.test(l)) out.push(l);
+    });
+    return out.join("\n");
+  }
+
+  /* ── 判定ルール ─────────────────────────── */
+  var RULES = [
+    { key: "sub", cue: "ルータのサブインターフェース", cond: "ルータに接続して、VLAN どうしをつなぐ",
+      verdict: "ルータにサブインターフェースを作り、encapsulation dot1Q と IP アドレスを設定する",
+      why: "1本のリンクに複数の VLAN を通すときは、VLAN ごとにサブインターフェースを作る。サブインターフェースの番号と VLAN 番号は、一致していなくてもよい",
+      look: ["どこにつなぐか（問題文）"],
+      steps: function (v) { return [["問題文のことば", v.sub || "-"]]; },
+      no: function () { return "ルータに接続する話ではない"; },
+      test: function (v) { return !!v.sub; } },
+
+    { key: "voice", cue: "IP Phone をつなぐ", cond: "電話をつなぐ",
+      verdict: "switchport access vlan と switchport voice vlan を打つ",
+      why: "電話とパソコンを1本の線でつなぐときは、トランクにしない。データ用に access vlan、音声用に voice vlan を打つ",
+      look: ["どこにつなぐか（問題文）"],
+      steps: function (v) { return [["問題文のことば", v.voice || "-"]]; },
+      no: function () { return "電話の話ではない"; },
+      test: function (v) { return !!v.voice; } },
+
+    { key: "dtp", cue: "DTP を使う", cond: "DTP に任せる、と書いてある",
+      verdict: "switchport mode dynamic desirable にする",
+      why: "DTP は「相手と話し合ってトランクにする」仕組み。desirable は自分から話しかける側",
+      look: ["どこにつなぐか（問題文）"],
+      steps: function (v) { return [["問題文のことば", v.dtp || "-"]]; },
+      no: function () { return "DTP を使えとは書かれていない"; },
+      test: function (v) { return !!v.dtp; } },
+
+    { key: "notag", cue: "タグに対応していない機器", cond: "相手が VLAN のタグに対応していない",
+      verdict: "ネイティブVLAN として、タグなしで転送する",
+      why: "タグ付きフレームを扱えない機器には、タグを付けない VLAN（ネイティブVLAN）で転送する",
+      look: ["どこにつなぐか（問題文）"],
+      steps: function (v) { return [["問題文のことば", v.notag || "-"]]; },
+      no: function () { return "札に対応しない機器の話ではない"; },
+      test: function (v) { return !!v.notag; } },
+
+    { key: "access2trunk", cue: "Administrative Mode が static access", cond: "いまアクセスのままになっている",
+      verdict: "switchport mode trunk にして、カプセル化を dot1q にする",
+      why: "Administrative Mode が static access のままだと、VLAN をいくつも通せない。カプセル化より先に、まず mode trunk にする",
+      look: ["現在のモード（Administrative Mode）"],
+      steps: function (v) { return [["現在のモード", v.access || "-"]]; },
+      no: function () { return "アクセスのままではない"; },
+      test: function (v) { return !!v.access; } },
+
+    { key: "isl", cue: "カプセル化が isl", cond: "トランクだが、カプセル化が isl になっている",
+      verdict: "isl を消して dot1q にし、足りない VLAN を add で足す",
+      why: "isl は シスコだけの古いやり方。両側でそろえないとトランクにならないので、標準の dot1q に直す",
+      look: ["カプセル化（Encapsulation）"],
+      steps: function (v) { return [["現在のカプセル化", v.isl || "-"]]; },
+      no: function () { return "カプセル化は isl ではない"; },
+      test: function (v) { return !!v.isl; } },
+
+    { key: "addvlan", cue: "新しい VLAN を通す", cond: "新しい VLAN を、そのトランクで転送したい",
+      verdict: "switchport trunk allowed vlan add で足す",
+      why: "add を付けないと、いま通っている VLAN が消える。一覧に足すつもりで打つ",
+      look: ["通してよい VLAN の一覧（Trunking VLANs Enabled）"],
+      steps: function (v) { return [["現在の一覧", v.enabled || "-"]]; },
+      no: function () { return "新しい VLAN を足す話ではない"; },
+      test: function (v) { return !!v.addvlan; } },
+
+    { key: "native", cue: "ネイティブVLAN を既定以外にする", cond: "ネイティブVLAN を既定（1）以外にする、と書いてある",
+      verdict: "switchport trunk native vlan を 1 以外にする",
+      why: "ネイティブVLAN が 1 のままだと、タグなしのフレームが既定の VLAN に流れる。守りのために 1 以外にする",
+      look: ["ネイティブVLAN"],
+      steps: function (v) { return [["現在のネイティブVLAN", v.nativeNo || "1（既定）"]]; },
+      no: function () { return "ネイティブVLAN を変える話ではない"; },
+      test: function (v) { return !!v.native1; } },
+
+    { key: "role", cue: "スイッチ間と端末側の両方を設定する", cond: "スイッチ間と、端末側の両方を設定する",
+      verdict: "スイッチ間はトランク、端末側はアクセスにする",
+      why: "スイッチどうしの線だけがトランク。パソコンやサーバをつなぐ口はアクセスにする",
+      look: ["どこにつなぐか（問題文）"],
+      steps: function (v) { return [["問題文のことば", v.role || "-"]]; },
+      no: function () { return "両方を設定する話ではない"; },
+      test: function (v) { return !!v.role; } },
+
+    { key: "totrunk", cue: "対向の出力に合わせる", cond: "そのほか（いまアクセスのままなので、トランクにする）",
+      verdict: "switchport mode trunk にして、カプセル化を dot1q にする",
+      why: "Administrative Mode が static access のままだと、VLAN をいくつも通せない。まず mode trunk にする",
+      look: ["現在のモード（Administrative Mode）", "カプセル化（Encapsulation）"],
+      steps: function (v) {
+        return [["現在のモード", v.access || v.mode || "（出力に無い）"],
+                ["カプセル化", v.encap || "-"]];
+      },
+      no: function () { return "ここまでで決まっている"; },
+      test: function () { return true; } }
+  ];
+
+  var GLOSS = {
+    "ルータにサブインターフェースを作り、encapsulation dot1Q と IP アドレスを設定する": "VLAN ごとに、ルータ側の受け口を1つずつ作る",
+    "switchport access vlan と switchport voice vlan を打つ": "1本の線で、パソコンと電話を別々の VLAN に分ける",
+    "switchport mode dynamic desirable にする": "自分から話しかけて、相手とトランクを作る",
+    "ネイティブVLAN として、タグなしで転送する": "タグを扱えない機器には、タグを付けずに転送する",
+    "isl を消して dot1q にし、足りない VLAN を add で足す": "古いやり方をやめて、標準の付け方にそろえる",
+    "switchport trunk allowed vlan add で足す": "add を忘れると、現在の一覧が消える",
+    "switchport trunk native vlan を 1 以外にする": "既定のままだと、タグなしのフレームが既定の VLAN に流れる",
+    "スイッチ間はトランク、端末側はアクセスにする": "トランクにするのはスイッチどうしの線だけ",
+    "switchport mode trunk にして、カプセル化を dot1q にする": "アクセスのままでは、VLAN をいくつも通せない"
+  };
+
+  /* 本の答えの言い回しと突き合わせるための言葉 */
+  var SAME = {
+    "ルータにサブインターフェースを作り、encapsulation dot1Q と IP アドレスを設定する": ["encapsulation dot1"],
+    "switchport access vlan と switchport voice vlan を打つ": ["voice vlan"],
+    "switchport mode dynamic desirable にする": ["dynamic desirable"],
+    "ネイティブVLAN として、タグなしで転送する": ["native vlan"],
+    "isl を消して dot1q にし、足りない VLAN を add で足す": ["no switchport trunk encapsulation isl"],
+    "switchport trunk allowed vlan add で足す": ["allowed vlan add"],
+    "switchport trunk native vlan を 1 以外にする": ["native vlan"],
+    "スイッチ間はトランク、端末側はアクセスにする": ["switchport mode access"],
+    "switchport mode trunk にして、カプセル化を dot1q にする": ["mode trunk"]
+  };
+
+  /* ── 出力を作る ─────────────────────────── */
+  function baseVals() {
+    return {
+      sw: pick(["SW1", "SW2", "Cat9300-1", "AccSw1"]),
+      ifn: pick(["Gi1/0/1", "Fa0/1", "Et0/0"]),
+      mode: "static access",
+      encap: pick(["dot1q", "negotiate"]),
+      nat: 1,
+      list: pick(["1,22", "100,200,300", "1-10"]),
+      v: pick([5, 10, 20, 23, 100]),
+      nv: pick([99, 321, 500]),
+      ip: "10." + R(10, 30) + "." + R(1, 30) + ".1"
+    };
+  }
+
+  function sw(v) {
+    return [
+      v.sw + "# show interface " + v.ifn + " switchport",
+      "Name: " + v.ifn,
+      "Switchport: Enabled",
+      "Administrative Mode: " + v.mode,
+      "Operational Mode: " + (v.mode === "trunk" ? "trunk" : "static access"),
+      "Administrative Trunking Encapsulation: " + v.encap,
+      "Negotiation of Trunking: On",
+      "Access Mode VLAN: 1 (default)",
+      "Trunking Native Mode VLAN: " + v.nat + (v.nat === 1 ? " (default)" : ""),
+      "Trunking VLANs Enabled: " + v.list
+    ].join("\n");
+  }
+
+  function build(v) { return v.need + "\n\n" + sw(v); }
+
+  var MAKERS = {
+    sub: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q";
+      b.need = "ルータの " + b.ifn + " にサブインターフェースを足して、VLAN " + b.v +
+               "（" + b.ip + "/24）を通します。どのコマンドが必要ですか。";
+      return b;
+    },
+    voice: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q";
+      b.need = "この口に Cisco IP Phone とパソコンをつなぎます。音声は VLAN " + b.v +
+               " を使います。どの設定をしますか。";
+      return b;
+    },
+    dtp: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q";
+      b.need = "相手のスイッチとは DTP を使ってつなぎます。どの設定をしますか。";
+      return b;
+    },
+    notag: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q";
+      b.need = "相手はトランク ポートをサポートしていないサードパーティ製の機器です。" +
+               "現在の通信を保ったまま、どの設定をしますか。";
+      return b;
+    },
+    access2trunk: function (b) {
+      b.mode = "static access"; b.encap = "negotiate";
+      b.need = "この線に VLAN をいくつも通せるようにします。どの設定をしますか。";
+      return b;
+    },
+    isl: function (b) {
+      b.mode = "trunk"; b.encap = "isl";
+      b.need = "相手側は dot1q です。この線をトランクにして、VLAN " + b.v +
+               " も通したい。どの設定をしますか。";
+      return b;
+    },
+    addvlan: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q";
+      b.need = "この線に、新しく VLAN " + b.v + " を実装します。どの設定をしますか。";
+      return b;
+    },
+    native: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q";
+      b.need = "2つの VLAN を通します。会社の決まりで、ネイティブ VLAN をデフォルト以外の値にします。どの設定をしますか。";
+      return b;
+    },
+    role: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q";
+      b.need = "スイッチどうしと、サーバをつなぐ口の両方を設定して、完全な接続にします。どの設定をしますか。";
+      return b;
+    },
+    totrunk: function (b) {
+      b.mode = "trunk"; b.encap = "dot1q"; b.nat = b.nv;
+      b.need = "相手側の " + b.ifn + " の出力を見て、こちら側を同じにそろえます。どの設定をしますか。";
+      return b;
+    }
+  };
+
+  function sample() {
+    return [
+      "ルータの Gi0/0 にサブインターフェースを足して、VLAN 20 を通します。どのコマンドが必要ですか。",
+      "（ほかの聞かれ方：IP Phone をつなぐ／DTP を使う／タグに対応していない相手／" +
+        "新しく VLAN 23 を実装する／ネイティブ VLAN をデフォルト以外にする／完全な接続にする）",
+      "",
+      sw({ sw: "SW1", ifn: "Et0/0", mode: "static access", encap: "isl",
+           nat: 1, list: "1,22" })
+    ].join("\n");
+  }
+
+
+  var spec = {
+    id: "trunk",
+    kind: "rules",
+    card: "config",
+    name: "トランクと VLAN",
+    note: "スイッチどうしの線に、複数の VLAN を通す設定を選ぶ",
+    obj: "2.2",
+    ask: "この要件を満たす設定はどれですか。",
+    wantsQuestion: true,
+    spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
+    read: read, excerpt: excerpt,
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES),
+    /* 規則では出せないが、テストには出す問題 */
+    bookOnly: ["B3-M3-020"],
+    expect: { spots: 5, rules: 10, questions: 19 },
+    dropped: []
+  };
+
+  global.SPECS = global.SPECS || {};
+  global.SPECS.trunk = spec;
+  if (typeof module !== "undefined" && module.exports) module.exports = spec;
+})(typeof window !== "undefined" ? window : globalThis);

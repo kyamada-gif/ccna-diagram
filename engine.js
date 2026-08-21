@@ -42,6 +42,56 @@
       if (VERDICTS.indexOf(r.verdict) < 0) VERDICTS.push(r.verdict);
     });
 
+    /* ── 誤答が足りないときの借り先 ──────────────
+     * 決め方が1つしかない分野（ログの読み取りなど）は、答えの顔ぶれも1つになる。
+     * そのままだと選択肢が1個しか出ず、問題にならない。
+     * **そこで、同じ分野の本の問題が出している「正解でない選択肢」を借りる。**
+     * こちらで誤答を考え出さない。借りるのは本の言葉だけ。
+     * （借りるのは選択肢の文だけで、問題文や提示物は借りない。
+     *   練習に本の問題そのものを出さない、という決まりは崩れない）
+     */
+    function spareWrongs() {
+      var spare = [];
+      var bank = (global.BANKS || {})[spec.id];
+      if (!bank) return spare;
+      /* この分野で「正解」になっている文は、誤答にできない */
+      var right = {};
+      bank.forEach(function (q) {
+        [].concat(q.answer || []).forEach(function (a) { right[a] = 1; });
+      });
+      /* 判定の答えと同じ意味の言い換え（SAME）も、誤答にできない */
+      var same = spec.same || {};
+      Object.keys(same).forEach(function (k) {
+        right[k] = 1;
+        same[k].forEach(function (x) { right[x] = 1; });
+      });
+      var plain = [], polite = [];
+      bank.forEach(function (q) {
+        (q.choices || []).forEach(function (c) {
+          if (right[c]) return;
+          if (plain.indexOf(c) >= 0 || polite.indexOf(c) >= 0) return;
+          /* **言い回しをそろえる。**本によって「〜する」と「〜します。」が混じっている。
+             混ぜたまま並べると、言い回しの違いだけで正解が当てられてしまう。
+             ふだん形（句点で終わらない）を先に使う */
+          (/[。]$/.test(c) ? polite : plain).push(c);
+        });
+      });
+      spare = shuffle(plain).concat(shuffle(polite));
+      return spare;
+    }
+
+    /* 選ぶものが3つに満たないとき、本の誤答で埋める */
+    function padOpts(opts, right) {
+      if (opts.length >= 3) return opts;
+      var seen = {};
+      opts.forEach(function (o) { seen[o] = 1; });
+      spareWrongs().forEach(function (w) {
+        if (opts.length >= 3 || seen[w] || w === right) return;
+        seen[w] = 1; opts.push(w);
+      });
+      return opts;
+    }
+
     /* 提示物から値を読む。
        ふつうはテキストを正規表現で読む。**図の問題は形が違う**ので、
        その題材が自分の読み方（spec.read）を持っていればそちらを使う */
@@ -200,8 +250,70 @@
       return out.join("\n");
     }
 
+    /* ── 練習の1問を組み立てる ─────────────────────
+     * **画面側では組み立てない。**ここで作って、画面はあるものを出すだけ。
+     *   stepQ(i, n)  … i 番目の見る所の問題。n は 0／1（2問作る）
+     *   wholeQ()     … 最後の「提示物ぜんぶで判定」
+     * どちらも作れなければ null。
+     */
+    function stepQ(i, n) {
+      var r = reach(i, n === 0);
+      if (!r) return null;
+      var st = r.step, ask, opts, right;
+      if (spec.walk) {
+        var w = spec.walk(st, read(r.text), shuffle, n);
+        ask = w.ask; opts = w.opts; right = w.right;
+      } else {
+        /* 上から順に確認していく題材の、共通の聞き方。
+           **「答えは何か」ではなく「ここで決まるか、次を確認するか」を問う。**
+           解くときに頭の中でたどる順番を、そのまま問いにする */
+        var look = (st.look && st.look.length) ? st.look.join(" と ") : "この値";
+        var hitTxt = look + " で「" + st.verdict + "」と決まる";
+        var nextTxt = look + " だけでは決まらない。次に " + st.next + " を確認する";
+        right = st.hit ? hitTxt : nextTxt;
+        opts = [right];
+        if (st.hit) { if (st.next) opts.push(nextTxt); }
+        else { opts.push(hitTxt); }
+        var other = shuffle(VERDICTS.filter(function (v) { return v !== st.verdict; }))[0];
+        if (other) opts.push(look + " で「" + other + "」と決まる");
+        /* 決め方が1つしかない分野は、ここで選択肢が1つになってしまう。
+           そのときだけ、本の誤答を同じ言い回しに包んで足す */
+        spareWrongs().forEach(function (w) {
+          if (opts.length >= 3) return;
+          opts.push(look + " で「" + w + "」と決まる");
+        });
+        var seen1 = {}, uq = [];
+        opts.forEach(function (o) { if (!seen1[o]) { seen1[o] = 1; uq.push(o); } });
+        opts = shuffle(uq.slice(0, 3));
+        ask = look + " を確認します。ここで答えは決まりますか。";
+      }
+      return { kind: "step", ask: ask, exhibit: r.text,
+               opts: opts, right: right, extra: { step: st, i: i } };
+    }
+
+    function wholeQ() {
+      var g = makeAny();
+      if (!g.text) return null;
+      var r = RULES.filter(function (x) { return x.key === g.key; })[0];
+      var opts, right;
+      /* 答えが「その場の選択肢」になる題材（ルートブリッジなど）は、
+         誤答も同じ提示物の中の別のものから作る */
+      if (spec.answer) {
+        var v = read(g.text);
+        right = spec.answer(v);
+        opts = shuffle(v.sw.map(function (x) { return x.id; }));
+      } else {
+        right = r.verdict;
+        opts = shuffle(padOpts([r.verdict].concat(
+          shuffle(VERDICTS.filter(function (v) { return v !== r.verdict; })).slice(0, 3)), right));
+      }
+      return { kind: "whole", ask: spec.ask || "この出力で起きていることはどれですか。",
+               exhibit: g.text, opts: opts, right: right, extra: {} };
+    }
+
     return {
       id: spec.id, kind: spec.kind || "rules", spec: spec,
+      stepQ: stepQ, wholeQ: wholeQ,
       SPOTS: SPOTS, RULES: RULES, VERDICTS: VERDICTS, MAKERS: MAKERS,
       read: read, judge: judge, trace: trace, walk: walk, groups: groups,
       blocks: blocks, reach: reach, gloss: gloss, make: make, makeAny: makeAny,
@@ -215,7 +327,256 @@
     };
   }
 
-  var API = { makeEngine: makeEngine, R: R, pick: pick, shuffle: shuffle, n: n };
+  /* ══════════════════════════════════════════════════
+   * 対応づけ（言葉と説明を結ぶ）ブロックのエンジン。
+   *
+   * 上の makeEngine は「見る所を順に見て、規則で答えを出す」題材のもの。
+   * こちらは規則ではなく**覚える**題材。作りは同じ形にそろえてあるので、
+   * 画面側（app.jsx）は2つを見分けなくてよい。
+   *
+   *   blocks()      見る所。入れ先ひとつ、または本の1問がもつ話題ひとつ
+   *   stepQ(i, n)   その見る所の問題。説明を1つ見せて、入れ先を選ばせる
+   *   wholeQ()      最後の問題。対の一覧から**毎回ちがう組み合わせ**を作って結ばせる
+   *
+   * 中身はすべて本の対から作る。**説明も入れ先も、こちらでは書かない。**
+   * ただし組み合わせは毎回作るので、本には無い1問になる（＝生成問題）。
+   * ══════════════════════════════════════════════════ */
+  function makeMatchEngine(spec) {
+    var bank = spec.bank || [];
+    /* 言い換え表（q/synonym.js）。**テストの選択肢は本の言葉のまま**なので、
+       同じものを指す言い方が2通り出てくる。練習では1つにまとめる。
+       まとめないと、見る所が同じ意味で2つに割れ、誤答に「同じ意味の別の言い方」が
+       混ざって、答えが2つある問題になってしまう */
+    var SYN = spec.synonym ||
+      (typeof global.SYNONYM !== "undefined" ? global.SYNONYM : {});
+    /* 言い換え表に無くても、**空白や中黒だけが違う書き方**はそろえる。
+       例「グローバル ユニキャスト アドレス」と「グローバルユニキャストアドレス」。
+       いちばん多く出てくる書き方を代表にする */
+    var FLAT = (function () {
+      var cnt = {};
+      bank.forEach(function (q) {
+        (q.pairs || []).forEach(function (p) {
+          var t = SYN[p.r] || p.r;
+          var k = String(t).replace(/[\s・‐-‒–—ー]/g, "").toLowerCase();
+          (cnt[k] = cnt[k] || {})[t] = (cnt[k][t] || 0) + 1;
+        });
+      });
+      var rep = {};
+      Object.keys(cnt).forEach(function (k) {
+        var best = null, n = -1;
+        Object.keys(cnt[k]).forEach(function (t) {
+          if (cnt[k][t] > n) { n = cnt[k][t]; best = t; }
+        });
+        rep[k] = best;
+      });
+      return rep;
+    })();
+    function same(t) {
+      var v = SYN[t] || t;
+      var k = String(v).replace(/[\s・‐-‒–—ー]/g, "").toLowerCase();
+      return FLAT[k] || v;
+    }
+    /* 対の一覧。
+       **ほとんど同じ説明は1つにまとめる。**本ごとに言い回しが少しずつ違うので、
+       まとめないと「覚える1枚」に似た文が何行も並んで読めなくなる。
+       まとめ方は、句読点と空白を落として同じになるものを1つとみなし、
+       いちばん多く出てくる言い方を代表にする。入れ先が食い違うときは多いほうを採る */
+    function flat(t) {
+      return String(t).replace(/[\s、。，．・「」『』（）()"'']/g, "").toLowerCase();
+    }
+    var pairs = (function () {
+      var box = {};
+      bank.forEach(function (q) {
+        (q.pairs || []).forEach(function (p) {
+          var k = flat(p.l);
+          var b = box[k] || (box[k] = { words: {}, rs: {}, from: q.qid,
+                                        targets: (q.targets || []).map(same) });
+          b.words[p.l] = (b.words[p.l] || 0) + 1;
+          var r = same(p.r);
+          b.rs[r] = (b.rs[r] || 0) + 1;
+        });
+      });
+      function top(o) {
+        var best = null, n = -1;
+        Object.keys(o).forEach(function (k) { if (o[k] > n) { n = o[k]; best = k; } });
+        return best;
+      }
+      return Object.keys(box).map(function (k) {
+        var b = box[k];
+        return { l: top(b.words), r: top(b.rs), from: b.from, targets: b.targets };
+      });
+    })();
+    var targets = [];
+    pairs.forEach(function (p) { if (targets.indexOf(p.r) < 0) targets.push(p.r); });
+
+    /* 見る所の決め方。
+       入れ先が少ないブロック（ケーブルなど）は**入れ先ひとつ＝見る所ひとつ**。
+       入れ先が多いブロック（部品と役割など）は、入れ先を並べると数が多すぎるので
+       **本の1問がもつ「入れ先の組」＝1つの話題**を見る所にする */
+    var byTarget = targets.length <= (spec.maxTargets || 9);
+
+    var GROUPS = (function () {
+      var out = [];
+      if (byTarget) {
+        targets.forEach(function (t) {
+          out.push({ name: t, targets: [t],
+                     pairs: pairs.filter(function (p) { return p.r === t; }) });
+        });
+        return out;
+      }
+      var mark = {};
+      bank.forEach(function (q) {
+        var ts = [];
+        (q.targets || []).forEach(function (t) {
+          if (ts.indexOf(same(t)) < 0) ts.push(same(t));
+        });
+        if (!ts.length) return;
+        var key = ts.slice().sort().join(" / ");
+        if (mark[key]) {                       /* 同じ入れ先の組は1つの話題にまとめる */
+          var g = mark[key];
+          (q.pairs || []).forEach(function (p) {
+            if (!g.pairs.some(function (x) { return x.l === p.l && x.r === p.r; }))
+              g.pairs.push({ l: p.l, r: p.r, from: q.qid, targets: ts });
+          });
+          return;
+        }
+        var g2 = { name: ts.join(" と "), targets: ts,
+                   pairs: (q.pairs || []).map(function (p) {
+                     return { l: p.l, r: p.r, from: q.qid, targets: ts };
+                   }) };
+        mark[key] = g2;
+        out.push(g2);
+      });
+      return out;
+    })();
+
+    function blocks() {
+      return GROUPS.map(function (g, i) {
+        return {
+          no: i + 1, name: g.name, look: [], verdict: g.name,
+          cond: [], keys: [],
+          targets: g.targets,
+          /* 覚える1枚に出すもの。**本の対をそのまま並べる。**
+             こちらで説明文を書かない（書くと、それは生成した中身になる） */
+          learn: g.pairs.map(function (p) { return { l: p.l, r: p.r }; }),
+          spots: []
+        };
+      });
+    }
+
+    /* 誤答は、同じ見る所の中のほかの入れ先から借りる。
+       足りなければ、同じブロックのほかの入れ先から借りる */
+    function wrongs(g, right, k) {
+      var pool = g.targets.filter(function (t) { return t !== right; });
+      var more = shuffle(targets.filter(function (t) {
+        return t !== right && pool.indexOf(t) < 0;
+      }));
+      return shuffle(pool).concat(more).slice(0, k);
+    }
+
+    function stepQ(i, n) {
+      var g = GROUPS[i];
+      if (!g || !g.pairs.length || targets.length < 2) return null;
+      var p = g.pairs[(n + Math.floor(Math.random() * g.pairs.length)) % g.pairs.length];
+      var opts = shuffle([p.r].concat(wrongs(g, p.r, 3)));
+      var st = {
+        look: [], hit: true, verdict: p.r, next: null,
+        values: [{ name: "説明", value: p.l }],
+        why: "この説明は「" + p.r + "」のもの。本の " + p.from + " に出ています。"
+      };
+      return { kind: "step", ask: "この説明は、どれにあてはまりますか。",
+               exhibit: null, opts: opts, right: p.r,
+               extra: { step: st, i: i } };
+    }
+
+    /* 最後の問題。**本には無い組み合わせを、その場で作る。**
+       決まり3つ。
+         ・同じ説明を2回入れない（本どうしで入れ先が食い違う説明があるため）
+         ・入れ先は必ず2つ以上（1つだと問題にならない）
+         ・組はいつも4つ（数がぶれると、練習の進み具合が回ごとに変わる）
+    */
+    function wholeQ() {
+      /* 説明ひとつにつき入れ先を1つに決める。先に出てきたほうを採る */
+      var uniq = [], byL = {};
+      pairs.forEach(function (p) {
+        if (byL[p.l]) return;
+        byL[p.l] = 1; uniq.push(p);
+      });
+      if (uniq.length < 4 || targets.length < 2) return null;
+
+      var pool = shuffle(uniq);
+      var take = [pool[0]];
+      /* 2つめは、1つめと入れ先がちがうものにする */
+      var other = pool.filter(function (p) { return p.r !== take[0].r; })[0];
+      if (!other) return null;
+      take.push(other);
+      for (var i = 0; i < pool.length && take.length < 4; i++) {
+        var p = pool[i];
+        if (take.some(function (x) { return x.l === p.l; })) continue;
+        take.push(p);
+      }
+      if (take.length < 4) return null;
+      take = shuffle(take);
+      var ts = [];
+      take.forEach(function (p) { if (ts.indexOf(p.r) < 0) ts.push(p.r); });
+      return {
+        kind: "match", ask: "左の説明を、右のどれにあてはめますか。",
+        exhibit: null, opts: shuffle(ts),
+        right: take.map(function (p) { return p.l + " → " + p.r; }),
+        extra: { pairs: take.map(function (p) { return { l: p.l, r: p.r }; }),
+                 targets: shuffle(ts) }
+      };
+    }
+
+    return {
+      id: spec.id, kind: "match", spec: spec,
+      SPOTS: [], RULES: [], VERDICTS: targets, MAKERS: {},
+      PAIRS: pairs, TARGETS: targets,
+      blocks: blocks, stepQ: stepQ, wholeQ: wholeQ,
+      read: function (x) { return x; },
+      judge: function () { return null; },
+      trace: function () { return null; },
+      gloss: function () { return ""; },
+      answer: null, view: "match",
+      sample: function () { return ""; },
+      shuffle: shuffle, pick: pick
+    };
+  }
+
+  /* 設定を選ぶ題材の、共通の聞き方。
+   *
+   * この種類の問題は「上から順に絞り込む」形ではない。
+   * 問題文の中の**決め手になる言葉**を見つけ、そこから打つコマンドが1つに決まる。
+   * だから練習も2段にする。
+   *
+   *   1問目 … この問題文で、答えを決めているのはどれか（決め手を探す）
+   *   2問目 … その決め手なら、何をするか（設定を選ぶ）
+   *
+   * 各ルールに cue（決め手を短く言った言葉）が要る。
+   */
+  function cueWalk(rules) {
+    return function (step, v, sh, n) {
+      var me = rules.filter(function (r) { return r.verdict === step.verdict; })[0]
+        || rules[rules.length - 1];
+      if (n === 0 && me.cue) {
+        var opts = [me.cue];
+        sh(rules.filter(function (r) { return r.cue && r.cue !== me.cue; }))
+          .slice(0, 3).forEach(function (r) { opts.push(r.cue); });
+        return { ask: "この問題文で、答えを決めているのはどれですか。",
+                 opts: sh(opts), right: me.cue };
+      }
+      var opts2 = [step.verdict];
+      sh(rules.filter(function (r) { return r.verdict !== step.verdict; }))
+        .slice(0, 3).forEach(function (r) { opts2.push(r.verdict); });
+      var seen2 = {}, uq2 = [];
+      opts2.forEach(function (o) { if (!seen2[o]) { seen2[o] = 1; uq2.push(o); } });
+      return { ask: me.cue ? "「" + me.cue + "」が決め手です。何をしますか。"
+                           : "この要件なら、何をしますか。",
+               opts: sh(uq2), right: step.verdict };
+    };
+  }
+
+  var API = { makeEngine: makeEngine, makeMatchEngine: makeMatchEngine, cueWalk: cueWalk, R: R, pick: pick, shuffle: shuffle, n: n };
   global.ENGINE = API;
   if (typeof module !== "undefined" && module.exports) module.exports = API;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -9,21 +9,18 @@ import React, { useState, useEffect, useRef } from "react";
  *
  * ・判定と出力作りは engine.js と types/<id>.js。ここでは判定しない
  * ・過去問は questions.js の BANKS[<ブロックの id>]。ここには書かない
- * ・間違えたときは lpic-reflex と同じ：正解を見せて「もう一度チャレンジ」だけ。
+ * ・間違えたときは lpic-reflex と同じ：正解を見せて、同じ確認項目をもう一度解かせる。
  *   点になるのは最初の答え
  * ・画面の言葉は説明だけ。励ましも呼びかけも書かない
  */
 
 /* 画面が変わったら、いつも上から読み始める。
    **押すたびに自分で上へ戻すのは面倒**なので、こちらで戻す（ipcalc2 と同じ） */
-const nowY = () => { const e = document.querySelector(".wrap"); return e ? e.scrollTop : 0; };
-const toTop = (y) => {
-  const e = document.querySelector(".wrap");
-  if (e) e.scrollTop = y || 0;
-  try { window.scrollTo(0, y || 0); } catch (err) {}
-};
+/* 見ている位置。**動くのはページそのものなので、ページの位置を見る。**
+   中に別のスクロールを作らないので、ここも1か所で済む */
+const nowY = () => (document.scrollingElement || document.documentElement).scrollTop;
+const toTop = (y) => { try { window.scrollTo(0, y || 0); } catch (err) {} };
 
-const TEST_N = 10;
 const LETTERS = "ABCDEFGH";
 
 /* ── 札とブロック ────────────────────────────
@@ -33,7 +30,7 @@ const LETTERS = "ABCDEFGH";
  */
 const CARDS = [
   { id: "read", name: "出力を読んで当てる",
-    note: "値を読んで、決まった規則で答えを出す",
+    note: "出力の値を読み、決まった規則にあてはめて答えを出す",
     blocks: [
       { id: "showint", name: "show interface の障害", n: 31 },
       { id: "json", name: "JSON の読み取り", n: 38 },
@@ -43,7 +40,7 @@ const CARDS = [
       { id: "log", name: "ログの読み取り", n: 3 }
     ] },
   { id: "words", name: "言葉と意味の組み合わせ",
-    note: "説明と用語の対を覚える",
+    note: "説明と用語の対応を覚える",
     blocks: [
       { id: "parts", name: "ネットワークの部品と役割", n: 22 },
       { id: "autoword", name: "自動化と API の言葉", n: 21 },
@@ -54,24 +51,28 @@ const CARDS = [
       { id: "dhcpword", name: "DHCP と DNS・NTP・SNMP", n: 10 }
     ] },
   { id: "config", name: "足りない設定を選ぶ",
-    note: "要件と今の設定を読んで、打つコマンドを選ぶ",
+    note: "要件と現在の設定を読み、必要なコマンドを選ぶ",
     blocks: [
       { id: "etherchannel", name: "EtherChannel", n: 20 },
-      { id: "trunk", name: "トランク", n: 11 },
+      { id: "trunk", name: "トランクと VLAN", n: 19 },
       { id: "access", name: "機器への入り方", n: 10 },
-      { id: "vlan", name: "VLAN の設定と確認", n: 10 },
-      { id: "othercfg", name: "そのほかの設定", n: 13 }
+      { id: "ipsvc", name: "DHCP・NAT・NTP の設定", n: 9 },
+      { id: "portsec", name: "ポートの守り", n: 4 }
     ] },
   { id: "misc", name: "そのほか",
-    note: "決まった見る所が立たない、一点物",
+    note: "決まった確認項目が立たない、一点ものの問題",
     blocks: [
-      { id: "wlangui", name: "無線の画面を読む", n: 12 },
-      { id: "nolink", name: "つながらない原因をさがす", n: 4 },
+      { id: "wlangui", name: "無線の画面を読む", n: 13 },
+      { id: "nolink", name: "つながらない原因をさがす", n: 5 },
       { id: "misc", name: "そのほか", n: 8 }
     ] }
 ];
 
 const bank = (id) => (typeof BANKS !== "undefined" && BANKS[id]) || null;
+/* 紙面から切り出した提示物。**qid で引く。**問題データには画像を書かない。
+   img/index.js（scripts/build_exhibit_images.py が作る）が唯一の置き場所 */
+const scanOf = (qid) =>
+  (typeof SCANS !== "undefined" && SCANS[String(qid).replace(/#\d+$/, "")]) || null;
 const engine = (id) => (typeof GENS !== "undefined" && GENS[id]) || null;
 const isReady = (id) => !!bank(id);
 const blockOf = (id) => {
@@ -84,6 +85,51 @@ const blockNo = (cid, bid) => {
   const c = CARDS.filter((x) => x.id === cid)[0];
   return cardNo(cid) + "." + (c.blocks.findIndex((b) => b.id === bid) + 1);
 };
+/* ── 名前の付け方（画面に出る言葉の決まり）──────────────
+ * ここに全部まとめる。**画面のあちこちで別々に組み立てない。**
+ *
+ *   札      「1 出力を読んで当てる」          番号は 1〜4。ホームの小見出しにだけ出る
+ *   分野    「1.1 show interface の障害」     番号は 札.分野
+ *   やり方  「練習」「テスト」                **テストは分野に1本なので、回の番号は無い**
+ */
+
+/* ── 印（バッジ）の決まり ──────────────────────
+ * 3つの状態しかない。**画面のどこでも同じ見た目にする。**
+ *
+ *   まだ    … 一度も受けていない
+ *   数字    … 受けたが、まだ届いていない（いちばん良かった点）
+ *   🏅      … 届いた
+ *
+ * **数えるものは分野のバッジ1種類だけ。**
+ * 分野は21ある。ホームの上に「n / 21 分野」と出す。
+ */
+function markOf(r, of) {
+  if (!r || r.best === null || r.best === undefined) return { kind: "yet", text: "まだ" };
+  if (r.passed) return { kind: "done", text: "🏅" };
+  return { kind: "part", text: r.best + " / " + of };
+}
+/* バッジの置き場。**空の枠を先に見せる。**
+   ipcalc2 と同じ形（破線の枠 → バッジが付くと金色の枠に 🏅）。
+   途中の点数は、枠の下に小さく添える */
+function Mark({ mark, sm }) {
+  const cls = "slot" + (sm ? " sm" : "") + (mark.kind === "done" ? " got" : "");
+  if (mark.kind === "part") {
+    return (
+      <span className="slot-w">
+        <span className={cls} />
+        <span className="slot-n">{mark.text}</span>
+      </span>
+    );
+  }
+  return <span className={cls}>{mark.kind === "done" ? "🏅" : ""}</span>;
+}
+/* 分野の印。テストは分野に1本なので、その1本の結果がそのまま分野の印になる */
+function blockMark(st, id) {
+  const ch = testChunks(id);
+  if (!ch.length) return { kind: "yet", text: "まだ" };
+  return markOf((st.rounds || {})[STORE.setKey(ch[0])] || {}, ch[0].length);
+}
+
 const cardCount = (c) => c.blocks.reduce((a, b) => a + (bank(b.id) ? bank(b.id).length : b.n), 0);
 
 /* 学習の記録は store.js（いまは localStorage、のちにサーバ）。
@@ -182,6 +228,58 @@ function asExhibit(x) {
   if (x.src !== undefined) return { kind: "json", text: x.src, data: x };
   return { kind: "topology", fig: x };
 }
+/* 書き起こしを「図の段」と「文字の段」に分ける。
+ *
+ * 提示物の書き起こしは `【ネットワーク図】` `【SW1 の show interface】` のような
+ * 見出しで区切ってある。**紙面の画像があるときは、図の段だけを画像に置きかえる。**
+ * 文字の段（show出力・設定）は、そのまま画像の下に出す。
+ * 見出しが無いもの（出力だけの問題）は、丸ごと文字の段になる。
+ */
+function splitFigure(text) {
+  if (typeof text !== "string" || text.indexOf("【") < 0) return { fig: null, rest: text };
+  const lines = text.split("\n");
+  const secs = [];
+  let cur = { head: "", body: [] };
+  lines.forEach((l) => {
+    const m = /^【(.+)】\s*$/.exec(l.trim());
+    if (m) { if (cur.head || cur.body.length) secs.push(cur); cur = { head: m[1], body: [] }; }
+    else cur.body.push(l);
+  });
+  secs.push(cur);
+  /* 「図」だけを画像に譲る。**「画面」の段は文字のまま残す。**
+     機器の画面は別の箱に刷られていて、図の切り出しには入らないことがある
+     （例 B1-P15-010：ネットワーク図は紙面の画像、HostC の設定画面は文字） */
+  const isFig = (h) => /図/.test(h);
+  if (!secs.some((s) => isFig(s.head))) return { fig: null, rest: text };
+  /* 図の段の中に、見出しを付けずに show出力や設定が続けて書いてあることがある。
+     **空行のあとに、機器の合図（R1# など）や設定の言葉が来たら、そこから下は文字。** */
+  const looksCode = (l) =>
+    /^\S*[#>]\s*\S/.test(l) ||
+    /^\s*(interface|switchport|ip\s|no\s|encapsulation|channel-group|router\s|vlan\s|line\s|username|hostname|spanning-tree|standby|access-list)\b/.test(l) ||
+    /^\.\.\.$/.test(l.trim());
+  const cut = (body) => {
+    for (let i = 1; i < body.length; i++) {
+      if (body[i - 1].trim() !== "") continue;
+      let j = i;
+      while (j < body.length && body[j].trim() === "") j++;
+      if (j < body.length && looksCode(body[j])) return [body.slice(0, i), body.slice(j)];
+    }
+    return [body, []];
+  };
+  const figPart = [], textPart = [];
+  secs.forEach((s) => {
+    if (isFig(s.head)) {
+      const [f, t] = cut(s.body);
+      figPart.push(f.join("\n"));
+      if (t.length) textPart.push(t.join("\n"));
+    } else {
+      textPart.push((s.head ? "【" + s.head + "】\n" : "") + s.body.join("\n"));
+    }
+  });
+  const rest = textPart.join("\n").replace(/^\n+|\n+$/g, "");
+  return { fig: figPart.join("\n").trim(), rest: rest || null };
+}
+
 /* 判定エンジンに渡す中身を取り出す。**画面に出すものとは限らない** */
 function exValue(ex) {
   if (!ex) return null;
@@ -197,63 +295,53 @@ function exValue(ex) {
  * 最後に、提示物ぜんぶで判定を3問。
  */
 function makePractice(G, id) {
-  /* 判定エンジンを持たないブロック（言葉と意味の組み合わせなど）は、
-     **過去問そのものを練習にする。**間違えたら、正解するまでやり直す形。
-     テストは同じ問題を、点を付けて解く（lpic-reflex と同じ考え方） */
-  if (!G || G.kind !== "rules") {
-    const qs = bank(id) || [];
-    if (!qs.length) return [];
-    return shuffleAny(qs).map((q) => asPast(q));
-  }
+  /* **エンジンが無いブロックは、まだ練習が作れない。**
+     ここで過去問を出してしまうと「練習＝テストと同じ問題」になる。
+     決まりは「テストは本の問題、練習は生成問題」。混ぜない */
+  if (!G) return [];
   const bs = G.blocks();
   const out = [];
   bs.forEach((b, i) => {
     out.push(item({ kind: "learn", extra: { block: b, i: i, of: bs.length } }));
-    [true, false].forEach((hit) => {
-      const r = G.reach(i, hit);
-      if (!r) return;
-      const st = r.step;
-      /* 聞き方と選択肢を、その題材が自分で持っているときは、そちらを使う。
-         **画面側では文を組み立てない**（判定と同じ考え方） */
-      let ask, opts, right;
-      if (G.spec.walk) {
-        const w = G.spec.walk(st, G.read(r.text), G.shuffle);
-        ask = w.ask; opts = w.opts; right = w.right;
-      } else {
-        right = st.hit ? "答えは「" + st.verdict + "」" : "次に " + st.next + " を見る";
-        opts = [right];
-        if (st.hit) { if (st.next) opts.push("次に " + st.next + " を見る"); }
-        else { opts.push("答えは「" + st.verdict + "」"); }
-        const other = G.shuffle(G.VERDICTS.filter((v) => v !== st.verdict))[0];
-        if (other) opts.push("答えは「" + other + "」");
-        opts = G.shuffle(opts.slice(0, 3));
-        ask = "この値なら、どうしますか。";
-      }
-      out.push(item({ kind: "step", ask: ask, exhibit: asExhibit(r.text),
-        opts: opts, right: right, extra: { step: st, i: i, of: bs.length } }));
+    /* その確認項目の問題を2問。**組み立てるのはエンジン側**（画面では作らない） */
+    [0, 1].forEach((n) => {
+      const q = G.stepQ(i, n);
+      if (!q) return;
+      out.push(item({ kind: q.kind, ask: q.ask, exhibit: asExhibit(q.exhibit),
+        opts: q.opts, right: q.right,
+        extra: Object.assign({}, q.extra, { i: q.extra.i, of: bs.length }) }));
     });
   });
   for (let k = 0; k < 3; k++) {
-    const g = G.makeAny();
-    if (!g.text) continue;
-    const r = G.RULES.filter((x) => x.key === g.key)[0];
-    /* 答えが「その場の選択肢」になるブロック（ルートブリッジなど）は、
-       誤答も同じ提示物の中の別のものから作る */
-    let opts, right;
-    if (G.answer) {
-      const v = G.read(g.text);
-      right = G.answer(v);
-      opts = G.shuffle(v.sw.map((x) => x.id));
-    } else {
-      right = r.verdict;
-      opts = G.shuffle([r.verdict].concat(
-        G.shuffle(G.VERDICTS.filter((v) => v !== r.verdict)).slice(0, 3)));
-    }
-    out.push(item({ kind: "whole",
-      ask: (G.spec && G.spec.ask) || "この出力で起きていることはどれですか。",
-      exhibit: asExhibit(g.text), opts: opts, right: right,
-      extra: { i: bs.length, of: bs.length } }));
+    const q = G.wholeQ();
+    if (!q) continue;
+    out.push(item({ kind: q.kind, ask: q.ask, exhibit: asExhibit(q.exhibit),
+      opts: q.opts, right: q.right,
+      extra: Object.assign({}, q.extra, { i: bs.length, of: bs.length }) }));
   }
+  return out;
+}
+
+/* ── 間違えた確認項目だけを、もう一度 ──────────────
+ * 練習の記録には、どの確認項目でつまずいたかが残っている（answers[].spot）。
+ * その項目だけを取り出して、短い練習を組み直す。
+ * **問題は作り直すので、同じ問題は出ない。**
+ */
+function makeReview(G, idx) {
+  if (!G || !idx.length) return [];
+  const bs = G.blocks();
+  const out = [];
+  idx.forEach((i) => {
+    if (!bs[i]) return;
+    out.push(item({ kind: "learn", extra: { block: bs[i], i: i, of: bs.length } }));
+    [0, 1].forEach((n) => {
+      const q = G.stepQ(i, n);
+      if (!q) return;
+      out.push(item({ kind: q.kind, ask: q.ask, exhibit: asExhibit(q.exhibit),
+        opts: q.opts, right: q.right,
+        extra: Object.assign({}, q.extra, { i: q.extra.i, of: bs.length }) }));
+    });
+  });
   return out;
 }
 
@@ -263,35 +351,51 @@ function makePractice(G, id) {
 function testChunks(id) {
   const qs = bank(id);
   if (!qs || !qs.length) return [];
-  const all = qs.slice().sort(function (a, b) {
+  return [qs.slice().sort(function (a, b) {
     return a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0;
-  });
-  const out = [];
-  for (let i = 0; i < all.length; i += TEST_N) out.push(all.slice(i, i + TEST_N));
-  if (out.length > 1 && out[out.length - 1].length < 5) {
-    const last = out.pop();
-    out[out.length - 1] = out[out.length - 1].concat(last);
-  }
-  return out;
+  })];
 }
 
-/* 印が付く線。**10問に満たない回で「満点でないと印が付かない」ことが起きないように、
-   問題数から1を引く。**9割の計算だと 9問の回は 9/9 が必要になってしまう */
-function passLine(len) { return Math.max(1, len - 1); }
+/* バッジが付く線は9割。**例外を作らない。**
+   例：10問なら9問、38問なら35問。
+   9問までの分野は、計算すると満点が必要になる（オーナーの判断でそのまま） */
+function passLine(len) { return Math.ceil(len * 0.9); }
 
 /* 過去問1問を、画面が読む形にする */
 function asPast(q) {
+  /* 左と右を結ぶ問題。**本の1問のまま出す。**
+     正解は「説明 → 入れ先」の並び。ためる1件の形を変えずに済むよう、
+     ほかの問題と同じ「文字列の配列」にそろえる */
+  if (q.pairs) {
+    return item({
+      kind: "match", ask: q.text,
+      exhibit: null, image: scanOf(q.qid),
+      opts: q.targets,
+      right: q.pairs.map((p) => p.l + " → " + p.r),
+      extra: { pairs: q.pairs, targets: q.targets },
+      note: { qid: q.qid, book: q.book, explanation: q.explanation }
+    });
+  }
+  /* 紙面の画像があるときは、書き起こしの「図の段」を画像に譲る。
+     文字の段（show出力・設定）は画像の下に残す。**同じ中身を二度出さない。**
+       covers="all" … 図と出力が同じ箱に入っている → 書き起こしは出さない
+       covers="fig" … 図だけ                    → 文字の段だけ残す */
+  const scan = scanOf(q.qid);
+  let ex = q.fig || q.exhibit || null;
+  if (scan && typeof ex === "string") {
+    ex = scan.covers === "all" ? null : splitFigure(ex).rest;
+  }
   return item({
     kind: "past", ask: q.text,
-    exhibit: asExhibit(q.fig || q.exhibit || null),
-    image: q.image || null,
+    exhibit: asExhibit(ex),
+    image: scan,
     opts: q.choices, right: q.answer,
     extra: { maclist: !!(q.fig && q.fig.maclist), sw: q.fig ? q.fig.sw : null },
     note: { qid: q.qid, book: q.book, explanation: q.explanation }
   });
 }
 
-/* 判定エンジンが無いブロックでも混ぜられるように */
+/* 判定エンジンが無い分野でも混ぜられるように */
 function shuffleAny(a) {
   const x = a.slice();
   for (let i = x.length - 1; i > 0; i--) {
@@ -356,218 +460,180 @@ function Note({ title, body, gloss }) {
  * **はじめは札だけ。押した札にだけ、2つのボタンが出る**（ipcalc2 と同じ）。
  * 鍵は無い。どの札も、練習もテストも、いつでも押せる。
  */
-function Home({ prog, go }) {
-  const [pick, setPick] = useState(null);
-  const done = CARDS.filter((c) =>
-    c.blocks.every((b) => prog.blocks[b.id] && prog.blocks[b.id].badge)).length;
+/* ── ホーム ───────────────────────────────
+ * **この1枚に全部ある。**分野を選ぶための画面は作らない。
+ * 21の分野が縦に並び、行を押すとその場で開いて
+ * 「練習をする」「テストをする」が出る。開くのは1行だけ。
+ * 4つの札は、押せない小見出しとして行のかたまりを区切るだけ。
+ */
+function Home({ prog, go, open, setOpen }) {
+  const allBlocks = CARDS.reduce((a, c) => a.concat(c.blocks), []);
+  const doneB = allBlocks.filter((b) =>
+    blockMark(prog.blocks[b.id] || {}, b.id).kind === "done").length;
+
   return (
     <div className="wrap">
       <div className="hero">
         <div className="hero-t">計算なしの図表問題</div>
         <div className="hero-n">出力・図・画面を見て答える問題を、型ごとに覚える</div>
-        <div className="bar"><div className="bar-in" style={{ width: (done / CARDS.length * 100) + "%" }} /></div>
-        <div className="hero-n">{done} / {CARDS.length} の札に印が付きました</div>
+        <div className="bar">
+          <div className="bar-in" style={{ width: (doneB / allBlocks.length * 100) + "%" }} />
+        </div>
+        <div className="hero-n">🏅 {doneB} / {allBlocks.length} 分野</div>
       </div>
 
-      {CARDS.map((c, i) => {
-        const ready = c.blocks.filter((b) => isReady(b.id));
-        const clear = c.blocks.filter((b) => prog.blocks[b.id] && prog.blocks[b.id].badge).length;
-        return (
-          <div className="road" key={c.id}>
-            {i > 0 && <div className="link" />}
-            <div className={"tile" + (clear === c.blocks.length ? " tile-clear" : "") +
-              (pick === c.id ? " pick" : "")}>
-              <div className="t-top">
-                <button className="t-h" onClick={() => setPick(pick === c.id ? null : c.id)}>
-                  <span className="tile-n">{i + 1}</span>
-                  <span className="tile-b">
-                    <span className="tile-t">{c.name}</span>
-                    <span className="tile-s">
-                      {c.note}　／　{c.blocks.length} ブロック・{cardCount(c)} 問
-                    </span>
-                  </span>
-                </button>
-                {clear === c.blocks.length ? <span className="badge badge-gold">🏅</span>
-                  : <span className="trow-p">{ready.length} / {c.blocks.length} できています</span>}
-              </div>
-              {pick === c.id && (
-                <div className="t-go">
-                  <button className="go" onClick={() => go(c.id, "practice")}>練習をする</button>
-                  <button className="go" onClick={() => go(c.id, "test")}>テストをする</button>
-                </div>
-              )}
-            </div>
+      {CARDS.map((c, ci) => (
+        <div className="grp" key={c.id}>
+          <div className="grp-h">
+            <span className="grp-n">{ci + 1}</span>
+            <span className="grp-b">
+              <span className="grp-t">{c.name}</span>
+              <span className="grp-s">{c.note}</span>
+            </span>
           </div>
-        );
-      })}
+
+          {c.blocks.map((b) => {
+            const on = open === b.id;
+            const ready = isReady(b.id);
+            const mark = blockMark(prog.blocks[b.id] || {}, b.id);
+            const n = bank(b.id) ? bank(b.id).length : b.n;
+            const G = engine(b.id);
+            const bs = G ? G.blocks() : [];
+            return (
+              <div className={"row" + (on ? " row-on" : "") + (ready ? "" : " row-yet")} key={b.id}>
+                <button className="row-h" onClick={() => setOpen(on ? null : b.id)}
+                  aria-expanded={on}>
+                  <span className="row-n">{blockNo(c.id, b.id)}</span>
+                  <span className="row-b">
+                    <span className="row-t">{b.name}</span>
+                    <span className="row-s">本の問題 {n} 問</span>
+                  </span>
+                  <Mark mark={mark} sm />
+                  <span className={"row-v" + (on ? " row-v-on" : "")}>▾</span>
+                </button>
+
+                {on && (
+                  <div className="row-p">
+                    {ready ? (
+                      <>
+                        <div className="row-d">
+                          {bs.length === 0
+                            ? "この分野の練習は、まだ用意できていません。テストだけ受けられます。"
+                            : G.kind === "match"
+                              ? "用語 " + bs.length + " 個。用語ごとに説明を1枚とその用語の問題を2問。"
+                                + "最後に、覚えた組み合わせを結ぶ問題が3問あります。"
+                              : "確認項目 " + bs.length + " 個。項目ごとに説明を1枚とその項目の問題を2問。"
+                                + "最後に、出力全体から答えを決める問題が3問あります。"}
+                        </div>
+                        <div className="row-d">
+                          テストに出るのは、本に載っている問題そのもの {n} 問です。
+                          {passLine(n)} 問正解でバッジが付きます。
+                        </div>
+                        <div className="row-go">
+                          <button className="go next" disabled={bs.length === 0}
+                            onClick={() => go(b.id, "practice")}>練習をする</button>
+                          <button className="go ghost"
+                            onClick={() => go(b.id, "test:0")}>テストを受ける</button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="row-d">
+                        この分野の「確認項目」と「決め方」を、本の問題と解説から書き起こす作業がこれからです。
+                        できると、ほかの分野と同じように、練習で覚えてからテストに進めます。
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      <div className="legend">
+        <span className="slot got">🏅</span>
+        <span className="legend-t">
+          バッジは分野ごとに1つ。その分野のテストで9割正解すると付きます。
+        </span>
+      </div>
 
       <div className="foot">
         計算のいらない図表問題は、本で 335 問あります。
-        どの問題も、必ずどれかの札のどれかのブロックに入ります。
-        対応づけの問題は、1つずつ答えられる形に開いてあるので、数はふえます。
+        どの問題も、必ずどれかの分野に入ります。
+        テストに出るのは、本に載っている問題そのものです。
+        練習は、それを解けるようになるためのものです。
+      </div>
+
+      <button className="wipe" onClick={() => {
+        if (window.confirm("これまでの記録をすべて消します。よろしいですか。")) {
+          STORE.wipe();
+          window.location.reload();
+        }
+      }}>記録を消す</button>
+    </div>
+  );
+}
+
+/* ── 左と右を結ぶ問題 ─────────────────────
+ * 上に説明の札、下に入れ先。**説明を押してから、入れ先を押す。**
+ * 引っぱって落とす形にしないのは、小さい画面で押し間違えるため。
+ * 答え合わせのあとは、合った組に✓、違った組に✕と正しい入れ先を出す。
+ */
+function Match({ pairs, targets, put, hold, done, onCard, onTarget }) {
+  return (
+    <div className="mt">
+      <div className="mt-cards">
+        {pairs.map((p, i) => {
+          const at = put[i];
+          const right = done && at === p.r;
+          let cls = "mt-card";
+          if (done) cls += right ? " mt-ok" : " mt-ng";
+          else if (hold === i) cls += " mt-hold";
+          else if (at !== undefined) cls += " mt-set";
+          return (
+            <button key={i} className={cls} disabled={done} onClick={() => onCard(i)}>
+              <span className="mt-l">{p.l}</span>
+              {at !== undefined && <span className="mt-at">{at}</span>}
+              {done && (right
+                ? <span className="mt-m">✓</span>
+                : <span className="mt-m">✕　正しくは {p.r}</span>)}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-targets">
+        {targets.map((t, i) => (
+          <button key={i} className={"mt-t" + (hold !== null ? " mt-t-on" : "")}
+            disabled={done || hold === null} onClick={() => onTarget(t)}>
+            {t}
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-/* ── どの分野をやるか選ぶ ───────────────────────
- * 上のタブで分野（ブロック）を選び、中身を見てから、
- * いちばん下のボタンで始める。練習もテストも同じ形。
- */
-/* 上のタブ＋中身＋いちばん下のボタン */
-function Choose({ cid, kind, bid, prog, setBid, start, back }) {
-  const c = CARDS.filter((x) => x.id === cid)[0];
-  const block = c.blocks.filter((b) => b.id === bid)[0] || c.blocks[0];
-  const isPractice = kind === "practice";
-  const st = prog.blocks[block.id] || {};
-  const G = engine(block.id);
-  const bs = G && G.kind === "rules" ? G.blocks() : [];
-  const chunks = testChunks(block.id);
-  const spec = G ? G.spec : null;
-  const ready = isReady(block.id);
-  const canGo = isPractice ? (bs.length > 0 || (ready && !G)) : chunks.length > 0;
-
-  let nextRound = 0;
-  for (let i = 0; i < chunks.length; i++) {
-    const r = (st.rounds || {})[STORE.setKey(chunks[i])] || {};
-    if (!r.passed) { nextRound = i; break; }
-  }
-
-  return (
-    <>
-      <div className="wrap has-dock">
-        <div className="head">
-          <button className="back" onClick={back}>← もどる</button>
-          <span className="head-t">
-            {cardNo(cid)} {c.name}　{isPractice ? "練習" : "テスト"}
-          </span>
-          {st.badge && <span className="head-n">🏅</span>}
-        </div>
-
-        <div className="sec">
-          <span className="sec-l">どの分野をやりますか</span>
-        </div>
-        <div className="tabs">
-          {c.blocks.map((b) => (
-            <button key={b.id}
-              className={"tab" + (b.id === block.id ? " on" : "") + (isReady(b.id) ? "" : " tab-yet")}
-              onClick={() => setBid(b.id)}>
-              <span className="tab-n">{blockNo(cid, b.id)}</span>
-              {b.name}
-            </button>
-          ))}
-        </div>
-
-        {!ready ? (
-          <>
-            <div className="sec">
-              <span className="sec-l">ここに入る問題</span>
-              <div className="brief-t">過去問 {block.n} 問</div>
-              <div className="brief-b">{c.note}。</div>
-            </div>
-            <div className="sec">
-              <span className="sec-l">まだできていないこと</span>
-              <div className="brief-b">
-                この題材の「見る所」と「決め方」を、過去問と解説から起こす作業がこれからです。
-                できると、ほかの分野と同じように、練習で覚えてからテストに進めます。
-              </div>
-            </div>
-          </>
-        ) : isPractice ? (
-          <>
-            <div className="sec">
-              <span className="sec-l">この分野でやること</span>
-              <div className="brief-b">
-                {spec ? spec.note + "。決め手は決まった所にあります。上から順に見ていって、当たったところで答えが決まります。"
-                      : c.note + "。1問ずつ出します。間違えたら、正解するまでやり直します。"}
-              </div>
-            </div>
-            {bs.length > 0 && (
-              <div className="sec">
-                <span className="sec-l">見る順番（上から一個ずつ覚えます）</span>
-                <div className="order">
-                  {bs.map((x, i) => (
-                    <div className="order-r" key={i}>
-                      <span className="order-n">{i + 1}</span>
-                      <span className="order-k">{x.name}</span>
-                      <span className="order-v">{x.verdict}
-                        <span className="order-g">{G.gloss(x.verdict)}</span></span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="sec">
-              <span className="sec-l">練習の中身</span>
-              <div className="brief-b">
-                {bs.length > 0
-                  ? "見る所ごとに、覚える1枚とその所の問題2問。最後に、出力ぜんぶで判定する問題が3問あります。"
-                  : bank(block.id).length + " 問を、順番を混ぜて1問ずつ出します。点は付きません。"}
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="sec">
-              <span className="sec-l">テストの中身</span>
-              <div className="brief-b">
-                この分野で覚えた所が、そのままテストの範囲です。
-                過去問 {bank(block.id).length} 問を {chunks.length} 回に分けてあります。
-                1問まで間違えても、その回に印が付きます。
-              </div>
-              {spec && spec.dropped && spec.dropped.length > 0 && (
-                <div className="brief-b">
-                  この題材の図表問題は全部で {bank(block.id).length + spec.dropped.length} 問ありますが、
-                  {spec.dropped.length} 問は本の答えが出力と食い違うため外しています。
-                </div>
-              )}
-            </div>
-            {chunks.map((ch, i) => {
-              const r = (st.rounds || {})[STORE.setKey(ch)] || {};
-              return (
-                <button className="trow" key={i} onClick={() => start("test:" + i)}>
-                  <span className="trow-n">{i + 1}</span>
-                  <span className="trow-b">
-                    <span className="trow-t">テスト {i + 1}</span>
-                    <span className="trow-s">{ch.length} 問　{ch[0].qid} 〜 {ch[ch.length - 1].qid}</span>
-                  </span>
-                  {r.passed ? <span className="badge badge-gold">🏅</span>
-                    : r.best !== null && r.best !== undefined
-                      ? <span className="trow-p">{r.best} / {ch.length}</span>
-                    : <span className="trow-p trow-yet">まだ</span>}
-                </button>
-              );
-            })}
-          </>
-        )}
-      </div>
-
-      {/* いちばん下の段。本文をどこまで送っても、ここは動かない */}
-      <div className="dock">
-        <button className="go next" disabled={!canGo}
-          onClick={() => start(isPractice ? "practice" : "test:" + nextRound)}>
-          {isPractice ? "この分野を練習する" : "テスト " + (nextRound + 1) + " を受ける"}
-        </button>
-      </div>
-    </>
-  );
-}
-
 /* ── 一問一答 ────────────────────────── */
-function Drill({ bid, mode, prog, setProg, back }) {
+function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   const { block } = blockOf(bid);
+  const chunks = testChunks(bid);
   const G = engine(bid);
   const ci = mode.indexOf("test:") === 0 ? parseInt(mode.slice(5), 10) : -1;
   const isTest = ci >= 0;
-  const [plan] = useState(() => (isTest ? makeTest(bid, ci) : makePractice(G, bid)));
+  const [plan, setPlan] = useState(() => (isTest ? makeTest(bid, ci) : makePractice(G, bid)));
   const [at, setAt] = useState(0);
   const [picked, setPicked] = useState(null);   // 決まった時に押したもの（間違いのときだけ入る）
   const [got, setGot] = useState([]);           // 当たった選択肢（答えが2つ以上のとき積む）
+  /* 結ぶ問題だけが使う。説明の番号 → 用語の名前。まだ入れていない説明は入らない */
+  const [put, setPut] = useState({});
+  const [hold, setHold] = useState(null);       // いま持ち上げている説明の番号
   const [done, setDone] = useState(false);      // その問題の答え合わせが出ているか
   const [firstOk, setFirstOk] = useState(null);
   const [score, setScore] = useState(0);
   const [asked, setAsked] = useState(0);
   const [end, setEnd] = useState(false);
+  /* この回が「間違えた確認項目だけの回」かどうか。結果の説明文を変えるために持つ */
+  const [again, setAgain] = useState(false);
   /* ためる1件。**練習もテストも同じ形。**問題ごとに足していく */
   const at0 = useRef(Date.now());
   const rec = useRef(null);
@@ -616,15 +682,59 @@ function Drill({ bid, mode, prog, setProg, back }) {
       no: rec.current.answers.length + 1,
       kind: it.kind,
       qid: it.note ? it.note.qid : null,
-      spot: it.kind === "step" ? it.extra.step.look.join(" と ") : null,
+      /* どの確認項目でつまずいたかを残す。あとで、そこだけ練習し直すために使う。
+         対応づけは look を持たないので、その用語の名前を入れる */
+      spot: it.kind === "step"
+        ? (it.extra.step.look.length ? it.extra.step.look.join(" と ")
+           : ((G.blocks()[it.extra.i] || {}).name || null))
+        : null,
+      spotNo: it.kind === "step" ? it.extra.i : null,
       firstOk: ok, tries: tries.current,
       picked: picked, right: rights,
       ms: Date.now() - at0.current
     });
     at0.current = Date.now();
   }
+  /* ── 結ぶ問題 ─────────────────────────
+   * 説明を押す → 入れ先を押す。もう一度押すと外れる。
+   * **ぜんぶ入れてから答え合わせ。全部合って初めて正解**（本の1問＝1点）。
+   */
+  function tapCard(i) {
+    if (done) return;
+    if (put[i] !== undefined) { const p = { ...put }; delete p[i]; setPut(p); setHold(null); return; }
+    setHold(hold === i ? null : i);
+  }
+  function tapTarget(t) {
+    if (done || hold === null) return;
+    setPut({ ...put, [hold]: t });
+    setHold(null);
+  }
+  function grade() {
+    if (done) return;
+    tries.current += 1;
+    const pairs = it.extra.pairs;
+    const allOk = pairs.every((p, i) => put[i] === p.r);
+    setDone(true);
+    if (!allOk) setPicked("×");
+    if (firstOk === null) {
+      setFirstOk(allOk);
+      setAsked(asked + 1);
+      if (allOk) setScore(score + 1);
+      writeAnswer(allOk, pairs.map((p, i) => p.l + " → " + (put[i] || "（入れていない）")));
+    }
+  }
+
   /* やり直しは問題が上に出直すので、こちらも上へ戻す */
-  function retry() { setPicked(null); setGot([]); setDone(false); toTop(); }
+  function retry() {
+    setPicked(null); setGot([]); setDone(false);
+    /* 結ぶ問題は、合っている組だけ残して、違う組を外す */
+    if (it && it.kind === "match") {
+      const keep = {};
+      it.extra.pairs.forEach((p, i) => { if (put[i] === p.r) keep[i] = put[i]; });
+      setPut(keep); setHold(null);
+    }
+    toTop();
+  }
   function next() {
     if (at + 1 >= plan.length) {
       /* 1回ぶんを、そのまま1件ためる（のちにサーバへ送るのと同じ形） */
@@ -632,6 +742,7 @@ function Drill({ bid, mode, prog, setProg, back }) {
       setProg(loadState()); setEnd(true); return;
     }
     setAt(at + 1); setPicked(null); setGot([]); setDone(false); setFirstOk(null);
+    setPut({}); setHold(null);
     tries.current = 0; at0.current = Date.now();
   }
 
@@ -643,6 +754,13 @@ function Drill({ bid, mode, prog, setProg, back }) {
         return;
       }
       if (!done) {
+        /* 結ぶ問題は押す所が2段あるので、キーでは選べない。Enter で答え合わせだけ */
+        if (it.kind === "match") {
+          if (e.key === "Enter" && Object.keys(put).length >= it.extra.pairs.length) {
+            e.preventDefault(); grade();
+          }
+          return;
+        }
         const k = e.key.toLowerCase();
         let i = LETTERS.toLowerCase().indexOf(k);
         if (i < 0 && /^[1-8]$/.test(k)) i = parseInt(k, 10) - 1;
@@ -658,7 +776,7 @@ function Drill({ bid, mode, prog, setProg, back }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  /* 練習の材料が作れないブロック（判定エンジンがない）で、空のまま入ったとき */
+  /* 練習の材料が作れない分野（判定エンジンがない）で、空のまま入ったとき */
   if (!plan.length) {
     return (
       <div className="wrap">
@@ -667,7 +785,7 @@ function Drill({ bid, mode, prog, setProg, back }) {
           <span className="head-t">{block.name}</span>
         </div>
         <div className="sec">
-          <div className="brief-b">このブロックの練習は、まだ用意できていません。</div>
+          <div className="brief-b">この分野の練習は、まだ用意できていません。</div>
         </div>
         <button className="go" onClick={back}>もどる</button>
       </div>
@@ -676,39 +794,138 @@ function Drill({ bid, mode, prog, setProg, back }) {
 
   if (end) {
     const need = rec.current.passLine;
+    const passed = isTest && score >= need;
+    /* 間違えた確認項目を、記録から拾う。同じ項目は1つにまとめる。
+       **名前ではなく番号で引く。**確認項目の名前は、ほかの項目と重なることがある */
+    const bs2 = G ? G.blocks() : [];
+    const wrong = [];
+    (rec.current.answers || []).forEach((a) => {
+      if (a.kind !== "step" || a.firstOk) return;
+      if (a.spotNo === null || a.spotNo === undefined) return;
+      if (bs2[a.spotNo] && wrong.indexOf(a.spotNo) < 0) wrong.push(a.spotNo);
+    });
+    wrong.sort((x, y) => x - y);
+    /* 次の分野（ホームの並び順で、次に来る用意のできた分野） */
+    const all = CARDS.reduce((a, c) => a.concat(c.blocks), []).filter((b) => isReady(b.id));
+    const at2 = all.map((b) => b.id).indexOf(bid);
+    const nextB = at2 >= 0 && at2 + 1 < all.length ? all[at2 + 1] : null;
+
     return (
       <div className="wrap">
-        <div className="head"><span className="head-t">おわり</span></div>
+        <div className="head">
+          <span className="head-t">{isTest ? "テスト" : "練習"}　結果</span>
+        </div>
+
         <div className="sec">
           <div className="brief-t">{score} / {asked} 問</div>
           <div className="brief-b">
             {isTest
-              ? (score >= need ? "この回に印が付きました。" : need + " 問できると印が付きます。")
-              : "見る所を上から順に、ぜんぶ通りました。点になるのは最初の答えです。"}
+              ? (passed ? "この分野にバッジが付きました。"
+                        : need + " 問正解でバッジが付きます。あと " + (need - score)
+                          + " 問です。もう一度受けられます。")
+              : again
+                ? "間違えた確認項目だけを、もう一度解きました。得点になるのは最初の答えです。"
+                : "確認項目を上から順に、すべて通しました。得点になるのは最初の答えです。"}
           </div>
-          <div className="brief-b">数字と順番は毎回変わります。</div>
         </div>
-        <button className="go" onClick={back}>もどる</button>
+
+        {/* つまずいた確認項目。**そこだけをもう一度やり直せる** */}
+        {!isTest && wrong.length > 0 && (
+          <div className="sec">
+            <span className="sec-l">間違えた確認項目</span>
+            {wrong.map((i) => (
+              <div className="brief-r" key={i}>
+                <span className="brief-k">{i + 1}</span>
+                <span className="brief-v">{bs2[i].name}</span>
+              </div>
+            ))}
+            <button className="go ghost" onClick={() => {
+              const p2 = makeReview(G, wrong);
+              setPlan(p2); setAgain(true);
+              setAt(0); setPicked(null); setGot([]); setDone(false); setFirstOk(null);
+              setPut({}); setHold(null); setScore(0); setAsked(0); setEnd(false);
+              tries.current = 0; at0.current = Date.now();
+              const qn = p2.filter((x) => x.kind !== "learn").length;
+              rec.current = STORE.start({
+                version: dataVersion(), block: bid, mode: "practice",
+                set: "generated", of: qn, passLine: passLine(qn)
+              });
+              toTop();
+            }}>この {wrong.length} 項目だけ、もう一度解く</button>
+          </div>
+        )}
+
+        <div className="dock">
+          {!isTest && (
+            <button className="go next" onClick={goTest}>この分野のテストを受ける</button>
+          )}
+          {isTest && passed && nextB && (
+            <button className="go next" onClick={() => goNext(nextB.id)}>
+              次の分野（{nextB.name}）へ
+            </button>
+          )}
+          {isTest && !passed && (
+            <button className="go next" onClick={() => {
+              setPlan(makeTest(bid, ci));
+              setAt(0); setPicked(null); setGot([]); setDone(false); setFirstOk(null);
+              setPut({}); setHold(null); setScore(0); setAsked(0); setEnd(false);
+              tries.current = 0; at0.current = Date.now();
+              rec.current = STORE.start({
+                version: dataVersion(), block: bid, mode: "test",
+                set: STORE.setKey(testChunks(bid)[ci]),
+                of: chunks[ci].length, passLine: passLine(chunks[ci].length)
+              });
+              toTop();
+            }}>もう一度受ける</button>
+          )}
+          <button className="go ghost" onClick={back}>ホームへ</button>
+        </div>
       </div>
     );
   }
 
-  /* 見る所を覚える1枚 */
+  /* 確認項目の説明 */
   if (it.kind === "learn") {
     const lb = it.extra.block, li = it.extra.i, lof = it.extra.of;
     return (
       <div className="wrap">
         <div className="head">
           <button className="back" onClick={back}>← もどる</button>
-          <span className="head-t">見る所　{li + 1} / {lof}</span>
+          <span className="head-t">
+            {G.kind === "match" ? "覚える用語　" : "確認項目　"}{li + 1} / {lof}</span>
           <span className="head-n">{at + 1} / {plan.length}</span>
         </div>
         <div className="bar"><div className="bar-in" style={{ width: (at / plan.length * 100) + "%" }} /></div>
 
         <div className="sec">
-          <span className="sec-l">{li + 1} 番目に見る所</span>
+          <span className="sec-l">{G.kind === "match"
+            ? (li + 1) + " 番目に覚える用語" : (li + 1) + " 番目の確認項目"}</span>
           <div className="brief-t">{lb.name}</div>
         </div>
+        {/* 対応づけは、規則ではなく覚えるもの。
+            **説明はこちらで書かない。**本に載っている対をそのまま並べる */}
+        {G.kind === "match" ? (
+          <>
+            <div className="sec">
+              <span className="sec-l">この用語に当てはまる説明（過去問から）</span>
+              {/* 用語の名前は上の見出しに出ているので、ここは説明だけ並べる */}
+              {lb.learn.map((p, i) => (
+                <div className="brief-r" key={i}>
+                  <span className="brief-k">{i + 1}</span>
+                  <span className="brief-v">{p.l}</span>
+                </div>
+              ))}
+            </div>
+            <div className="sec">
+              <span className="sec-l">どう使うか</span>
+              <div className="brief-b">
+                ここに挙げた {lb.learn.length} 個の説明は、すべて「{lb.name}」を指します。
+                {li + 1 < lof ? "次の用語へ進みます。" : "これが最後の用語です。"}
+              </div>
+            </div>
+          </>
+        ) : (
+        <>
         <div className="sec">
           <span className="sec-l">何を表すか</span>
           {lb.spots.map((s, i) => (
@@ -739,6 +956,8 @@ function Drill({ bid, mode, prog, setProg, back }) {
             {li + 1 < lof ? "決まらなければ、次の所を見ます。" : "ここまでで決まらないときの、最後の所です。"}
           </div>
         </div>
+        </>
+        )}
         <button className="go" onClick={next}>この所の問題へ（Enter）</button>
       </div>
     );
@@ -750,9 +969,14 @@ function Drill({ bid, mode, prog, setProg, back }) {
     : (done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
   const con = (
     <>
-      {it.image ? <Scan image={it.image} alt={it.note ? it.note.qid : ""} />
-        : it.exhibit && it.exhibit.kind === "topology" ? <Figure fig={it.exhibit.fig} />
-        : it.exhibit ? <Console text={it.exhibit.text} hits={hitWords} /> : null}
+      {/* **画像と文字は、両方出せる。**
+          紙面の画像があればまず画像。文字の提示物（show出力・設定・JSON）は
+          その下に続けて出す。図の書き起こしは、画像があるほうに譲ってある（asPast） */}
+      {it.image && <Scan image={it.image} alt={it.note ? it.note.qid : ""} />}
+      {!it.image && it.exhibit && it.exhibit.kind === "topology"
+        ? <Figure fig={it.exhibit.fig} />
+        : it.exhibit && it.exhibit.kind !== "topology"
+          ? <Console text={it.exhibit.text} hits={hitWords} /> : null}
       {/* 図の下に MACアドレスの一覧が別に刷られている問題。
           これが無いと、選択肢が SW1〜SW4 だけの問題は解けない */}
       {it.extra.maclist && <MacList sw={it.extra.sw} />}
@@ -770,7 +994,8 @@ function Drill({ bid, mode, prog, setProg, back }) {
   ) : null;
   let ask = it.ask || "";
   /* 問題文が自分で「2つ選択」と言っているときは、重ねて書かない */
-  if (rights.length > 1 && !/つ選|選択して/.test(ask)) {
+  /* 結ぶ問題は「いくつ選ぶ」ではないので、この一言を足さない */
+  if (it.kind !== "match" && rights.length > 1 && !/つ選|選択して/.test(ask)) {
     ask = ask + "（" + rights.length + "つ選びます）";
   }
 
@@ -781,7 +1006,22 @@ function Drill({ bid, mode, prog, setProg, back }) {
       note = <Note title={it.right[0]} body={st.why}
         gloss={st.hit ? G.gloss(st.verdict) : ""} />;
     } else {
-      note = (
+      note = it.kind === "match" ? (
+        /* 結ぶ問題の答えは、1本の長い行にしない。**組ごとに1行**にする */
+        <div className="note">
+          <div className="note-t">正しい組み合わせ</div>
+          <div className="mt-ans">
+            {it.extra.pairs.map((p, i) => (
+              <div className="mt-ans-r" key={i}>
+                <span className="mt-ans-k">{p.r}</span>
+                <span className="mt-ans-v">{p.l}</span>
+              </div>
+            ))}
+          </div>
+          {it.note && it.note.explanation &&
+            <div className="note-b">本の解説：{it.note.explanation.slice(0, 150)}</div>}
+        </div>
+      ) : (
         <>
           {/* 紙面の図はかすれていることがある。答え合わせでは、読み取った中身も出す */}
           {it.image && it.exhibit && it.exhibit.kind === "topology" &&
@@ -794,10 +1034,13 @@ function Drill({ bid, mode, prog, setProg, back }) {
     }
   }
 
+  const isMatchG = G && G.kind === "match";
   const head = isTest
-    ? "テスト " + (ci + 1)
-    : (it.kind === "step" ? "見る所　" + (it.extra.i + 1) + " / " + it.extra.of
-       : it.kind === "past" ? "練習" : "ぜんぶ見て判定");
+    ? "テスト"
+    : (it.kind === "step"
+        ? (isMatchG ? "覚える用語　" : "確認項目　") + (it.extra.i + 1) + " / " + it.extra.of
+        : it.kind === "past" ? "練習"
+        : isMatchG ? "覚えた組み合わせで" : "ぜんぶ見て判定");
 
   return (
     <div className="wrap">
@@ -812,6 +1055,11 @@ function Drill({ bid, mode, prog, setProg, back }) {
       {vals}
       <div className="ask">{ask}</div>
 
+      {it.kind === "match" ? (
+        <Match pairs={it.extra.pairs} targets={it.extra.targets}
+          put={put} hold={hold} done={done}
+          onCard={tapCard} onTarget={tapTarget} />
+      ) : (
       <div className="opts">
         {it.opts.map((o, i) => {
           const right = rights.indexOf(o) >= 0;
@@ -832,16 +1080,30 @@ function Drill({ bid, mode, prog, setProg, back }) {
           );
         })}
       </div>
+      )}
 
       {note}
 
-      {!done ? (
+      {it.kind === "match" && !done ? (
+        <>
+          <button className="go" onClick={grade}
+            disabled={Object.keys(put).length < it.extra.pairs.length}>
+            答え合わせ（Enter）
+          </button>
+          <div className="src">
+            {hold === null
+              ? "説明を押してから、入れる先を押します"
+              : "入れる先を押します。もう一度説明を押すと外れます"}
+            {"　／　あと " + (it.extra.pairs.length - Object.keys(put).length) + " つ"}
+          </div>
+        </>
+      ) : !done ? (
         <div className="src">
           A〜{LETTERS[it.opts.length - 1]} か 1〜{it.opts.length} のキーでも選べます
           {rights.length > 1 && got.length > 0 && "　／　あと " + (rights.length - got.length) + " つ"}
         </div>
       ) : (cram && !ok) ? (
-        <button className="go go-retry" onClick={retry}>🔁 もう一度チャレンジ（Enter）</button>
+        <button className="go go-retry" onClick={retry}>同じ確認項目を、もう一度解く（Enter）</button>
       ) : (
         <button className="go" onClick={next}>
           {at + 1 >= plan.length ? "結果を見る（Enter）" : "次へ（Enter）"}
@@ -852,30 +1114,31 @@ function Drill({ bid, mode, prog, setProg, back }) {
   );
 }
 
+/* ── 画面は2つだけ ─────────────────────────
+ * ホーム（分野の一覧）と、練習・テストの画面。
+ * **その間に「選ぶ画面」を置かない。**
+ * 分野は、ホームの行を開いて出てくるボタンから直接はじまる。
+ */
 export default function App() {
   const [prog, setProg] = useState(loadState);
-  const [cid, setCid] = useState(null);    // 札
-  const [kind, setKind] = useState(null);  // "practice" / "test"
-  const [bid, setBid] = useState(null);    // 分野（ブロック）
-  const [mode, setMode] = useState(null);  // null=分野を選ぶ / "practice" / "test:N"
+  const [bid, setBid] = useState(null);    // いまやっている分野
+  const [mode, setMode] = useState(null);  // null=ホーム / "practice" / "test:0"
+  const [open, setOpen] = useState(null);  // ホームで開いている行
   const homeY = useRef(0);
   /* ホームに戻ったときだけ、見ていた所に戻す。ほかは上から */
-  useEffect(() => { toTop(cid === null ? homeY.current : 0); }, [cid, kind, bid, mode]);
+  useEffect(() => { toTop(mode === null ? homeY.current : 0); }, [bid, mode]);
 
-  if (cid === null) {
-    return <Home prog={prog} go={(c, k) => {
-      homeY.current = nowY();
-      const card = CARDS.filter((x) => x.id === c)[0];
-      const first = card.blocks.filter((b) => isReady(b.id))[0] || card.blocks[0];
-      setCid(c); setKind(k); setBid(first.id); setMode(null);
-    }} />;
-  }
   if (mode === null) {
-    return <Choose cid={cid} kind={kind} bid={bid} prog={prog}
-      setBid={(id) => setBid(id)}
-      start={(m) => setMode(m)}
-      back={() => { setCid(null); setKind(null); setBid(null); }} />;
+    return <Home prog={prog} open={open} setOpen={setOpen}
+      go={(id, m) => { homeY.current = nowY(); setBid(id); setMode(m); }} />;
   }
-  return <Drill bid={bid} mode={mode} prog={prog} setProg={setProg}
-    back={() => setMode(null)} />;
+  /* key に分野とやり方を入れて、別のものへ移ったときに作り直す。
+     こうしないと、前の問題と点数がそのまま残る */
+  return <Drill key={bid + "/" + mode} bid={bid} mode={mode} prog={prog} setProg={setProg}
+    back={() => { setOpen(bid); setMode(null); }}
+    /* 練習が終わったら、そのままテストへ進めるようにする。
+       いちどホームまで戻らせない */
+    goTest={() => setMode("test:0")}
+    /* 次の分野へ。ホームに戻し、その行を開いた状態で見せる */
+    goNext={(id) => { homeY.current = 0; setOpen(id); setBid(id); setMode(null); }} />;
 }

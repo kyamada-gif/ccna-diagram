@@ -43,7 +43,7 @@
     { key: "outq", name: "Output queue",
       re: /Output queue: (\d+)\//,
       mean: "出ていけずに順番待ちしているパケットの数",
-      use: "0 でなければ「キューイング（順番待ち）」。出口が詰まっている" },
+      use: "0 でなければ「キューイング（順番待ち）」。送信側が滞留している" },
     { key: "bcast", name: "broadcasts",
       re: /Received (\d+) broadcasts/,
       mean: "受け取ったブロードキャストの数",

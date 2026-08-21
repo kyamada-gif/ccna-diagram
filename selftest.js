@@ -13,11 +13,12 @@ function load() {
   const { GENS, SPECS, BLOCK_IDS } = require(path.join(dir, "gen.js"));
   const { BANKS } = require(path.join(dir, "questions.js"));
   const FIG = require(path.join(dir, "fig.js"));
+  const SCANS = require(path.join(dir, "img", "index.js"));
   /* app.js は画面を描くところまで書いてあるので、その1行だけ外して読む */
   const src = fs.readFileSync(path.join(dir, "app.js"), "utf8")
     .replace(/ReactDOM\.createRoot[\s\S]*$/, "");
   const ctx = {
-    GENS, SPECS, BANKS, BLOCK_IDS, FIG, console,
+    GENS, SPECS, BANKS, BLOCK_IDS, FIG, SCANS, console,
     React: { createElement: () => ({}), Fragment: "F",
              useState: () => [], useEffect: () => {}, useRef: () => ({}) },
     document: { querySelector: () => null },
@@ -33,7 +34,27 @@ function checkItem(it, where, bad) {
   const tag = `${where} kind=${it.kind}`;
   if (!it.kind) { bad.push(`${where}: kind が無い`); return; }
   if (it.kind === "learn") return;            /* 覚える1枚は問題ではない */
+  /* 左と右を結ぶ問題。選ぶ形ではないので、確かめる所が違う */
+  if (it.kind === "match") {
+    const e = it.extra || {};
+    if (!e.pairs || e.pairs.length < 2) { bad.push(`${tag}: 組が2つに満たない`); return; }
+    if (!e.targets || !e.targets.length) { bad.push(`${tag}: 入れ先が無い`); return; }
+    e.pairs.forEach((p) => {
+      if (!p.l || !p.r) bad.push(`${tag}: 組の中身が欠けている`);
+      if (e.targets.indexOf(p.r) < 0) bad.push(`${tag}: 入れ先「${p.r}」が一覧に無い`);
+    });
+    if (new Set(e.targets).size !== e.targets.length) bad.push(`${tag}: 入れ先が重複している`);
+    if (new Set(e.pairs.map((p) => p.l)).size !== e.pairs.length) bad.push(`${tag}: 説明が重複している`);
+    return;
+  }
   if (!it.opts || !it.opts.length) { bad.push(`${tag}: 選択肢が無い`); return; }
+  /* **こちらで作る問題は、選ぶものが3つ未満だと成り立たない。**
+     決め方が1つしかない分野で、答えの顔ぶれも1つになると起きる。
+     engine.js が本の誤答を借りて埋めるので、ここで見張る。
+     本の問題（kind:"past"）は数えない。**本が2択で出しているものは、そのまま出す。** */
+  if (it.kind !== "past" && it.opts.length < 3) {
+    bad.push(`${tag}: 選択肢が ${it.opts.length} 個しかない（3個以上）`);
+  }
   const rights = Array.isArray(it.right) ? it.right : [it.right];
   if (!rights.length || !rights[0]) { bad.push(`${tag}: 正解が無い`); return; }
   rights.forEach((r) => {
@@ -50,7 +71,7 @@ function checkItem(it, where, bad) {
 /* ためる1件（attempt）の形。**練習もテストも同じでなければならない** */
 const ATTEMPT_KEYS = ["id", "app", "version", "user", "block", "mode", "set",
   "startedAt", "endedAt", "seconds", "asked", "score", "of", "passLine", "passed", "answers"];
-const ANSWER_KEYS = ["no", "kind", "qid", "spot", "firstOk", "tries", "picked", "right", "ms"];
+const ANSWER_KEYS = ["no", "kind", "qid", "spot", "spotNo", "firstOk", "tries", "picked", "right", "ms"];
 
 function checkAttempt(a, where, bad) {
   const k = Object.keys(a);
@@ -68,21 +89,51 @@ function run() {
   const bad = [];
   /* 判定エンジンがあるブロックと、過去問だけのブロックの両方を見る */
   const ids = Array.from(new Set(BLOCK_IDS.concat(Object.keys(BANKS))));
+  /* **まだ練習を作っていないブロック。**ここに載っている間は、
+     練習が空でも止めない。**いまは空＝全ブロックの練習ができている。**
+     ここに何かを足すのは、新しいブロックを作りかけのときだけ */
+  const YET = [];
+
+  /* 本の問題の顔ぶれ。**練習にこれが出てきたら止める。**
+     決まりは「テストは本の問題そのまま、練習はそれを解くための生成問題」 */
+  const norm = (s) => String(s == null ? "" : s).replace(/\s+/g, "");
+  const BOOK = new Set();
+  Object.keys(BANKS).forEach((id) => (BANKS[id] || []).forEach((q) => {
+    if (q.text) BOOK.add(norm(q.text));
+    const ex = q.exhibit;
+    if (typeof ex === "string" && ex.trim()) BOOK.add(norm(ex));
+  }));
+
   ids.forEach((id) => {
     const G = GENS[id];
     const qs = BANKS[id] || [];
     if (!G && !qs.length) return;
 
     /* 練習：何度作っても、毎回ちゃんとした問題になるか。
-       判定エンジンが無いブロックは、過去問そのものが練習になる */
-    {
+       **練習は必ず生成問題。**本の問題をそのまま出すことはしない */
+    if (!G && YET.indexOf(id) >= 0) {
+      console.log(`  ${id}: 練習はまだ（エンジンを作っていない）`);
+    } else {
       let len = null;
       for (let n = 0; n < 30; n++) {
         const plan = ctx.__P(G, id);
         if (!plan.length) { bad.push(`${id}: 練習が空`); break; }
         if (len === null) len = plan.length;
         if (plan.length !== len) bad.push(`${id}: 練習の問題数が ${len} と ${plan.length} で変わる`);
-        plan.forEach((it, i) => checkItem(it, `${id} 練習[${i}]`, bad));
+        plan.forEach((it, i) => {
+          checkItem(it, `${id} 練習[${i}]`, bad);
+          /* **練習に本の問題そのものが出ていないか。** */
+          if (it.note && it.note.qid) {
+            bad.push(`${id} 練習[${i}]: 本の問題（${it.note.qid}）がそのまま出ている`);
+          }
+          if (it.ask && BOOK.has(norm(it.ask))) {
+            bad.push(`${id} 練習[${i}]: 問題文が本のものと同じ`);
+          }
+          const ex = it.exhibit && it.exhibit.text;
+          if (ex && BOOK.has(norm(ex))) {
+            bad.push(`${id} 練習[${i}]: 提示物が本のものと同じ`);
+          }
+        });
       }
       console.log(`  ${id}: 練習 ${len} 問 × 30回`);
     }
@@ -116,6 +167,7 @@ function run() {
         no += 1;
         STORE.answer(a, { no: no, kind: it.kind, qid: it.note ? it.note.qid : null,
           spot: it.kind === "step" ? it.extra.step.look.join(" と ") : null,
+          spotNo: it.kind === "step" ? it.extra.i : null,
           firstOk: true, tries: 1, picked: it.right, right: it.right, ms: 1 });
       });
       return STORE.finish(a);

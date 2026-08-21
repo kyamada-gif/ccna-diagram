@@ -529,7 +529,7 @@
     var opts = [yes, no, look + " を見ると、答えは " + other];
     var seen = {}, u = [];
     opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; u.push(o); } });
-    return { ask: look + " を見ます。ここで答えは決まりますか。",
+    return { ask: look + " を確認します。ここで答えは決まりますか。",
              opts: sh(u), right: right };
   }
 

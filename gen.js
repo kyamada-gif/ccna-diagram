@@ -12,26 +12,47 @@
   var E = global.ENGINE ||
     (typeof require !== "undefined" ? require("./engine.js") : null);
 
-  var BLOCK_IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr", "log"];
+  /* 規則で答えを出すブロック。中身は types/<id>.js に書く */
+  var RULE_IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr", "log",
+                  "etherchannel", "trunk", "access", "ipsvc", "portsec", "wlangui", "nolink", "misc"];
+
+  /* 言葉と説明を結んで覚えるブロック。
+     **中身を書くファイルは要らない。**過去問の対（q/<id>.js の pairs）から
+     engine.js の makeMatchEngine がそのまま組み立てる */
+  var MATCH_IDS = ["parts", "autoword", "ipv6word", "cable",
+                   "aaa", "guardword", "dhcpword"];
+
+  var BLOCK_IDS = RULE_IDS.concat(MATCH_IDS);
 
   /* Node から読むときは、ここで types を読み込む（ブラウザは index.html の script） */
   if (typeof require !== "undefined") {
-    BLOCK_IDS.forEach(function (id) { require("./types/" + id + ".js"); });
+    RULE_IDS.forEach(function (id) { require("./types/" + id + ".js"); });
+    /* 対応づけのエンジンは過去問の対から組むので、先に問題を読み込む
+       （ブラウザは index.html で questions.js を先に読んでいる） */
+    if (!global.BANKS) require("./questions.js");
+    if (!global.SYNONYM) { try { require("./q/synonym.js"); } catch (e) {} }
   }
 
   var SPECS = global.SPECS || {};
   var GENS = {};
-  BLOCK_IDS.forEach(function (id) {
+  RULE_IDS.forEach(function (id) {
     if (SPECS[id]) GENS[id] = E.makeEngine(SPECS[id]);
+  });
+  MATCH_IDS.forEach(function (id) {
+    var bank = (global.BANKS || {})[id];
+    if (bank && bank.length) GENS[id] = E.makeMatchEngine({ id: id, bank: bank });
   });
 
   global.GENS = GENS;
   global.SPECS = SPECS;
   global.BLOCK_IDS = BLOCK_IDS;
+  global.RULE_IDS = RULE_IDS;
+  global.MATCH_IDS = MATCH_IDS;
   /* 前からある呼び方。1つ目のブロックを指す */
   global.GEN = GENS[BLOCK_IDS[0]];
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { GENS: GENS, SPECS: SPECS, BLOCK_IDS: BLOCK_IDS, GEN: global.GEN };
+    module.exports = { GENS: GENS, SPECS: SPECS, BLOCK_IDS: BLOCK_IDS,
+                      RULE_IDS: RULE_IDS, MATCH_IDS: MATCH_IDS, GEN: global.GEN };
   }
 })(typeof window !== "undefined" ? window : globalThis);
