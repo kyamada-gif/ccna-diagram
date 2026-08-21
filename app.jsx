@@ -1109,8 +1109,14 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   if (done) {
     if (it.kind === "step") {
       const st = it.extra.step;
-      note = <Note title={it.right[0]} body={st.why}
-        gloss={st.hit ? G.gloss(st.verdict) : ""} />;
+      /* 答え合わせの言葉。分野が note() を持っていれば、そちらを使う。
+         **決まりと、この場合の数字を、別々の行に出す。**
+         持っていない分野は、いままでどおり判定ルールの文をそのまま出す */
+      const sn = (G && G.spec && typeof G.spec.note === "function" && exv)
+        ? G.spec.note(G.read(exv)) : null;
+      note = <Note title={it.right[0]}
+        body={sn ? sn.body : st.why}
+        gloss={sn ? sn.gloss : (st.hit ? G.gloss(st.verdict) : "")} />;
     } else {
       note = it.kind === "match" ? (
         /* 結ぶ問題の答えは、1本の長い行にしない。**組ごとに1行**にする */

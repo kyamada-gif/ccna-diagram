@@ -840,14 +840,59 @@
   var BRIEF = [
     [{ if: "行が [ で始まる", then: "配列", note: "英語では array" }],
     [{ if: "行が { で始まる", then: "オブジェクト", note: "英語では object" }],
-    [{ if: "コロン : の 左", then: "キー", note: "英語では key" }],
-    [{ if: "コロン : の 右", then: "値", note: "英語では value" }],
-    [{ if: "[ … ] の 中", then: "配列", note: "英語では array" }],
+    [{ if: "コロン : の左", then: "キー", note: "英語では key" }],
+    [{ if: "コロン : の右", then: "値", note: "英語では value" }],
+    [{ if: "[ … ] の中", then: "配列", note: "英語では array" }],
     [{ if: "開くかっこを、上から数える",
-       then: ["{ の数 ＝ オブジェクト", "[ の数 ＝ 配列", ": の左の数 ＝ キー"] }],
+       then: ["{ の数 ＝ オブジェクト", "[ の数 ＝ 配列", "コロン : の左の数 ＝ キー"] }],
     [{ if: "開いた数 ＞ 閉じた数", then: "その閉じかっこが足りない" }]
   ];
   function brief(block, i) { return BRIEF[i] || null; }
+
+  /* ── 答え合わせの言葉 ───────────────────────
+   * **決まりと、この場合の数字を、別々の行に出す。**
+   * 同じことを2回書かない。説明の1枚（brief）と同じ書き方にそろえる。
+   *   決まり  「[ の数 ＝ 配列」
+   *   この場合「[ は 2 個」
+   */
+  function note(v) {
+    if (!v) return null;
+    var say = SAY[v.lang] || SAY.ja;
+    if (v.mode === "word" || v.mode === "type") {
+      var side = v.side === "コロンの左" ? { g: "コロン : の左 ＝ " + say.key, b: "コロンの左にある" }
+        : v.side === "コロンの右" ? { g: "コロン : の右 ＝ " + say.value, b: "コロンの右にある" }
+        : v.side === "角かっこの中" ? { g: "[ … ] の中 ＝ " + say.array, b: "角かっこの中に並んでいる" }
+        : null;
+      if (!side) return null;
+      return { gloss: side.g, body: q(v.word) + " は" + side.b };
+    }
+    if (v.mode === "line" || v.mode === "whole") {
+      var top = v.top === "{" ? { g: "行が { で始まる ＝ " + say.object, n: "{" }
+        : v.top === "[" ? { g: "行が [ で始まる ＝ " + say.array, n: "[" } : null;
+      if (!top) return null;
+      var where = v.mode === "whole" ? "この JSON は"
+        : (v.to ? v.lineno + " 行目から " + v.to + " 行目は" : v.lineno + " 行目は");
+      return { gloss: top.g, body: where + " " + top.n + " で始まっている" };
+    }
+    if (v.mode === "count") {
+      var mark = v.what === "オブジェクト" ? "{"
+        : v.what === "配列" ? "[" : "コロン : の左";
+      return { gloss: mark + " の数 ＝ " + v.what,
+               body: mark + " は " + v.num + " 個" };
+    }
+    if (v.mode === "countset") {
+      return { gloss: "開くかっこを、上から数える",
+               body: "{ が " + v.objs + " 個、[ が " + v.arrs + " 個、コロン : の左が " + v.keys + " 個" };
+    }
+    if (v.mode === "missing") {
+      var lack = v.lackObj > 0 ? { n: "{", c: "}", o: v.objs, s: v.shutObj }
+        : v.lackArr > 0 ? { n: "[", c: "]", o: v.arrs, s: v.shutArr } : null;
+      if (!lack) return null;
+      return { gloss: "開いた数 ＞ 閉じた数 ＝ その閉じかっこが足りない",
+               body: lack.n + " が " + lack.o + " 個、" + lack.c + " が " + lack.s + " 個" };
+    }
+    return null;
+  }
 
   /* ── 出題パターン ─────────────────────────
    * 本の41問は、聞かれ方で15通りに分かれる。
@@ -906,7 +951,7 @@
        日本語 → 英語 → 併記。数える問題と足りない問題は2問で止まる */
     perSpot: 3,
     begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks, focus: focus,
-    brief: brief,
+    brief: brief, note: note,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 7, rules: 7, questions: 25 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。
