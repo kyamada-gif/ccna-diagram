@@ -762,22 +762,26 @@
     return out;
   }
 
+  /* 見本に使う値。**説明の一言も、ここから作る。**
+     別々に書くと、片方を直したときにもう片方とずれる */
+  var LV = {
+    both:  { h1: 5,  d1: 20, h2: 10, d2: 40 },
+    hello: { h1: 5,  d1: 40, h2: 10, d2: 40 },
+    dead:  { h1: 10, d1: 20, h2: 10, d2: 40 },
+    rid:   { h1: 10, d1: 40, h2: 10, d2: 40, rid1: "1.1.1.1", rid2: "1.1.1.1" }
+  };
   var LEARN_EX = {
     /* 片側で OSPF が動いていない。**設定の形でしか見えない**
        （動いていない側は show ip ospf interface に何も出ない） */
     off: learnTwo(learnConf("R1", "1", true), learnConf("R2", "2", false)),
-    /* Hello も Dead も違う */
-    both: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 5, 20),
-              learnShow("R2", 0, 1, "2.2.2.2", 10, 40)),
-    /* Hello だけ違う */
-    hello: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 5, 40),
-               learnShow("R2", 0, 1, "2.2.2.2", 10, 40)),
-    /* Dead だけ違う */
-    dead: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 10, 20),
-              learnShow("R2", 0, 1, "2.2.2.2", 10, 40)),
-    /* 両側の Router ID が同じ */
-    rid: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 10, 40),
-             learnShow("R2", 0, 1, "1.1.1.1", 10, 40))
+    both: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", LV.both.h1, LV.both.d1),
+                   learnShow("R2", 0, 1, "2.2.2.2", LV.both.h2, LV.both.d2)),
+    hello: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", LV.hello.h1, LV.hello.d1),
+                    learnShow("R2", 0, 1, "2.2.2.2", LV.hello.h2, LV.hello.d2)),
+    dead: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", LV.dead.h1, LV.dead.d1),
+                   learnShow("R2", 0, 1, "2.2.2.2", LV.dead.h2, LV.dead.d2)),
+    rid: learnTwo(learnShow("R1", 0, 1, LV.rid.rid1, LV.rid.h1, LV.rid.d1),
+                  learnShow("R2", 0, 1, LV.rid.rid2, LV.rid.h2, LV.rid.d2))
   };
 
   function learnEx(block) {
@@ -803,12 +807,25 @@
   };
 
   /* 添える一言。**取り違えやすい所だけ。**説明を足さない */
+  /* 添える一言。**上の見本を指して、具体的に書く。**
+     初めて見る人は「片側に router ospf の行が無い」と言われても、
+     どの行のことか分からない。見本のどこを見ればよいかまで書く */
   var NOTE = {
-    off: "エリアは network の行の末尾。show の出力なら Process ID の行が無く、エリアは Internet address の行の末尾",
-    both: "Timer intervals configured の行に並ぶ数字の、1つめと2つめ",
-    hello: "1つめの数字が Hello。すぐ下の Hello due in は別のもの",
-    dead: "2つめの数字が Dead。設定では ip ospf dead-interval の行",
-    rid: "Router ID は Process ID の行の中。設定では router-id の行"
+    off: "R1 には router ospf 1 と network …… area 0 の2行がある。R2 にはこの2行が無いので、" +
+         "R2 にも同じ2行を足す。show の出力で見るときは Process ID の行が無く、" +
+         "エリアは Internet address の行の末尾に出る",
+    both: "R1 は Hello " + LV.both.h1 + "・Dead " + LV.both.d1 +
+          "、R2 は Hello " + LV.both.h2 + "・Dead " + LV.both.d2 +
+          "。どちらも違うので両方そろえる。数字は Timer intervals configured の行に4つ並び、" +
+          "1つめが Hello、2つめが Dead",
+    hello: "R1 は Hello " + LV.hello.h1 + "、R2 は Hello " + LV.hello.h2 +
+           "。Dead はどちらも " + LV.hello.d1 + " で同じ。" +
+           "すぐ下の Hello due in は次に送るまでの残り時間なので、別のもの",
+    dead: "R1 は Dead " + LV.dead.d1 + "、R2 は Dead " + LV.dead.d2 +
+          "。Hello はどちらも " + LV.dead.h1 + " で同じ。" +
+          "設定の形で見るときは ip ospf dead-interval の行",
+    rid: "R1 も R2 も Router ID が " + LV.rid.rid1 + " で同じ。" +
+         "Router ID は Process ID の行の中にある。設定の形では router-id の行"
   };
 
   function brief(block, i) {
