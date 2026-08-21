@@ -82,6 +82,7 @@
 
   var spec = {
     id: "log",
+    ask: "このログは、何が起きたことを知らせていますか。",
     kind: "rules",
     card: "read",
     name: "ログの読み取り",

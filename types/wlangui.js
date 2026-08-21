@@ -303,7 +303,7 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES),
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES, "画面のどこを触りますか。"),
     /* 「この画面から何が分かるか」を聞く問題。規則では出せないが、テストには出す */
     bookOnly: ["B1-P15-046", "B1-P16-065"],
     expect: { spots: 5, rules: 9, questions: 13 },

@@ -443,6 +443,8 @@
 
   var spec = {
     id: "showint",
+    /* **この分野が最後に答えるべき問い。**練習の1問1問も、この問いで聞く */
+    ask: "この出力で起きている障害の原因は、どれですか。",
     pattern: patternOf, patterns: PATTERNS,
     kind: "rules",
     card: "read",

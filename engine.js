@@ -273,30 +273,41 @@
         ask = w.ask; opts = w.opts; right = w.right;
       } else {
         /* 上から順に確認していく題材の、共通の聞き方。
-           **「答えは何か」ではなく「ここで決まるか、次を確認するか」を問う。**
-           解くときに頭の中でたどる順番を、そのまま問いにする */
+         * **問いは、その分野が最後に答えるべき本物の問い。**
+         * 「ここで決まりますか」のようなメタな聞き方はしない。
+         * 何を目指しているのか分からないまま、進み方だけ聞かれても答えられない。
+         *
+         * 代わりに、**選択肢に「◯◯だけでは決められない」を混ぜる。**
+         * その選択肢が、次の確認項目へ進む思考をそのまま教える。
+         *
+         *   ルートブリッジになるのはどれですか。
+         *     SW1 ／ SW2 ／ SW3 ／ 優先度だけでは決められない
+         *
+         * 説明の1枚で「優先度が最も小さい1台が答え」と学ぶ
+         *   → それを使う問題を解く
+         *   → 決まらない図に当たって「優先度だけでは決められない」を選ぶ
+         *   → 次の確認項目（MACアドレス）を学ぶ
+         * この順で「まず優先度、次に MAC」という思考が積み上がる。
+         */
         var look = (st.look && st.look.length) ? st.look.join(" と ") : "この値";
-        /* **「ここで答えは決まりますか」とは聞かない。**
-           何も起きていない所でそう聞かれても、何を答えればよいのか分からない。
-           値はすでに問題文の上に出ているので、「次にどうするか」だけを聞く */
-        var hitTxt = "ここで決まる。答えは「" + st.verdict + "」";
-        var nextTxt = "ここでは決まらない。次に " + st.next + " を確認する";
-        right = st.hit ? hitTxt : nextTxt;
+        var undecided = look + " だけでは決められない";
+        right = st.hit ? st.verdict : undecided;
         opts = [right];
-        if (st.hit) { if (st.next) opts.push(nextTxt); }
-        else { opts.push(hitTxt); }
-        var other = shuffle(VERDICTS.filter(function (v) { return v !== st.verdict; }))[0];
-        if (other) opts.push("ここで決まる。答えは「" + other + "」");
-        /* 決め方が1つしかない分野は、ここで選択肢が1つになってしまう。
-           そのときだけ、本の誤答を同じ言い回しに包んで足す */
+        /* **次の確認項目があるときだけ**「決められない」を誤答に混ぜる。
+           最後の確認項目でこれを出すと、正しくない選び方を教えてしまう */
+        if (st.hit && st.next) opts.push(undecided);
+        shuffle(VERDICTS.filter(function (v) { return v !== st.verdict; }))
+          .forEach(function (v) { if (opts.length < 4) opts.push(v); });
+        /* 決め方が1つしかない分野は、ここで選択肢が足りなくなる。
+           そのときだけ、本の誤答を借りて足す */
         spareWrongs().forEach(function (w) {
-          if (opts.length >= 3) return;
-          opts.push("ここで決まる。答えは「" + w + "」");
+          if (opts.length >= 4) return;
+          opts.push(w);
         });
         var seen1 = {}, uq = [];
         opts.forEach(function (o) { if (!seen1[o]) { seen1[o] = 1; uq.push(o); } });
-        opts = shuffle(uq.slice(0, 3));
-        ask = look + " を確認しました。次にどうしますか。";
+        opts = shuffle(uq.slice(0, 4));
+        ask = spec.ask || "この出力で起きていることはどれですか。";
       }
       return { kind: "step", ask: ask, exhibit: r.text,
                opts: opts, right: right, extra: { step: st, i: i } };
@@ -574,7 +585,15 @@
    *
    * 各ルールに cue（決め手を短く言った言葉）が要る。
    */
-  function cueWalk(rules) {
+  /* 問題文が決め手になる分野の、2段の聞き方。
+   * **どこを探すか → 何を答えるか**の順にたどらせる。
+   *   1問目「この問題文の中に、答えを決める言葉があります。どれですか。」
+   *   2問目 その分野の本物の問い（spec.ask）。決め手を示したうえで答えさせる
+   *
+   * ask2 … 2問目の聞き方。分野ごとに変えたいときに渡す
+   *        （例 つながらない原因は「何をしますか」ではなく「原因はどれですか」）
+   */
+  function cueWalk(rules, ask2) {
     return function (step, v, sh, n) {
       var me = rules.filter(function (r) { return r.verdict === step.verdict; })[0]
         || rules[rules.length - 1];
@@ -582,7 +601,7 @@
         var opts = [me.cue];
         sh(rules.filter(function (r) { return r.cue && r.cue !== me.cue; }))
           .slice(0, 3).forEach(function (r) { opts.push(r.cue); });
-        return { ask: "この問題文で、答えを決めているのはどれですか。",
+        return { ask: "この問題文の中に、答えを決める言葉があります。どれですか。",
                  opts: sh(opts), right: me.cue };
       }
       var opts2 = [step.verdict];
@@ -590,8 +609,8 @@
         .slice(0, 3).forEach(function (r) { opts2.push(r.verdict); });
       var seen2 = {}, uq2 = [];
       opts2.forEach(function (o) { if (!seen2[o]) { seen2[o] = 1; uq2.push(o); } });
-      return { ask: me.cue ? "「" + me.cue + "」が決め手です。何をしますか。"
-                           : "この要件なら、何をしますか。",
+      var tail = ask2 || "この要件を満たす設定はどれですか。";
+      return { ask: me.cue ? "決め手は「" + me.cue + "」です。" + tail : tail,
                opts: sh(uq2), right: step.verdict };
     };
   }

@@ -216,7 +216,7 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES),
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES, "つながらない原因は、どれですか。"),
     expect: { spots: 5, rules: 4, questions: 5 },
     dropped: []
   };

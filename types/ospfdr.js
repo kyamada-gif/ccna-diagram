@@ -189,19 +189,24 @@
     /* **「ここで決まりますか」とは聞かない。**
        何も起きていない所でそう聞かれても、何を答えればよいのか分からない。
        値は図に書いてあるので、「次にどうするか」だけを聞く */
+    /* **問いは、本物の問い。**「ここで決まりますか」とは聞かない。
+       代わりに「◯◯だけでは決められない」を選択肢に混ぜる。
+       その選択肢が、次の確認項目へ進む思考をそのまま教える */
+    var undecided = look + " だけでは決められない";
     if (st.hit) {
-      right = "ここで決まる。答えは " + ans;
-      opts = [right,
-              "ここでは決まらない。次に " + (st.next || "ほかの所") + " を確認する",
-              "ここで決まる。答えは " + pick(others)];
+      right = ans;
+      /* **次の確認項目があるときだけ**「決められない」を誤答に混ぜる。
+         最後の確認項目でこれを出すと、正しくない選び方を教えてしまう */
+      opts = [right].concat(st.next ? [undecided] : [])
+        .concat(shuffle(others).slice(0, st.next ? 2 : 3));
     } else {
-      right = "ここでは決まらない。次に " + st.next + " を確認する";
-      opts = [right, "ここで決まる。答えは " + ans,
-              "ここで決まる。答えは " + pick(others)];
+      right = undecided;
+      opts = [right].concat(shuffle(v.sw ? v.sw.map(function (x) { return x.id; })
+        : others).slice(0, 3));
     }
     var seen = {}, uniq = [];
     opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; uniq.push(o); } });
-    return { ask: look + " を確認しました。次にどうしますか。",
+    return { ask: spec.ask,
              opts: shuffle(uniq), right: right };
   }
 

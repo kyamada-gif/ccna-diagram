@@ -160,7 +160,7 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    sample: sample, walk: E.cueWalk(RULES),
+    sample: sample, walk: E.cueWalk(RULES, "答えはどれですか。"),
     expect: { spots: 4, rules: 4, questions: 5 },
     dropped: []
   };
