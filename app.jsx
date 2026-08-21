@@ -458,6 +458,16 @@ function asPast(q) {
 }
 
 /* 判定エンジンが無い分野でも混ぜられるように */
+/* 並びを必ず変える。**同じ並びが出ると、位置を覚えて押せてしまう。**
+   1回混ぜただけでは、たまたま元と同じ並びになることがある */
+function reshuffle(a) {
+  if (!a || a.length < 2) return a;
+  const same = (x) => x.every((v, i) => v === a[i]);
+  let out = shuffleAny(a);
+  for (let k = 0; k < 12 && same(out); k++) out = shuffleAny(a);
+  return out;
+}
+
 function shuffleAny(a) {
   const x = a.slice();
   for (let i = x.length - 1; i > 0; i--) {
@@ -780,6 +790,14 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
       const keep = {};
       it.extra.pairs.forEach((p, i) => { if (put[i] === p.r) keep[i] = put[i]; });
       setPut(keep); setHold(null);
+    } else if (it && it.opts && it.opts.length > 1) {
+      /* **選択肢の並びを変える。**
+         同じ並びのまま出すと、位置を覚えて機械的に押せてしまう。
+         この教材は言葉を覚えるものではなく、**判断の道すじをたどるもの**なので、
+         毎回いちから読み直してもらう */
+      setPlan((p) => p.map((x, i) => (
+        i === at ? Object.assign({}, x, { opts: reshuffle(x.opts) }) : x
+      )));
     }
     toTop();
   }
