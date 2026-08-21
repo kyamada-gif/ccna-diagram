@@ -257,6 +257,14 @@
      * どちらも作れなければ null。
      */
     function stepQ(i, n) {
+      /* **分野が自分で問題を組み立てられるようにする。**
+         上から順に見ていく題材（show interface）は下の共通の形でよいが、
+         聞かれ方が問題文で決まる題材（JSON）は形が違う。
+         stepQ を持たない分野は、いままでどおり下の共通の形になる */
+      if (typeof spec.stepQ === "function") {
+        return spec.stepQ(i, n, { blocks: blocks, read: read, shuffle: shuffle,
+                                  judge: judge, VERDICTS: VERDICTS });
+      }
       var r = reach(i, n === 0);
       if (!r) return null;
       var st = r.step, ask, opts, right;
@@ -319,6 +327,9 @@
 
     return {
       id: spec.id, kind: spec.kind || "rules", spec: spec,
+      /* 練習の始めに1回だけ呼ばれる。**同じ提示物を練習の間ずっと使う分野**が、
+         ここで1つ作って持っておく。持たない分野では何も起きない */
+      begin: typeof spec.begin === "function" ? spec.begin : null,
       stepQ: stepQ, wholeQ: wholeQ,
       SPOTS: SPOTS, RULES: RULES, VERDICTS: VERDICTS, MAKERS: MAKERS,
       read: read, judge: judge, trace: trace, walk: walk, groups: groups,

@@ -428,26 +428,43 @@ function exValue(ex) {
  *   ② 決まるとき / 決まらないとき の2問
  * 最後に、提示物ぜんぶで判定を3問。
  */
+/* 1つの確認項目につき、問題を何問出すか。
+   **分野ごとに変えられる。**指定が無ければ2問（いままでどおり） */
+function perSpot(G) {
+  const n = G && G.spec && G.spec.perSpot;
+  return n > 0 ? n : 2;
+}
+/* 説明の1枚に出す見本。**分野が用意しているときだけ出す。**
+   出力のどこを見るかは、文字の説明より現物を見せたほうが早い */
+function learnEx(G, block, i) {
+  if (!G || !G.spec || typeof G.spec.learnEx !== "function") return null;
+  return asExhibit(G.spec.learnEx(block, i));
+}
 function makePractice(G, id) {
   /* **エンジンが無いブロックは、まだ練習が作れない。**
      ここで過去問を出してしまうと「練習＝テストと同じ問題」になる。
      決まりは「テストは本の問題、練習は生成問題」。混ぜない */
   if (!G) return [];
+  /* 練習の始めに1回だけ呼ぶ。**同じ提示物を練習の間ずっと使う分野**が、
+     ここで1つ作って持っておく（指定が無ければ何も起きない） */
+  if (G.begin) G.begin();
   const bs = G.blocks();
   const out = [];
+  const per = perSpot(G);
   bs.forEach((b, i) => {
     out.push(item({
       kind: "learn",
+      exhibit: learnEx(G, b, i),
       extra: {
         block: b,
         i: i,
         of: bs.length
       }
     }));
-    /* その確認項目の問題を2問。**組み立てるのはエンジン側**（画面では作らない） */
-    [0, 1].forEach(n => {
+    /* その確認項目の問題。**組み立てるのはエンジン側**（画面では作らない） */
+    for (let n = 0; n < per; n++) {
       const q = G.stepQ(i, n);
-      if (!q) return;
+      if (!q) continue;
       out.push(item({
         kind: q.kind,
         ask: q.ask,
@@ -459,7 +476,7 @@ function makePractice(G, id) {
           of: bs.length
         })
       }));
-    });
+    }
   });
   for (let k = 0; k < 3; k++) {
     const q = G.wholeQ();
@@ -486,21 +503,24 @@ function makePractice(G, id) {
  */
 function makeReview(G, idx) {
   if (!G || !idx.length) return [];
+  if (G.begin) G.begin();
   const bs = G.blocks();
   const out = [];
+  const per = perSpot(G);
   idx.forEach(i => {
     if (!bs[i]) return;
     out.push(item({
       kind: "learn",
+      exhibit: learnEx(G, bs[i], i),
       extra: {
         block: bs[i],
         i: i,
         of: bs.length
       }
     }));
-    [0, 1].forEach(n => {
+    for (let n = 0; n < per; n++) {
       const q = G.stepQ(i, n);
-      if (!q) return;
+      if (!q) continue;
       out.push(item({
         kind: q.kind,
         ask: q.ask,
@@ -512,7 +532,7 @@ function makeReview(G, idx) {
           of: bs.length
         })
       }));
-    });
+    }
   });
   return out;
 }
@@ -1165,6 +1185,17 @@ function Drill({
     }, "\u30DB\u30FC\u30E0\u3078")));
   }
 
+  /* 決め手の行を光らせるための言葉。
+     **確認項目の日本語名は、出力の中には書かれていない。**
+     例「エリアの番号」は出力に無く、実際に書いてあるのは Internet address の行。
+     そこで、分野が hits() を持っていれば、名前を「出力に実際にある文字」に置きかえる。
+     持っていない分野は、いままでどおり名前のまま当てる */
+  const toHits = look => {
+    if (!look || !look.length) return look;
+    if (!G || !G.spec || typeof G.spec.hits !== "function") return look;
+    return look.reduce((a, w) => a.concat(G.spec.hits(w) || [w]), []);
+  };
+
   /* 確認項目の説明 */
   if (it.kind === "learn") {
     const lb = it.extra.block,
@@ -1194,7 +1225,17 @@ function Drill({
       className: "sec-l"
     }, G.kind === "match" ? li + 1 + " 番目に覚える用語" : li + 1 + " 番目の確認項目"), /*#__PURE__*/React.createElement("div", {
       className: "brief-t"
-    }, lb.name)), G.kind === "match" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    }, lb.name)), it.exhibit && /*#__PURE__*/React.createElement("div", {
+      className: "sec"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sec-l"
+    }, "\u3069\u3053\u306B\u66F8\u3044\u3066\u3042\u308B\u304B"), it.exhibit.image && /*#__PURE__*/React.createElement(Scan, {
+      image: it.exhibit.image,
+      alt: lb.name
+    }), it.exhibit.text ? /*#__PURE__*/React.createElement(Console, {
+      text: it.exhibit.text,
+      hits: toHits(lb.look)
+    }) : null), G.kind === "match" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
@@ -1258,7 +1299,7 @@ function Drill({
 
   /* **kind で場合分けしない。**あるものを出すだけ */
   const exv = exValue(it.exhibit);
-  const hitWords = it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null;
+  const hitWords = toHits(it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
   const con = /*#__PURE__*/React.createElement(React.Fragment, null, it.image && /*#__PURE__*/React.createElement(Scan, {
     image: it.image,
     alt: it.note ? it.note.qid : ""
