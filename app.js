@@ -1351,8 +1351,15 @@ function Drill({
 
   /* **kind で場合分けしない。**あるものを出すだけ */
   const exv = exValue(it.exhibit);
-  const hitWords = toHits(it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
-  const markWords = toMarks(it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
+  /* 問題の画面で光らせる所。
+     **確認項目の名前ではなく、その問題が実際に聞いている所を光らせる。**
+     「IDS は何を表しますか」なら、光らせるのは IDS だけ。
+     確認項目の名前（コロンの左）から引くと、キーを全部光らせてしまう。
+     focus() を持たない分野は、いままでどおり確認項目の名前から引く */
+  const look = it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null;
+  const focus = G && G.spec && typeof G.spec.focus === "function" && exv && (it.kind === "step" || done) ? G.spec.focus(G.read(exv)) : null;
+  const hitWords = focus ? focus.hits : toHits(look);
+  const markWords = focus ? focus.marks : toMarks(look);
   const con = /*#__PURE__*/React.createElement(React.Fragment, null, it.image && /*#__PURE__*/React.createElement(Scan, {
     image: it.image,
     alt: it.note ? it.note.qid : ""

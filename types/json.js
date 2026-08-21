@@ -796,7 +796,25 @@
 
   function hits(name) { return isSpot(name) ? [] : [name]; }
 
-  /* 確認項目の名前 → その JSON の中で光らせる言葉 */
+  /* ── 問題の画面で光らせる所 ────────────────
+   * **その問題が実際に聞いている所だけを光らせる。**
+   *   言葉を聞かれている  … その言葉だけ（引用符ごと）
+   *   行を聞かれている    … その行だけを塗る
+   *   全体・数・足りない  … 光らせない（画面ぜんぶが対象なので、光らせても意味がない）
+   */
+  function focus(v) {
+    var none = { hits: [], marks: [] };
+    if (!v) return none;
+    if (v.mode === "word" || v.mode === "type") {
+      return { hits: [], marks: [q(v.word), v.word] };
+    }
+    if (v.mode === "line" && !v.to && v.row >= 0) {
+      return { hits: [v.lines[v.row]], marks: [] };
+    }
+    return none;
+  }
+
+  /* 確認項目の名前 → その JSON の中で光らせる言葉。**説明の1枚だけで使う。** */
   function marks(name) {
     if (!isSpot(name)) return [name];       /* 問題のとき。聞かれている言葉そのもの */
     if (!SHEET) begin();
@@ -836,7 +854,7 @@
     /* 1つの確認項目につき3問。**答えの書き方3通りを1周させるため。**
        日本語 → 英語 → 併記。数える問題と足りない問題は2問で止まる */
     perSpot: 3,
-    begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks,
+    begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks, focus: focus,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 7, rules: 7, questions: 41 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。
