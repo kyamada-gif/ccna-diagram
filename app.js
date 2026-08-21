@@ -42,7 +42,7 @@ const CARDS = [{
   }, {
     id: "json",
     name: "JSON の読み取り",
-    n: 41
+    n: 25
   }, {
     id: "rootbridge",
     name: "ルートブリッジの決まり方",

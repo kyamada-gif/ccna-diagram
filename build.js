@@ -413,6 +413,30 @@ BLOCK_IDS.forEach((id) => {
   });
 }
 
+/* ── 出題パターンの見張り ─────────────────────
+ * **同じ聞かれ方の問題が何問も並んでいると、テストが長いだけで身に付かない。**
+ * そこで分野ごとに上限を決めて絞っている（JSON は 41 → 25 問）。
+ * ただし**絞ったせいで、出題パターンが1つでも消えてはいけない。**
+ * 分野が pattern(q) を持っていれば、本にあったパターンが全部
+ * 残っているかを、ここで毎回確かめる。
+ *
+ *   spec.patterns  … 本にあった出題パターンの一覧（絞る前に数えたもの）
+ *   spec.pattern(q) … 過去問1問 → そのパターンの名前
+ */
+{
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id];
+    if (!sp || typeof sp.pattern !== "function" || !sp.patterns) return;
+    const qs = BANKS[id] || [];
+    const have = new Set(qs.map((q) => sp.pattern(q)).filter(Boolean));
+    const lost = sp.patterns.filter((p) => !have.has(p));
+    lost.forEach((p) => bad.push(`${sp.name}: 出題パターン「${p}」がテストから消えている`));
+    const extra = [...have].filter((p) => sp.patterns.indexOf(p) < 0);
+    extra.forEach((p) => bad.push(`${sp.name}: 見覚えのない出題パターン「${p}」がある`));
+    console.log(`  ${sp.name}: 出題パターン ${sp.patterns.length} 種類がすべて残っている`);
+  });
+}
+
 /* ── 全問カバーの見張り ───────────────────────
  * **束B の335問が、どれかのブロックに入っているか。**
  * 入っていない問題は、out/full/not_used.csv に理由つきで載っていなければならない。

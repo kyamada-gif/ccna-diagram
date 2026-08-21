@@ -832,8 +832,42 @@
     return [];                              /* 行の番号は左端の数字なので光らせない */
   }
 
+  /* ── 出題パターン ─────────────────────────
+   * 本の41問は、聞かれ方で15通りに分かれる。
+   * **同じパターンが何問も並んでいたので、3問までに絞った（41 → 25 問）。**
+   * 絞ったせいでパターンが消えていないかは、build.js が毎回確かめる。
+   * 絞り方そのものは scripts/json_block.py に書いてある。
+   */
+  function patternOf(q) {
+    var a = (q.exhibit && q.exhibit.asked) || {};
+    var ans = String(q.answer).replace(/\s/g, "");
+    var kind = a.mode === "countset" ? "まとめて数える"
+      : a.mode === "count" ? "数"
+      : a.mode === "missing" ? "閉じかっこ"
+      : a.mode === "type" ? "データの種類"
+      : /key|キー/i.test(ans) ? "キー"
+      : /value|値|バリュー/i.test(ans) ? "値"
+      : /object|オブジェクト/i.test(ans) ? "オブジェクト"
+      : /array|配列/i.test(ans) ? "配列" : ans;
+    var en = /[A-Za-z]/.test(String(q.answer));
+    var ja = /[ぁ-んァ-ヶ一-龠]/.test(String(q.answer));
+    var say = (en && ja) ? "併記" : en ? "英語" : "日本語";
+    return a.mode + "／" + say + "／" + kind;
+  }
+
+  var PATTERNS = [
+    "word／日本語／キー", "word／日本語／値", "word／日本語／配列",
+    "word／英語／値", "word／併記／キー",
+    "line／日本語／オブジェクト", "line／日本語／配列",
+    "line／英語／オブジェクト", "line／英語／配列",
+    "whole／日本語／オブジェクト", "whole／日本語／配列",
+    "count／日本語／数", "countset／併記／まとめて数える",
+    "missing／日本語／閉じかっこ", "type／日本語／データの種類"
+  ];
+
   var spec = {
     id: "json",
+    pattern: patternOf, patterns: PATTERNS,
     kind: "rules",
     view: "json",              /* 画面は src を そのまま文字で出す */
     card: "read",
@@ -856,7 +890,7 @@
     perSpot: 3,
     begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks, focus: focus,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
-    expect: { spots: 7, rules: 7, questions: 41 },
+    expect: { spots: 7, rules: 7, questions: 25 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。
        B2-0031-03 は「apple は何を表しますか」に対して、選択肢が
        配列／オブジェクト／番号／文字列 で、キーも値も無い。本の答えは「文字列」。
