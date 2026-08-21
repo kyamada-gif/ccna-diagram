@@ -47,7 +47,21 @@
    *     node:[ {id:"R1", at:"top|left|right|bottom", pri:108, rid:"1.1.1.1", tag:"DR"}, … ] }
    */
   function star(fig) {
-    var SW = 320, HB = 92, HH = 30, NB = 122, NH = 54, GAP = 62;
+    /* **箱の幅は中身に合わせて決める。**
+       決め打ちにすると、ルータ ID が長いときに文字がはみ出し、
+       左右の箱が中央の箱と重なる（左 8〜130、中央 114〜206 で 16 重なっていた）。 */
+    var HH = 30, NH = 54, GAP = 62, GAPX = 14;
+    var wide = 0;
+    (fig.node || []).forEach(function (n) {
+      [String(n.id) + (n.tag ? "（" + n.tag + "）" : ""),
+       "優先度 " + n.pri,
+       String(n.rid || n.lo || n.ip || "")].forEach(function (t) {
+        if (t.length > wide) wide = t.length;
+      });
+    });
+    var HB = Math.max(92, String(fig.hub || "").length * 7.4 + 20);
+    var NB = Math.max(122, wide * 6.6 + 18);
+    var SW = PAD * 2 + NB * 2 + GAPX * 2 + HB;
     var cx = SW / 2, cy = PAD + NH + GAP + HH / 2;
     var H = cy + HH / 2 + GAP + NH + PAD;
     var spot = {
