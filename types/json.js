@@ -589,9 +589,14 @@
     if (v.mode === "type") return "「" + v.word + "」のデータの種類は、どれですか。";
     if (v.mode === "whole") return "この JSON の全体は、何を表していますか。";
     if (v.mode === "line") {
+      /* **本の聞き方に合わせる。**
+         本が単独の行を聞くのは 2・3・4 行目だけで、答えはすべてオブジェクト。
+         配列を聞くときは「1 行目から 5 行目で終わる部分」とまとまりで聞く。
+         1行目だけを取り出すと、そこにあるのは開きかっこ1つで、
+         何を表しているのか決まらない */
       return v.to
-        ? v.lineno + " 行目から " + v.to + " 行目までは、何を表していますか。"
-        : v.lineno + " 行目は、何を表していますか。";
+        ? v.lineno + " 行目から " + v.to + " 行目までは、何が表されていますか。"
+        : v.lineno + " 行目には、何が表されていますか。";
     }
     if (v.mode === "count") return "この JSON の中に、" + v.what + "はいくつありますか。";
     if (v.mode === "countset") {
@@ -672,14 +677,16 @@
   /* 確認項目ごとの問題。並びは RULES と同じ。1項目につき2問（n は 0 か 1） */
   var STEPS = [
     /* 1 角かっこ [ ] と行の番号
-       1問目は外側の角かっこ（1行目）、2問目は内側の角かっこ（最後の行の中）。
-       **どちらも配列だが、見る場所が違う。**
-       「1行目」と「1行目から5行目まで」は同じ所を指していて、問いが重なる */
+       **本が配列を聞くときの2つの形を、そのまま出す。**
+         1問目「1 行目から 5 行目までは」（本 2問）
+         2問目「この JSON の全体は」（本 4問。ここでは配列になる）
+       本は1行目だけを取り出して聞かない。そこにあるのは開きかっこ1つで、
+       何を表しているのか決まらないため */
     function (n) {
       if (!SHEET) begin();
       return n === 0
-        ? sheetEx(null, { mode: "line", lineno: 1 })
-        : sheetEx(null, { mode: "word", word: SHEET.last.items[0] });
+        ? sheetEx(null, { mode: "line", lineno: 1, to: SHEET.body.length })
+        : sheetEx(null, { mode: "whole" });
     },
     /* 2 中かっこ { } と行の番号 */
     function (n) { return sheetEx(null, { mode: "line", lineno: n === 0 ? 2 : 4 }); },
