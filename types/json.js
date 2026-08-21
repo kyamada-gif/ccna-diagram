@@ -105,6 +105,20 @@
             object: "object（オブジェクト）", array: "array（配列）" }
   };
 
+  /* **解説では、日本語と英語を必ず並べて出す。**
+     問題によって「配列」と出たり「array」と出たりするので、
+     解説まで片方だけだと、別のものに見えてしまう */
+  var BOTH = {
+    key: "キー または key", value: "値 または value",
+    object: "オブジェクト または object", array: "配列 または array"
+  };
+  /* 説明の1枚では、答えを大きく1語で出したあとに添える。
+     大きい字ですでに「配列」と出ているので、そこでは繰り返さない */
+  var ALSO = {
+    key: "key も同じ", value: "value も同じ",
+    object: "object も同じ", array: "array も同じ"
+  };
+
   /* 数えるものの言葉 → 数。本は配列を「JSON リスト値」とも書く */
   function countOf(v, what) {
     if (/オブジェクト/.test(what)) return v.objs;
@@ -376,14 +390,14 @@
        英語だけ   … key         （3問）
        両方併記   … key（キー）  （1問） */
   var GLOSS = {
-    "キー": "コロンの左に書かれている名前。本によっては key と書かれている",
-    "値": "コロンの右に書かれている値。本によっては value と書かれている",
-    "オブジェクト": "中かっこ { } でひとまとめにしたもの。本によっては object と書かれている",
-    "配列": "角かっこ [ ] の中に並べたもの。本によっては array と書かれている",
-    "key": "コロンの左に書かれている名前。日本語では キー",
-    "value": "コロンの右に書かれている値。日本語では 値",
-    "object": "中かっこ { } でひとまとめにしたもの。日本語では オブジェクト",
-    "array": "角かっこ [ ] の中に並べたもの。日本語では 配列",
+    "キー": "キー または key。コロンの左に書かれている名前",
+    "値": "値 または value。コロンの右に書かれている値",
+    "オブジェクト": "オブジェクト または object。中かっこ { } でひとまとめにしたもの",
+    "配列": "配列 または array。角かっこ [ ] の中に並べたもの",
+    "key": "キー または key。コロンの左に書かれている名前",
+    "value": "値 または value。コロンの右に書かれている値",
+    "object": "オブジェクト または object。中かっこ { } でひとまとめにしたもの",
+    "array": "配列 または array。角かっこ [ ] の中に並べたもの",
     "key（キー）": "コロンの左に書かれている名前",
     "value（値）": "コロンの右に書かれている値",
     "object（オブジェクト）": "中かっこ { } でひとまとめにしたもの",
@@ -838,13 +852,14 @@
    * 英語の書き方も本に出るので、そこだけ小さく添える。
    */
   var BRIEF = [
-    [{ if: "行が [ で始まる", then: "配列", note: "英語では array" }],
-    [{ if: "行が { で始まる", then: "オブジェクト", note: "英語では object" }],
-    [{ if: "コロン : の左", then: "キー", note: "英語では key" }],
-    [{ if: "コロン : の右", then: "値", note: "英語では value" }],
-    [{ if: "[ … ] の中", then: "配列", note: "英語では array" }],
+    [{ if: "行が [ で始まる", then: "配列", note: ALSO.array }],
+    [{ if: "行が { で始まる", then: "オブジェクト", note: ALSO.object }],
+    [{ if: "コロン : の左", then: "キー", note: ALSO.key }],
+    [{ if: "コロン : の右", then: "値", note: ALSO.value }],
+    [{ if: "[ … ] の中", then: "配列", note: ALSO.array }],
     [{ if: "開くかっこを、上から数える",
-       then: ["{ の数 ＝ オブジェクト", "[ の数 ＝ 配列", "コロン : の左の数 ＝ キー"] }],
+       then: ["{ の数 ＝ " + BOTH.object, "[ の数 ＝ " + BOTH.array,
+              "コロン : の左の数 ＝ " + BOTH.key] }],
     [{ if: "開いた数 ＞ 閉じた数", then: "その閉じかっこが足りない" }]
   ];
   function brief(block, i) { return BRIEF[i] || null; }
@@ -857,18 +872,19 @@
    */
   function note(v) {
     if (!v) return null;
-    var say = SAY[v.lang] || SAY.ja;
+    /* **解説では、答えの言葉を日本語と英語の両方で出す。**
+       問題は片方の書き方で聞いてくるが、どちらも同じものだと分かるように */
     if (v.mode === "word" || v.mode === "type") {
-      var side = v.side === "コロンの左" ? { g: "コロン : の左 ＝ " + say.key, b: "コロンの左にある" }
-        : v.side === "コロンの右" ? { g: "コロン : の右 ＝ " + say.value, b: "コロンの右にある" }
-        : v.side === "角かっこの中" ? { g: "[ … ] の中 ＝ " + say.array, b: "角かっこの中に並んでいる" }
+      var side = v.side === "コロンの左" ? { g: "コロン : の左 ＝ " + BOTH.key, b: "コロンの左にある" }
+        : v.side === "コロンの右" ? { g: "コロン : の右 ＝ " + BOTH.value, b: "コロンの右にある" }
+        : v.side === "角かっこの中" ? { g: "[ … ] の中 ＝ " + BOTH.array, b: "角かっこの中に並んでいる" }
         : null;
       if (!side) return null;
       return { gloss: side.g, body: q(v.word) + " は" + side.b };
     }
     if (v.mode === "line" || v.mode === "whole") {
-      var top = v.top === "{" ? { g: "行が { で始まる ＝ " + say.object, n: "{" }
-        : v.top === "[" ? { g: "行が [ で始まる ＝ " + say.array, n: "[" } : null;
+      var top = v.top === "{" ? { g: "行が { で始まる ＝ " + BOTH.object, n: "{" }
+        : v.top === "[" ? { g: "行が [ で始まる ＝ " + BOTH.array, n: "[" } : null;
       if (!top) return null;
       var where = v.mode === "whole" ? "この JSON は"
         : (v.to ? v.lineno + " 行目から " + v.to + " 行目は" : v.lineno + " 行目は");
@@ -877,7 +893,9 @@
     if (v.mode === "count") {
       var mark = v.what === "オブジェクト" ? "{"
         : v.what === "配列" ? "[" : "コロン : の左";
-      return { gloss: mark + " の数 ＝ " + v.what,
+      var word = v.what === "オブジェクト" ? BOTH.object
+        : v.what === "配列" ? BOTH.array : BOTH.key;
+      return { gloss: mark + " の数 ＝ " + word,
                body: mark + " は " + v.num + " 個" };
     }
     if (v.mode === "countset") {
