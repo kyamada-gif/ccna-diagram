@@ -832,6 +832,23 @@
     return [];                              /* 行の番号は左端の数字なので光らせない */
   }
 
+  /* ── 短い説明の1枚 ────────────────────────
+   * **文字は読まれない。**見たらすぐ「こう来たら、こう答える」と
+   * 分かる形だけを残す。記号を大きく出して、その下に答えを置く。
+   * 英語の書き方も本に出るので、そこだけ小さく添える。
+   */
+  var BRIEF = [
+    [{ if: "行が [ で始まる", then: "配列", note: "英語では array" }],
+    [{ if: "行が { で始まる", then: "オブジェクト", note: "英語では object" }],
+    [{ if: "コロン : の 左", then: "キー", note: "英語では key" }],
+    [{ if: "コロン : の 右", then: "値", note: "英語では value" }],
+    [{ if: "[ … ] の 中", then: "配列", note: "英語では array" }],
+    [{ if: "開くかっこを、上から数える",
+       then: ["{ の数 ＝ オブジェクト", "[ の数 ＝ 配列", ": の左の数 ＝ キー"] }],
+    [{ if: "開いた数 ＞ 閉じた数", then: "その閉じかっこが足りない" }]
+  ];
+  function brief(block, i) { return BRIEF[i] || null; }
+
   /* ── 出題パターン ─────────────────────────
    * 本の41問は、聞かれ方で15通りに分かれる。
    * **同じパターンが何問も並んでいたので、3問までに絞った（41 → 25 問）。**
@@ -889,6 +906,7 @@
        日本語 → 英語 → 併記。数える問題と足りない問題は2問で止まる */
     perSpot: 3,
     begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks, focus: focus,
+    brief: brief,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 7, rules: 7, questions: 25 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。

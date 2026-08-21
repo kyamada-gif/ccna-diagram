@@ -945,6 +945,9 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   /* 確認項目の説明 */
   if (it.kind === "learn") {
     const lb = it.extra.block, li = it.extra.i, lof = it.extra.of;
+    /* 短い説明を持っている分野は、そちらを出す。[{if, then, note}] の並び */
+    const brief = (G && G.spec && typeof G.spec.brief === "function")
+      ? G.spec.brief(lb, li) : null;
     return (
       <div className="wrap">
         <div className="head">
@@ -956,16 +959,19 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
         <div className="bar"><div className="bar-in" style={{ width: (at / plan.length * 100) + "%" }} /></div>
 
         <div className="sec">
-          <span className="sec-l">{G.kind === "match"
-            ? (li + 1) + " 番目に覚える用語" : (li + 1) + " 番目の確認項目"}</span>
+          {/* 短い形のときは、番号の見出しを出さない。
+              上の「確認項目 1 / 7」と同じことを2回書かない */}
+          {!brief && <span className="sec-l">{G.kind === "match"
+            ? (li + 1) + " 番目に覚える用語" : (li + 1) + " 番目の確認項目"}</span>}
           <div className="brief-t">{lb.name}</div>
         </div>
 
         {/* 見本の出力。**どこを見るかは、文字で説明するより現物のほうが早い。**
             決め手の行は光らせる。用意していない分野では何も出ない（いままでどおり） */}
+        {/* eslint-disable-next-line no-unused-vars */}
         {it.exhibit && (
           <div className="sec">
-            <span className="sec-l">どこに書いてあるか</span>
+            {!brief && <span className="sec-l">どこに書いてあるか</span>}
             {it.exhibit.image && <Scan image={it.exhibit.image} alt={lb.name} />}
             {it.exhibit.text
               ? <Console text={it.exhibit.text} hits={toHits(lb.look)}
@@ -994,6 +1000,25 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
               </div>
             </div>
           </>
+        ) : (
+        brief ? (
+        /* ── 短い説明の1枚 ─────────────────────
+         * **文字は読まれない。**見たらすぐ「こう来たら、こう答える」と
+         * 分かる形だけを残す。分野が brief() を持っていれば、こちらを出す。
+         * 持っていない分野は、下のいままでの形のまま */
+        <div className="sec">
+          {brief.map((r, i) => (
+            <div className="rule" key={i}>
+              <span className="rule-if">{r.if}</span>
+              <span className="rule-ar">▼</span>
+              {/* 答えが2つ以上あるときは、同じ箱の中に縦に並べる */}
+              {(Array.isArray(r.then) ? r.then : [r.then]).map((x, k) => (
+                <span className="rule-then" key={k}>{x}</span>
+              ))}
+              {r.note && <span className="rule-n">{r.note}</span>}
+            </div>
+          ))}
+        </div>
         ) : (
         <>
         <div className="sec">
@@ -1029,7 +1054,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
           </div>
         </div>
         </>
-        )}
+        ))}
         <button className="go" onClick={next}>この確認項目の問題へ（Enter）</button>
       </div>
     );

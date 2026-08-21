@@ -215,6 +215,25 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
   white-space:pre}
 .cline{white-space:pre}
 .ccmd{color:var(--ink)}
+/* ── 短い説明の1枚 ──────────────────────────
+ * **文字は読まれない。**「こう来たら、こう答える」だけを大きく出す。
+ *   上 … 見る所（記号そのもの）
+ *   ▼
+ *   下 … そのときの答え
+ */
+.rule{display:flex;flex-direction:column;align-items:center;gap:var(--s2);
+  background:var(--bg-tile);border:1px solid var(--line);border-radius:12px;
+  padding:var(--s5) var(--s4);margin-bottom:var(--s3)}
+.rule-if{font-family:var(--mono);font-size:var(--f5);font-weight:700;
+  color:var(--ink);text-align:center;line-height:1.4}
+.rule-ar{color:var(--ink3);font-size:var(--f3);line-height:1}
+.rule-then{font-size:var(--f6);font-weight:800;color:var(--green-t);
+  text-align:center;line-height:1.25}
+/* 答えが並ぶときは、1つずつが大きすぎると読みにくい */
+.rule-then + .rule-then{font-size:var(--f5)}
+.rule:has(.rule-then + .rule-then) .rule-then{font-size:var(--f5)}
+.rule-n{font-size:var(--f2);color:var(--ink2)}
+
 /* 行の中の、決め手の言葉だけを光らせる。行ごと光らせると、
    どこを見ればいいのかが伝わらない */
 .cmark{background:var(--blue-bg);color:var(--blue-t);font-weight:700;
@@ -314,24 +333,24 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <body>
 <div id="root"></div>
 <!-- 共通の仕掛け（判定・道すじ・出力作り）。題材の中身は入っていない -->
-<script src="./store.js?v=199596" charset="utf-8"></script>
-<script src="./fig.js?v=199596" charset="utf-8"></script>
-<script src="./engine.js?v=199596" charset="utf-8"></script>
+<script src="./store.js?v=200282" charset="utf-8"></script>
+<script src="./fig.js?v=200282" charset="utf-8"></script>
+<script src="./engine.js?v=200282" charset="utf-8"></script>
 <!-- ブロックごとの中身。ブロックを増やしたら、ここに1行足す -->
-<script src="./types/rootbridge.js?v=199596" charset="utf-8"></script>
-<script src="./types/log.js?v=199596" charset="utf-8"></script>
-<script src="./types/ospf.js?v=199596" charset="utf-8"></script>
-<script src="./types/ospfdr.js?v=199596" charset="utf-8"></script>
-<script src="./types/json.js?v=199596" charset="utf-8"></script>
-<script src="./types/showint.js?v=199596" charset="utf-8"></script>
-<script src="./types/etherchannel.js?v=199596" charset="utf-8"></script>
-<script src="./types/trunk.js?v=199596" charset="utf-8"></script>
-<script src="./types/access.js?v=199596" charset="utf-8"></script>
-<script src="./types/ipsvc.js?v=199596" charset="utf-8"></script>
-<script src="./types/portsec.js?v=199596" charset="utf-8"></script>
-<script src="./types/wlangui.js?v=199596" charset="utf-8"></script>
-<script src="./types/nolink.js?v=199596" charset="utf-8"></script>
-<script src="./types/misc.js?v=199596" charset="utf-8"></script>
+<script src="./types/rootbridge.js?v=200282" charset="utf-8"></script>
+<script src="./types/log.js?v=200282" charset="utf-8"></script>
+<script src="./types/ospf.js?v=200282" charset="utf-8"></script>
+<script src="./types/ospfdr.js?v=200282" charset="utf-8"></script>
+<script src="./types/json.js?v=200282" charset="utf-8"></script>
+<script src="./types/showint.js?v=200282" charset="utf-8"></script>
+<script src="./types/etherchannel.js?v=200282" charset="utf-8"></script>
+<script src="./types/trunk.js?v=200282" charset="utf-8"></script>
+<script src="./types/access.js?v=200282" charset="utf-8"></script>
+<script src="./types/ipsvc.js?v=200282" charset="utf-8"></script>
+<script src="./types/portsec.js?v=200282" charset="utf-8"></script>
+<script src="./types/wlangui.js?v=200282" charset="utf-8"></script>
+<script src="./types/nolink.js?v=200282" charset="utf-8"></script>
+<script src="./types/misc.js?v=200282" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
 <script src="./q/showint.js?v=221173" charset="utf-8"></script>
 <script src="./q/parts.js?v=221173" charset="utf-8"></script>
@@ -361,8 +380,8 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <script src="./questions.js?v=221173" charset="utf-8"></script>
 <!-- 上のものを組み立てる。画面側では判定しない。
      **questions.js より後に読むこと。**対応づけのエンジンは過去問の対から組む -->
-<script src="./gen.js?v=199596" charset="utf-8"></script>
+<script src="./gen.js?v=200282" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=50261" charset="utf-8"></script>
+<script src="./app.js?v=51214" charset="utf-8"></script>
 </body>
 </html>

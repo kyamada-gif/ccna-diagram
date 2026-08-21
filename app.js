@@ -1252,6 +1252,8 @@ function Drill({
     const lb = it.extra.block,
       li = it.extra.i,
       lof = it.extra.of;
+    /* 短い説明を持っている分野は、そちらを出す。[{if, then, note}] の並び */
+    const brief = G && G.spec && typeof G.spec.brief === "function" ? G.spec.brief(lb, li) : null;
     return /*#__PURE__*/React.createElement("div", {
       className: "wrap"
     }, /*#__PURE__*/React.createElement("div", {
@@ -1272,13 +1274,13 @@ function Drill({
       }
     })), /*#__PURE__*/React.createElement("div", {
       className: "sec"
-    }, /*#__PURE__*/React.createElement("span", {
+    }, !brief && /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
     }, G.kind === "match" ? li + 1 + " 番目に覚える用語" : li + 1 + " 番目の確認項目"), /*#__PURE__*/React.createElement("div", {
       className: "brief-t"
     }, lb.name)), it.exhibit && /*#__PURE__*/React.createElement("div", {
       className: "sec"
-    }, /*#__PURE__*/React.createElement("span", {
+    }, !brief && /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
     }, "\u3069\u3053\u306B\u66F8\u3044\u3066\u3042\u308B\u304B"), it.exhibit.image && /*#__PURE__*/React.createElement(Scan, {
       image: it.exhibit.image,
@@ -1304,7 +1306,27 @@ function Drill({
       className: "sec-l"
     }, "\u3069\u3046\u4F7F\u3046\u304B"), /*#__PURE__*/React.createElement("div", {
       className: "brief-b"
-    }, "\u3053\u3053\u306B\u6319\u3052\u305F ", lb.learn.length, " \u500B\u306E\u8AAC\u660E\u306F\u3001\u3044\u305A\u308C\u3082\u300C", lb.name, "\u300D\u3092\u6307\u3057\u3066\u3044\u307E\u3059\u3002", li + 1 < lof ? "次の用語へ進みます。" : "これが最後の用語です。"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    }, "\u3053\u3053\u306B\u6319\u3052\u305F ", lb.learn.length, " \u500B\u306E\u8AAC\u660E\u306F\u3001\u3044\u305A\u308C\u3082\u300C", lb.name, "\u300D\u3092\u6307\u3057\u3066\u3044\u307E\u3059\u3002", li + 1 < lof ? "次の用語へ進みます。" : "これが最後の用語です。"))) : brief ?
+    /*#__PURE__*/
+    /* ── 短い説明の1枚 ─────────────────────
+     * **文字は読まれない。**見たらすぐ「こう来たら、こう答える」と
+     * 分かる形だけを残す。分野が brief() を持っていれば、こちらを出す。
+     * 持っていない分野は、下のいままでの形のまま */
+    React.createElement("div", {
+      className: "sec"
+    }, brief.map((r, i) => /*#__PURE__*/React.createElement("div", {
+      className: "rule",
+      key: i
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "rule-if"
+    }, r.if), /*#__PURE__*/React.createElement("span", {
+      className: "rule-ar"
+    }, "\u25BC"), (Array.isArray(r.then) ? r.then : [r.then]).map((x, k) => /*#__PURE__*/React.createElement("span", {
+      className: "rule-then",
+      key: k
+    }, x)), r.note && /*#__PURE__*/React.createElement("span", {
+      className: "rule-n"
+    }, r.note)))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
