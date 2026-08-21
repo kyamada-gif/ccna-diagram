@@ -32,7 +32,7 @@ const CARDS = [
   { id: "read", name: "出力を読んで当てる",
     note: "出力の値を読み、決まった規則にあてはめて答えを出す",
     blocks: [
-      { id: "showint", name: "show interface の障害", n: 31 },
+      { id: "showint", name: "show interface の障害", n: 17 },
       { id: "json", name: "JSON の読み取り", n: 25 },
       { id: "rootbridge", name: "ルートブリッジの決まり方", n: 23 },
       { id: "ospf", name: "OSPF のとなり関係", n: 7 },

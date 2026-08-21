@@ -428,7 +428,9 @@ BLOCK_IDS.forEach((id) => {
     const sp = SPECS[id];
     if (!sp || typeof sp.pattern !== "function" || !sp.patterns) return;
     const qs = BANKS[id] || [];
-    const have = new Set(qs.map((q) => sp.pattern(q)).filter(Boolean));
+    /* 判定エンジンを渡す。**パターンは「どのルールで答えが出るか」で決まる**
+       ことが多く、それを知っているのはエンジンのほうだから */
+    const have = new Set(qs.map((q) => sp.pattern(q, GENS[id])).filter(Boolean));
     const lost = sp.patterns.filter((p) => !have.has(p));
     lost.forEach((p) => bad.push(`${sp.name}: 出題パターン「${p}」がテストから消えている`));
     const extra = [...have].filter((p) => sp.patterns.indexOf(p) < 0);

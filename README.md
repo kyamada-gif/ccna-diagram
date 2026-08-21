@@ -249,7 +249,7 @@ cd /Users/e2304-01/ccna/showread && python3 -m http.server 8811
 
 | 札 | 分野 | テストに出る問題 |
 |---|---|---|
-| **1 出力を読んで当てる** | show interface の障害 31／JSON の読み取り 25／ルートブリッジ 23／OSPF のとなり関係 7／OSPF の代表ルータ 2／ログ 3 | 91 |
+| **1 出力を読んで当てる** | show interface の障害 17／JSON の読み取り 25／ルートブリッジ 23／OSPF のとなり関係 7／OSPF の代表ルータ 2／ログ 3 | 77 |
 | **2 言葉と意味の組み合わせ** | 部品と役割 21／自動化と API 12／IPv6 17／ケーブル 16／AAA 11／守りと QoS 7／DHCP ほか 6 | 90 |
 | **3 足りない設定を選ぶ** | EtherChannel 20／トランクと VLAN 19／機器への入り方 10／DHCP・NAT・NTP 9／ポートの守り 4 | 62 |
 | **4 そのほか** | 無線の画面を読む 13／つながらない原因をさがす 5／そのほか 5 | 23 |
@@ -552,6 +552,42 @@ JSON は41問のうち「単語 → 値」が7問、「単語 → キー」が6�
 | `spec.pattern(q)` | 過去問1問 → そのパターンの名前 |
 
 パターンが消えていても、見覚えのないパターンが増えていても止まる。
+
+### 絞り方は `scripts/trim.js`（どの分野でも使える）
+
+```bash
+node scripts/trim.js showint 2           # 何が起きるか見るだけ
+node scripts/trim.js showint 2 --write   # q/showint.js を書きかえる
+```
+
+**外す問題の一覧は、書きかえる前に取っておくこと。**
+書きかえた後に走らせても、もう外すものが無いので空になる。
+
+```bash
+node scripts/trim.js showint 2 | grep '^B' > /tmp/drop.csv   # 先に取る
+node scripts/trim.js showint 2 --write
+cat /tmp/drop.csv >> ../out/full/not_used.csv
+```
+
+### **答えでまとめてはいけない**
+
+パターンは「どのルールで答えにたどり着くか」で決める。
+show interface の「デュプレックスの不一致」は3つのルールから来る
+（Full なのに衝突／Half で衝突か CRC／衝突が桁違いに多い）。
+**答えでまとめると、読み方の道筋が2つ消える。**
+
+### show interface の場合
+
+31問 → **17問**（読み方10通りは全部残る）。
+
+| ルール | 本 | 残す |
+|---|---|---|
+| throughput（帯域を使い切っている） | 7 | 2 |
+| dup_half（Half で衝突か CRC） | 6 | 2 |
+| dup_full（Full なのに衝突） | 5 | 2 |
+| physical／queue | 3 ／ 3 | 2 ／ 2 |
+| oversub／storm | 2 ／ 2 | そのまま |
+| coll_many／bad_nic／linkdown | 各1 | そのまま |
 
 ### JSON の場合
 

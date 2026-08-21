@@ -38,7 +38,7 @@ const CARDS = [{
   blocks: [{
     id: "showint",
     name: "show interface の障害",
-    n: 31
+    n: 17
   }, {
     id: "json",
     name: "JSON の読み取り",

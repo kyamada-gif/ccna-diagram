@@ -263,8 +263,25 @@
     "インターフェースの設定（デュプレックス）": ["インターフェース構成", "インターフェース設定"]
   };
 
+  /* ── 出題パターン ─────────────────────────
+   * 本の31問は、**どのルールで答えにたどり着くか**で10通りに分かれる。
+   * **答えでまとめてはいけない。**「デュプレックスの不一致」は3つのルール
+   * （Full なのに衝突／Half で衝突か CRC／衝突が桁違いに多い）から来るので、
+   * 答えでまとめると読み方の道筋が2つ消えてしまう。
+   * 同じパターンが何問も並んでいたので2問までに絞った（31 → 17 問）。
+   * 絞り方は scripts/trim.js。パターンが消えていないかは build.js が毎回見る。
+   */
+  function patternOf(q, G) {
+    if (!G) return null;
+    var r = G.judge(G.read(q.fig || q.exhibit));
+    return r ? r.key : null;
+  }
+  var PATTERNS = ["linkdown", "queue", "oversub", "throughput", "dup_full",
+                  "dup_half", "coll_many", "physical", "bad_nic", "storm"];
+
   var spec = {
     id: "showint",
+    pattern: patternOf, patterns: PATTERNS,
     kind: "rules",
     card: "read",
     name: "show interface の障害",
@@ -272,7 +289,7 @@
     obj: "1.4",
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
-    expect: { spots: 13, rules: 11, questions: 31 },
+    expect: { spots: 13, rules: 11, questions: 17 },
     /* 本の答えが出力と食い違うため、演習から外した4問 */
     dropped: ["B1-P14-072", "B2-0251-02", "B1-P12-076", "B2-0084-02",
               /* B2-0137-01 と出力も選択肢も同じなのに、本の答えが違う。
