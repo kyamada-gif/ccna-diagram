@@ -33,7 +33,7 @@ const CARDS = [
     note: "出力の値を読み、決まった規則にあてはめて答えを出す",
     blocks: [
       { id: "showint", name: "show interface の障害", n: 31 },
-      { id: "json", name: "JSON の読み取り", n: 38 },
+      { id: "json", name: "JSON の読み取り", n: 41 },
       { id: "rootbridge", name: "ルートブリッジの決まり方", n: 23 },
       { id: "ospf", name: "OSPF のとなり関係", n: 7 },
       { id: "ospfdr", name: "OSPF の代表ルータ", n: 2 },
@@ -64,7 +64,7 @@ const CARDS = [
     blocks: [
       { id: "wlangui", name: "無線の画面を読む", n: 13 },
       { id: "nolink", name: "つながらない原因をさがす", n: 5 },
-      { id: "misc", name: "そのほか", n: 8 }
+      { id: "misc", name: "そのほか", n: 5 }
     ] }
 ];
 

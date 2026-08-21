@@ -42,7 +42,7 @@ const CARDS = [{
   }, {
     id: "json",
     name: "JSON の読み取り",
-    n: 38
+    n: 41
   }, {
     id: "rootbridge",
     name: "ルートブリッジの決まり方",
@@ -133,7 +133,7 @@ const CARDS = [{
   }, {
     id: "misc",
     name: "そのほか",
-    n: 8
+    n: 5
   }]
 }];
 const bank = id => typeof BANKS !== "undefined" && BANKS[id] || null;

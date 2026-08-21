@@ -1,6 +1,6 @@
-/* 「JSON の読み取り」ブロックの中身（目標6.7・過去問38問）。
+/* 「JSON の読み取り」ブロックの中身（過去問41問）。
  *
- * 見る所5か所と判定ルール6本は、過去問38問とその解説から起こした。思いつきで足さない。
+ * 見る所6か所と判定ルール7本は、過去問41問とその解説から起こした。思いつきで足さない。
  *
  * ── 提示物の形 ─────────────────────────────
  * show interface の出力は、出力さえ見れば答えが決まる。JSON はそうではない。
@@ -21,6 +21,7 @@
  *   "count"     what   … 数えるもの          その数
  *   "countset"  whats  … 数えるものの並び     まとめて数えた結果
  *   "type"      word   … 言葉               その言葉のデータの種類
+ *   "missing"   なし                        この JSON を成り立たせるのに足りないもの
  *
  * "type" だけは、判定ルールが答えを出さない（当たるルールが無い）。
  * 言葉の役目ではなくデータの種類を聞いていて、ほかの20問と同じ規則では答えられないため。
@@ -48,7 +49,11 @@
       use: "何行目かを問われたら、この番号で該当する行を探す。番号が振られていないときは、上から順に数える" },
     { key: "howmany", name: "かっこの組の数",
       mean: "同じ種類のかっこが何組あるか",
-      use: "個数を問われたら、開くかっこを上から数える。{ の組の数がオブジェクトの数、[ の組の数が配列の数、コロンの左にある言葉の数がキーの数" }
+      use: "個数を問われたら、開くかっこを上から数える。{ の組の数がオブジェクトの数、[ の組の数が配列の数、コロンの左にある言葉の数がキーの数" },
+
+    { key: "close", name: "かっこの閉じ忘れ",
+      mean: "開いたかっこと、閉じたかっこの数が合っているか",
+      use: "「何が足りないか」と問われたら、{ } と [ ] をそれぞれ数える。開いた数のほうが多ければ、その閉じかっこが足りない。JSON は開いたかっこを必ず同じ数だけ閉じる決まりなので、数が合わなければ読み込めない" }
   ];
 
   /* ── JSON を読む ─────────────────────────
@@ -58,6 +63,7 @@
    */
   function scan(src) {
     var stack = [], toks = [], objs = 0, arrs = 0, keys = 0;
+    var shutObj = 0, shutArr = 0;
     for (var i = 0; i < src.length; i++) {
       var ch = src.charAt(i);
       if (ch === '"') {
@@ -74,9 +80,11 @@
         i = j;
       } else if (ch === "{") { objs++; stack.push("{"); }
       else if (ch === "[") { arrs++; stack.push("["); }
-      else if (ch === "}" || ch === "]") { stack.pop(); }
+      else if (ch === "}") { shutObj++; stack.pop(); }
+      else if (ch === "]") { shutArr++; stack.pop(); }
     }
-    return { toks: toks, objs: objs, arrs: arrs, keys: keys };
+    return { toks: toks, objs: objs, arrs: arrs, keys: keys,
+             shutObj: shutObj, shutArr: shutArr };
   }
 
   /* 答えの書き方。本には英語だけで刷ってある問題が3問ある（選択肢が object / key /
@@ -115,6 +123,9 @@
     var v = { src: src, asked: asked, lines: lines, nums: nums, at: at,
               numbered: numbered * 2 >= lines.length && numbered > 0,
               objs: sc.objs, arrs: sc.arrs, keys: sc.keys,
+              /* 閉じ忘れを見つけるための数。開いた数と閉じた数の差 */
+              shutObj: sc.shutObj, shutArr: sc.shutArr,
+              lackObj: sc.objs - sc.shutObj, lackArr: sc.arrs - sc.shutArr,
               mode: asked.mode || null, word: asked.word || null,
               lineno: asked.lineno == null ? null : asked.lineno,
               to: asked.to == null ? null : asked.to,
@@ -157,6 +168,14 @@
     if (v.mode === "line" || v.mode === "whole") {
       return v.top === "{" ? say.object : v.top === "[" ? say.array : "";
     }
+    /* 足りないかっこは、開いた数と閉じた数の差から決める。
+       本の答えは「末尾に中括弧（}）」「末尾の中括弧 ( } )」のように
+       刷り方が3冊で違うので、かっこの字そのものを返して照らし合わせる */
+    if (v.mode === "missing") {
+      if (v.lackObj > 0) return LACK.brace;
+      if (v.lackArr > 0) return LACK.bracket;
+      return "";
+    }
     /* 数は、数えた結果をそのまま返す。本の答えも数字だけで刷ってある */
     if (v.mode === "count") return String(v.num);
     if (v.mode === "countset") {
@@ -166,6 +185,16 @@
     }
     return "";                            /* type … 判定ルールでは答えを出さない */
   }
+
+  /* 足りないものの言い方。**選択肢の顔ぶれは、本の4つに合わせてある**
+     （閉じかっこ／先頭の角かっこ／二重引用符／感嘆符）。こちらで考え出さない */
+  var LACK = {
+    brace: "閉じる中かっこ } が1つ足りない",
+    bracket: "閉じる角かっこ ] が1つ足りない",
+    head: "先頭に角かっこ [ が足りない",
+    quote: "名前を二重引用符でくくる",
+    bang: "各行の先頭に感嘆符 ! を付ける"
+  };
 
   /* 練習で出す選択肢。**正解は必ず入れる。**同じものは入れない */
   function uniq(list) {
@@ -187,6 +216,9 @@
       var n = v.num;
       return uniq([String(n), String(n + 1), String(n + 2), String(Math.max(1, n - 1)),
                    String(n + 3)]).slice(0, 4);
+    }
+    if (v.mode === "missing") {
+      return uniq([a, LACK.brace, LACK.bracket, LACK.head, LACK.quote, LACK.bang]).slice(0, 4);
     }
     if (v.mode === "countset") {
       var ws = v.whats || [], out = [a];
@@ -210,6 +242,7 @@
     }
     if (v.mode === "count") return v.what + " の数";
     if (v.mode === "countset") return (v.whats || []).join("と") + " の数";
+    if (v.mode === "missing") return "この JSON に足りないもの";
     return "（読み取れない）";
   }
   function shownLine(v) {
@@ -306,7 +339,24 @@
       no: function (v) {
         return "聞かれているのは " + asked(v) + " で、数ではない";
       },
-      test: function (v) { return v.mode === "count" || v.mode === "countset"; } }
+      test: function (v) { return v.mode === "count" || v.mode === "countset"; } },
+
+    /* 「何が足りないか」。**どのかっこが足りないかは、数えて決める。**
+       本の3問はどれも末尾の中かっこ ( } ) が1つ足りない形だが、
+       ここで「} と決めうち」にはしない。開いた数と閉じた数の差から出す */
+    { key: "missing", cond: "この JSON を読み込むのに何が足りないかを問われている",
+      verdict: "閉じかっこが足りない",
+      why: "JSON は、開いたかっこを同じ数だけ閉じる決まり。開いた数のほうが多ければ、その閉じかっこが足りない",
+      look: ["かっこの閉じ忘れ"],
+      steps: function (v) {
+        return [["聞かれているもの", asked(v)],
+                ["中かっこ { }", v.objs + " 個開いて " + v.shutObj + " 個閉じている"],
+                ["角かっこ [ ]", v.arrs + " 個開いて " + v.shutArr + " 個閉じている"]];
+      },
+      no: function (v) {
+        return "聞かれているのは " + asked(v) + " で、足りないものではない";
+      },
+      test: function (v) { return v.mode === "missing"; } }
   ];
 
   var GLOSS = {
@@ -314,7 +364,8 @@
     "値": "コロンの右に書かれている値",
     "オブジェクト": "中かっこ { } でひとまとめにしたもの",
     "配列": "角かっこ [ ] の中に並べたもの",
-    "数えた数": "開くかっこを上から数えた個数が、そのまま答えになる"
+    "数えた数": "開くかっこを上から数えた個数が、そのまま答えになる",
+    "閉じかっこが足りない": "開いた数と閉じた数を比べて、足りないほうの閉じかっこを補う"
   };
 
   /* 本の答えとの言い換え表。本には答えが日本語と英語で混ざって刷ってある。
@@ -324,7 +375,10 @@
     "キー": ["キー", "key"],
     "値": ["値", "value", "バリュー"],
     "オブジェクト": ["オブジェクト", "object"],
-    "配列": ["配列", "array", "シーケンス"]
+    "配列": ["配列", "array", "シーケンス"],
+    /* 本は「末尾に中括弧（}）」「末尾の中括弧 ( } )」と3冊で書き方が違う。
+       3つに共通するのは「中括弧」の3文字だけ */
+    "閉じかっこが足りない": ["中括弧", "大括弧"]
   };
 
   /* ── JSON を作る ───────────────────────────
@@ -393,6 +447,14 @@
 
   function build(v) {
     var body = bodyOf(v);
+    /* 「何が足りないか」の問題だけ、**閉じかっこを1つ落とす。**
+       落とすのは、いちばん最後の閉じかっこ（本の3問と同じ形）。
+       どのかっこが足りないかは、判定側が数えて決める */
+    if (v.asked && v.asked.mode === "missing") {
+      for (var k = body.length - 1; k >= 0; k--) {
+        if (/^[}\]]$/.test(body[k].trim())) { body.splice(k, 1); break; }
+      }
+    }
     if (v.numbered) {
       body = body.map(function (l, i) { return (i + 1) + "  " + l; });
     }
@@ -463,6 +525,15 @@
       b.asked = R(0, 3)
         ? { mode: "count", what: pick(COUNTWORD) }
         : { mode: "countset", whats: COUNTWORD.slice() };
+      return b;
+    },
+    /* 閉じかっこを1つ落とした JSON を出して、何が足りないかを聞く。
+       落とすかっこは形によって変わる（{ のこともあれば [ のこともある） */
+    missing: function (b) {
+      b.numbered = false;
+      b.shape = pick(["pairs", "rows"]);
+      b.n = b.shape === "rows" ? R(1, 3) : R(1, 3);
+      b.asked = { mode: "missing" };
       return b;
     }
   };
@@ -545,10 +616,15 @@
     read: read, excerpt: excerpt, walk: walkQ,
     /* 答えは決まった言葉ではなく、その場で計算した値になる */
     answer: answer, choices: choices,
-    /* 提示物ぜんぶを見て答える問題の、聞き方 */
-    ask: "聞かれていることの答えは、どれですか。",
+    /* 提示物ぜんぶを見て答える問題の、聞き方。
+       **「何が足りないか」だけは聞き方が別**なので、読み取った値で切り替える */
+    ask: function (v) {
+      return v && v.mode === "missing"
+        ? "この JSON を読み込むには、何が足りないですか。"
+        : "聞かれていることの答えは、どれですか。";
+    },
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
-    expect: { spots: 5, rules: 6, questions: 38 },
+    expect: { spots: 6, rules: 7, questions: 41 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。
        B2-0031-03 は「apple は何を表しますか」に対して、選択肢が
        配列／オブジェクト／番号／文字列 で、キーも値も無い。本の答えは「文字列」。

@@ -178,15 +178,19 @@ BLOCK_IDS.forEach((id) => {
       const r = G.judge(v);
       const ans = Array.isArray(q.answer) ? q.answer.join(" ") : q.answer;
       let ok;
-      if (G.answer) {
-        /* 答えがその場の選択肢になるブロック（例：ルートブリッジ） */
-        const a = G.answer(v);
-        ok = r && a && ans.replace(/\s/g, "").indexOf(a) >= 0;
-      } else {
-        ok = r && (spec.same[r.verdict] || []).some(
-          (w) => ans.toLowerCase().indexOf(w.toLowerCase()) >= 0
-        );
-      }
+      /* 本の答えと突き合わせる道が2つある。**どちらかで当たれば合格。**
+           ① answer(v) … その場で計算した答え（ルートブリッジの SW 名、数える問題の数）
+           ② same      … 判定の答えと同じ意味の言い方の一覧
+         ②が要るのは、**本が同じ答えを3冊で違う書き方で刷っている**ため。
+         例「末尾に中括弧（}）」「末尾の中括弧 ( } )」。共通するのは「中括弧」だけ */
+      const byAnswer = G.answer
+        ? (() => { const a = G.answer(v); return !!a && ans.replace(/\s/g, "").indexOf(a) >= 0; })()
+        : false;
+      const bySame = spec.same
+        ? (spec.same[(r || {}).verdict] || []).some(
+            (w) => ans.toLowerCase().indexOf(w.toLowerCase()) >= 0)
+        : false;
+      ok = !!r && (byAnswer || bySame);
       if (ok) hit++;
       else bad.push(`${tag}: ${q.qid} の判定が本の答えと合わない（${r ? r.verdict : "判定なし"}）`);
     });

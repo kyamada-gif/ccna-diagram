@@ -307,7 +307,13 @@
         opts = shuffle(padOpts([r.verdict].concat(
           shuffle(VERDICTS.filter(function (v) { return v !== r.verdict; })).slice(0, 3)), right));
       }
-      return { kind: "whole", ask: spec.ask || "この出力で起きていることはどれですか。",
+      /* 聞き方は分野ごとに1つ。ただし**同じ分野の中で聞かれ方が変わる題材**
+         （JSON の「何を表すか」と「何が足りないか」）は、
+         spec.ask を関数にして、読み取った値から聞き方を選べるようにしてある */
+      var askText = typeof spec.ask === "function"
+        ? spec.ask(read(g.text))
+        : (spec.ask || "この出力で起きていることはどれですか。");
+      return { kind: "whole", ask: askText,
                exhibit: g.text, opts: opts, right: right, extra: {} };
     }
 

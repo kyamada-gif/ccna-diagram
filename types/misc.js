@@ -1,16 +1,17 @@
-/* 「そのほか」ブロック（過去問8問）。
+/* 「そのほか」ブロック（過去問5問）。
  *
- * ほかのブロックに入らなかった、一点ものの集まり。決め方は5つ。
+ * ほかのブロックに入らなかった、一点ものの集まり。決め方は4つ。
  *
- *   ① JSON の書き方が足りない        3問
- *   ② QoS の絵から動きを読む         2問
- *   ③ OSPF の代表ルータにする設定     1問
- *   ④ IPv6 の自動アドレス            1問
- *   ⑤ ARP を受け取ったスイッチの動き  1問
+ *   ① QoS の図から動作を読み取る      2問
+ *   ② OSPF の代表ルータにする設定     1問
+ *   ③ IPv6 の自動アドレス            1問
+ *   ④ ARP を受け取ったスイッチの動き  1問
  *
- * **JSON の3問だけは、その場で作れる**（かっこを1つ落とした文を作る）。
- * ほかの5問は絵や1回きりの知識なので、覚える1枚だけを出し、
- * 問題は作らない（bookOnly。テストには本の問題が出る）。
+ * **どれも図か、1回きりの知識**なので、その場で作り直せる問題が無い。
+ * 説明の1枚だけを出し、問題は作らない。テストには本の問題がそのまま出る。
+ *
+ * 2026-08-21：JSON の「何が足りないか」3問は、JSON のブロックへ移した。
+ * 中身が JSON の書き方そのものなので、そちらで練習したほうが身に付く。
  */
 (function (global) {
   "use strict";
@@ -20,11 +21,6 @@
 
   /* ── 見る所 ───────────────────────────── */
   var SPOTS = [
-    { key: "brace", name: "かっこの数（JSON）",
-      re: /[{}\[\]]/,
-      mean: "{ } と [ ] が、開いた数と同じだけ閉じているか",
-      use: "開いたかっこの数と、閉じたかっこの数をそれぞれ数える。足りないほうのかっこが、不足しているもの" },
-
     { key: "qos", name: "図の右側のパケットの並び（QoS）",
       re: /(QoS|キューイング|ポリシング|シェーピング)/,
       mean: "パケットが1列に並んでいるか、破棄されているか",
@@ -112,19 +108,12 @@
       no: function () { return "IPv6 の自動アドレスの話ではない"; },
       test: function (v) { return !!v.eui; } },
 
-    { key: "arp", cue: "ARP を受け取ったとき", cond: "ARP を受け取ったスイッチの動き",
+    /* いちばん下は受け皿。ここまでで決まらなければ、これになる */
+    { key: "arp", cue: "ARP を受け取ったとき", cond: "そのほか（ARP を受け取ったスイッチの動き）",
       verdict: "受信したポート以外の、すべてのポートへ転送する",
       why: "宛先の MAC アドレスをまだ学習していないので、受信したポート以外のすべてのポートへ転送して探す",
       look: ["ARP を受け取ったスイッチの動き"],
       steps: function (v) { return [["問題文のことば", v.arp || "-"]]; },
-      no: function () { return "ARP の話ではない"; },
-      test: function (v) { return !!v.arp; } },
-
-    { key: "json", cue: "出力に足りないもの", cond: "そのほか（JSON の書き方が足りない）",
-      verdict: "末尾の閉じかっこ（}）が足りない",
-      why: "開いた数と同じだけ閉じる必要がある。{ } と [ ] をそれぞれ数えて、足りないほうを補う",
-      look: ["かっこの数（JSON）"],
-      steps: function (v) { return [["開いた数", v.open], ["閉じた数", v.close]]; },
       no: function () { return "ここまでで決まっている"; },
       test: function () { return true; } }
   ];
@@ -134,60 +123,31 @@
     "ip ospf priority を、最も大きい 255 にする": "0 にすると代表ルータには選ばれない",
     "ipv6 address （前半）::/64 eui-64 と設定する": "後半 64 ビットは、機器が自分で生成する",
     "受信したポート以外の、すべてのポートへ転送する": "宛先をまだ学習していないので、すべてのポートへ転送して探す",
-    "末尾の閉じかっこ（}）が足りない": "開いた数と同じだけ閉じる"
   };
 
   var SAME = {
     "キューイング（順番待ち）": ["キューイング"],
     "ip ospf priority を、最も大きい 255 にする": ["ip ospf priority"],
     "ipv6 address （前半）::/64 eui-64 と設定する": ["eui-64"],
-    "受信したポート以外の、すべてのポートへ転送する": ["フラッディング"],
-    "末尾の閉じかっこ（}）が足りない": ["中括弧"]
+    "受信したポート以外の、すべてのポートへ転送する": ["フラッディング"]
   };
 
-  /* ── JSON を作る ─────────────────────────
-   * かっこを1つ落とした文を作る。**落とす場所は毎回ちがう。**
+  /* ── 問題は作らない ────────────────────────
+   * この分野は、図か1回きりの知識ばかりで、その場で作り直せる形が無い。
+   * **無理に作ると、本に無い問題になってしまう。**
+   * 説明の1枚だけを出し、テストには本の問題をそのまま出す。
    */
-  function baseVals() {
-    return {
-      a: pick(["myCar", "SW1", "user", "device"]),
-      b: pick(["oldCar", "SW2", "admin", "router"]),
-      c: pick(["good", "warning", "up", "down"])
-    };
-  }
-
-  function jsonText(v) {
-    return [
-      "{",
-      '    "' + v.a + '": {',
-      '        "name": "' + v.b + '",',
-      '        "state": ["' + v.c + '", "' + v.c + '"],',
-      '        "light": false',
-      "    }"
-      /* 末尾の } を、わざと落としてある */
-    ].join("\n");
-  }
-
-  function build(v) { return v.need + "\n\n" + jsonText(v); }
-
-  var MAKERS = {
-    json: function (b) {
-      b.need = "この出力を実行するには、何が足りないのでしょうか。";
-      return b;
-    }
-  };
-
   function sample() {
     return [
-      "この出力を実行するには、何が足りないのでしょうか。",
-      "（ほかの聞かれ方：QoS のホップごとの動作／OSPF の中心点にする設定" +
-        "（ip ospf priority で優先度を最も大きくする）／" +
-        "IPv6 の自動アドレス割り当て（eui-64）／ARP を受け取った S1 の動き（フラッディング））",
+      "（この分野は、その場で作り直せる問題がありません。説明の1枚だけを出します）",
       "",
-      jsonText({ a: "myCar", b: "Thunder", c: "good" })
+      "本に出ている聞かれ方",
+      "  ・QoS の図から、ホップごとの動作を読み取る",
+      "  ・OSPF の代表ルータにする設定（ip ospf priority を 255 にする）",
+      "  ・IPv6 の自動アドレス割り当て（eui-64）",
+      "  ・ARP を受け取ったスイッチの動作（フラッディング）"
     ].join("\n");
   }
-
 
   var spec = {
     id: "misc",
@@ -200,8 +160,8 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES),
-    expect: { spots: 5, rules: 5, questions: 8 },
+    sample: sample, walk: E.cueWalk(RULES),
+    expect: { spots: 4, rules: 4, questions: 5 },
     dropped: []
   };
 
