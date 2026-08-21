@@ -232,18 +232,62 @@ function loadState() {
 }
 
 /* ── 出力を出す ───────────────────────────── */
+/* 打ったコマンドの行か。**1行目を無条件にコマンド扱いしない。**
+   show の出力や設定は「R1#show ip ospf interface」で始まるが、
+   JSON の1行目は中身そのもの。コマンド扱いすると色が変わるうえ、
+   決め手の行として光らせることもできなくなる */
+const isCmd = line => /^\S*[#>]\s*\S/.test(line);
+
+/* 行の中の、決め手の言葉だけを光らせる。
+   **行ごと光らせると、どこを見ればいいのか分からない。**
+   例「コロンの左」なら、その行の "firewall" だけを光らせたい */
+function marked(line, marks) {
+  if (!marks || !marks.length) return line;
+  /* 長い言葉から先に当てる。短い言葉が先だと、長い言葉の一部を先に取ってしまう */
+  const ws = marks.slice().sort((a, b) => b.length - a.length);
+  const out = [];
+  let rest = line,
+    guard = 0;
+  while (rest && guard++ < 200) {
+    let at = -1,
+      hit = null;
+    ws.forEach(w => {
+      if (!w) return;
+      const i = rest.indexOf(w);
+      if (i >= 0 && (at < 0 || i < at)) {
+        at = i;
+        hit = w;
+      }
+    });
+    if (at < 0) {
+      out.push(rest);
+      break;
+    }
+    if (at > 0) out.push(rest.slice(0, at));
+    out.push(/*#__PURE__*/React.createElement("span", {
+      className: "cmark",
+      key: out.length
+    }, hit));
+    rest = rest.slice(at + hit.length);
+  }
+  return out;
+}
 function Console({
   text,
-  hits
+  hits,
+  marks
 }) {
+  const lines = text.split("\n");
+  const head = isCmd(lines[0] || "");
   return /*#__PURE__*/React.createElement("pre", {
     className: "con"
-  }, text.split("\n").map((line, i) => {
-    const on = i > 0 && hits && hits.some(w => line.indexOf(w) >= 0);
+  }, lines.map((line, i) => {
+    const cmd = i === 0 && head;
+    const on = !cmd && hits && hits.some(w => line.indexOf(w) >= 0);
     return /*#__PURE__*/React.createElement("div", {
       key: i,
-      className: "cline" + (i === 0 ? " ccmd" : "") + (on ? " chit" : "")
-    }, line);
+      className: "cline" + (cmd ? " ccmd" : "") + (on ? " chit" : "")
+    }, cmd ? line : marked(line, marks));
   }));
 }
 
@@ -1190,6 +1234,13 @@ function Drill({
      例「エリアの番号」は出力に無く、実際に書いてあるのは Internet address の行。
      そこで、分野が hits() を持っていれば、名前を「出力に実際にある文字」に置きかえる。
      持っていない分野は、いままでどおり名前のまま当てる */
+  /* 行の中で光らせる言葉。分野が marks() を持っていれば使う。
+     持っていなければ何も光らせない（いままでどおり） */
+  const toMarks = look => {
+    if (!look || !look.length) return null;
+    if (!G || !G.spec || typeof G.spec.marks !== "function") return null;
+    return look.reduce((a, w) => a.concat(G.spec.marks(w) || []), []);
+  };
   const toHits = look => {
     if (!look || !look.length) return look;
     if (!G || !G.spec || typeof G.spec.hits !== "function") return look;
@@ -1234,7 +1285,8 @@ function Drill({
       alt: lb.name
     }), it.exhibit.text ? /*#__PURE__*/React.createElement(Console, {
       text: it.exhibit.text,
-      hits: toHits(lb.look)
+      hits: toHits(lb.look),
+      marks: toMarks(lb.look)
     }) : null), G.kind === "match" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
@@ -1300,6 +1352,7 @@ function Drill({
   /* **kind で場合分けしない。**あるものを出すだけ */
   const exv = exValue(it.exhibit);
   const hitWords = toHits(it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
+  const markWords = toMarks(it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
   const con = /*#__PURE__*/React.createElement(React.Fragment, null, it.image && /*#__PURE__*/React.createElement(Scan, {
     image: it.image,
     alt: it.note ? it.note.qid : ""
@@ -1307,7 +1360,8 @@ function Drill({
     fig: it.exhibit.fig
   }) : it.exhibit && it.exhibit.kind !== "topology" ? /*#__PURE__*/React.createElement(Console, {
     text: it.exhibit.text,
-    hits: hitWords
+    hits: hitWords,
+    marks: markWords
   }) : null, it.extra.maclist && /*#__PURE__*/React.createElement(MacList, {
     sw: it.extra.sw
   }));

@@ -1,6 +1,6 @@
 /* 「JSON の読み取り」ブロックの中身（過去問41問）。
  *
- * 見る所6か所と判定ルール7本は、過去問41問とその解説から起こした。思いつきで足さない。
+ * 確認項目7つと判定ルール7本は、過去問41問とその解説から起こした。思いつきで足さない。
  *
  * ── 提示物の形 ─────────────────────────────
  * show interface の出力は、出力さえ見れば答えが決まる。JSON はそうではない。
@@ -33,20 +33,26 @@
     (typeof require !== "undefined" ? require("../engine.js") : null);
   var R = E.R, pick = E.pick, shuffle = E.shuffle;
 
-  /* ── 見る所 ───────────────────────────── */
+  /* ── 確認項目 ───────────────────────────
+   * 並びは、練習で上から順に見ていく順番と同じ。
+   * 「コロン ( : )」は左と右で答えが分かれるので、2つに割ってある。
+   */
   var SPOTS = [
-    { key: "colon", name: "コロン ( : )",
-      mean: "名前と、その中身を区切る記号",
-      use: "問われている言葉がコロンの左にあればキー、右にあれば値。左右のどちらにあるかだけで決まる" },
-    { key: "brace", name: "中かっこ { }",
-      mean: "名前と値の組を、ひとまとめにする入れ物",
-      use: "問われている行が { で始まっていれば、その行はオブジェクト。出力全体が { で始まっていれば、全体がオブジェクト" },
     { key: "bracket", name: "角かっこ [ ]",
       mean: "同じ種類の値を、順番に並べる入れ物",
       use: "問われている行が [ で始まっていれば、その行は配列。問われている言葉が [ と ] の間に並んでいれば、その言葉が直接入っているのは配列" },
+    { key: "brace", name: "中かっこ { }",
+      mean: "名前と値の組を、ひとまとめにする入れ物",
+      use: "問われている行が { で始まっていれば、その行はオブジェクト。出力全体が { で始まっていれば、全体がオブジェクト" },
     { key: "lineno", name: "行の番号",
       mean: "出力の左端に振ってある行番号",
       use: "何行目かを問われたら、この番号で該当する行を探す。番号が振られていないときは、上から順に数える" },
+    { key: "colonL", name: "コロンの左",
+      mean: "名前と、その中身を区切る記号の、左側",
+      use: "問われている言葉がコロンの左にあればキー。左右のどちらにあるかだけで決まる" },
+    { key: "colonR", name: "コロンの右",
+      mean: "名前と、その中身を区切る記号の、右側",
+      use: "問われている言葉がコロンの右にあれば値。左右のどちらにあるかだけで決まる" },
     { key: "howmany", name: "かっこの組の数",
       mean: "同じ種類のかっこが何組あるか",
       use: "個数を問われたら、開くかっこを上から数える。{ の組の数がオブジェクトの数、[ の組の数が配列の数、コロンの左にある言葉の数がキーの数" },
@@ -260,31 +266,24 @@
   /* ── 判定ルール。上から順に当てて、最初に当たったところで決まる ──
    * 何が聞かれているかで分かれているので、当たるルールは必ず1本だけ。
    * 答えそのものは answer(v) が出す。ここで決めるのは「どこを見て決めたか」。
+   *
+   * 並びは、練習で上から順に見ていく順番と同じにしてある。
+   * 当たるルールが1本だけである以上、並べ替えても判定の結果は変わらない。
    */
   var RULES = [
-    { key: "key", cond: "問われている言葉が、コロンの左にある",
-      verdict: "キー",
-      why: "コロンの左に書かれているので、これは値に付けた名前",
-      look: ["コロン ( : )"],
+    { key: "line_array", cond: "問われている行が、角かっこ [ で始まっている",
+      verdict: "配列",
+      why: "角かっこで始まって角かっこで閉じているので、そこは値を順番に並べた入れ物",
+      look: ["角かっこ [ ]", "行の番号"],
       steps: function (v) {
-        return [["聞かれているもの", asked(v)], ["コロンのどちら側か", v.side || "見つからない"]];
+        return [["聞かれているもの", asked(v)], ["その行の先頭の記号", v.top || "なし"],
+                ["その行", shownLine(v)]];
       },
       no: function (v) {
-        return notWord(v) || "「" + v.word + "」はコロンの左にはない（" + (v.side || "見つからない") + "）";
+        return notLine(v) || "その行は " + (v.top || "なし") + " で始まっていて、[ ではない";
       },
-      test: function (v) { return v.mode === "word" && v.side === "コロンの左"; } },
-
-    { key: "value", cond: "問われている言葉が、コロンの右にある",
-      verdict: "値",
-      why: "コロンの右に書かれているので、これは名前に対応する値",
-      look: ["コロン ( : )"],
-      steps: function (v) {
-        return [["聞かれているもの", asked(v)], ["コロンのどちら側か", v.side || "見つからない"]];
-      },
-      no: function (v) {
-        return notWord(v) || "「" + v.word + "」はコロンの右にはない（" + (v.side || "見つからない") + "）";
-      },
-      test: function (v) { return v.mode === "word" && v.side === "コロンの右"; } },
+      test: function (v) {
+        return (v.mode === "line" || v.mode === "whole") && v.top === "["; } },
 
     { key: "line_object", cond: "問われている行が、中かっこ { で始まっている",
       verdict: "オブジェクト",
@@ -301,6 +300,30 @@
         return (v.mode === "line" || v.mode === "whole") && v.top === "{";
       } },
 
+    { key: "key", cond: "問われている言葉が、コロンの左にある",
+      verdict: "キー",
+      why: "コロンの左に書かれているので、これは値に付けた名前",
+      look: ["コロンの左"],
+      steps: function (v) {
+        return [["聞かれているもの", asked(v)], ["コロンのどちら側か", v.side || "見つからない"]];
+      },
+      no: function (v) {
+        return notWord(v) || "「" + v.word + "」はコロンの左にはない（" + (v.side || "見つからない") + "）";
+      },
+      test: function (v) { return v.mode === "word" && v.side === "コロンの左"; } },
+
+    { key: "value", cond: "問われている言葉が、コロンの右にある",
+      verdict: "値",
+      why: "コロンの右に書かれているので、これは名前に対応する値",
+      look: ["コロンの右"],
+      steps: function (v) {
+        return [["聞かれているもの", asked(v)], ["コロンのどちら側か", v.side || "見つからない"]];
+      },
+      no: function (v) {
+        return notWord(v) || "「" + v.word + "」はコロンの右にはない（" + (v.side || "見つからない") + "）";
+      },
+      test: function (v) { return v.mode === "word" && v.side === "コロンの右"; } },
+
     { key: "in_array", cond: "問われている言葉が、角かっこの中に並んでいる",
       verdict: "配列",
       why: "角かっこの中に、ほかの値と並べて書かれている。その言葉が直接入っているのは配列のほう",
@@ -312,20 +335,6 @@
         return notWord(v) || "「" + v.word + "」は角かっこの中の並びにはない（" + (v.side || "見つからない") + "）";
       },
       test: function (v) { return v.mode === "word" && v.side === "角かっこの中"; } },
-
-    { key: "line_array", cond: "問われている行が、角かっこ [ で始まっている",
-      verdict: "配列",
-      why: "角かっこで始まって角かっこで閉じているので、そこは値を順番に並べた入れ物",
-      look: ["角かっこ [ ]", "行の番号"],
-      steps: function (v) {
-        return [["聞かれているもの", asked(v)], ["その行の先頭の記号", v.top || "なし"],
-                ["その行", shownLine(v)]];
-      },
-      no: function (v) {
-        return notLine(v) || "その行は " + (v.top || "なし") + " で始まっていて、[ ではない";
-      },
-      test: function (v) {
-        return (v.mode === "line" || v.mode === "whole") && v.top === "["; } },
 
     /* 数える問題は1本。いくつでも数えられる。答えは answer(v) が計算して出す */
     { key: "count", cond: "個数を問われている",
@@ -568,40 +577,197 @@
     return { src: keep.join("\n"), asked: v.asked };
   }
 
-  /* ── 練習の問題文と選択肢 ─────────────────────
-   * 「この値なら、どうしますか」では何を聞かれているか分からないので、
-   * 何を見て、何が決まるのかを、そのまま文にする。
+  /* ── 問題文 ─────────────────────────────
+   * 本と同じ聞き方にする。「◯◯を確認します。ここで答えは決まりますか」ではなく、
+   * 「2 行目には何が表されていますか」と、聞きたいことをそのまま書く。
+   *
+   * show interface の出力は上から順に見ていけば答えが出るが、
+   * JSON は問題文のほうが先に「どこを見るか」を決める。だから聞き方も本に合わせる。
    */
-  var VERDICTS = [];
-  RULES.forEach(function (r) {
-    if (VERDICTS.indexOf(r.verdict) < 0) VERDICTS.push(r.verdict);
-  });
-  function walkQ(st, v, sh) {
-    var look = st.look.join(" と ");
-    /* 誤答に使う答え。**聞かれているものに合うものだけ。**
-       ここで答えが決まるときは、同じ提示物の選択肢から取る（数なら別の数）。
-       決まらないときは、次に見る所の答えを取る。
-       「言葉は何か」を聞いているのに「数えた数」を並べると、見ただけで消えてしまう */
-    var a = answer(v);
-    var other = st.hit
-      ? shuffle(choices(v).filter(function (x) { return x !== a; }))[0]
-      : (st.nextVerdict && st.nextVerdict !== st.verdict ? st.nextVerdict : null);
-    if (!other) {
-      other = shuffle(VERDICTS.filter(function (x) { return x !== st.verdict; }))[0];
+  function question(v) {
+    if (v.mode === "word") return "「" + v.word + "」という言葉は、何を表していますか。";
+    if (v.mode === "type") return "「" + v.word + "」のデータの種類は、どれですか。";
+    if (v.mode === "whole") return "この JSON の全体は、何を表していますか。";
+    if (v.mode === "line") {
+      return v.to
+        ? v.lineno + " 行目から " + v.to + " 行目までは、何を表していますか。"
+        : v.lineno + " 行目は、何を表していますか。";
     }
-    /* 当たったときは、その場で出した答えをそのまま見せる（数なら数字） */
-    var yes = look + " を見ると、答えは " + (st.hit ? (a || st.verdict) : st.verdict);
-    /* 次に見る所が、いま見ている所と同じ名前になることがある（コロンの左と右）。
-       そのときは「次に◯◯を見る」と書かない。最後の見る所には、次が無い */
-    var no = !st.next ? look + " を見ても決まらない"
-      : st.next !== look ? look + " だけでは決まらない。次に " + st.next + " を見る"
-      : "答えは " + st.verdict + " にはならない";
-    var right = st.hit ? yes : no;
-    var opts = [yes, no, look + " を見ると、答えは " + other];
-    var seen = {}, u = [];
-    opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; u.push(o); } });
-    return { ask: look + " を確認します。ここで答えは決まりますか。",
-             opts: sh(u), right: right };
+    if (v.mode === "count") return "この JSON の中に、" + v.what + "はいくつありますか。";
+    if (v.mode === "countset") {
+      return "この JSON の中に、" + (v.whats || []).join("、") + "は、それぞれいくつありますか。";
+    }
+    if (v.mode === "missing") return "この JSON を読み込むには、何が足りないですか。";
+    return "聞かれていることの答えは、どれですか。";
+  }
+
+  /* ── 練習で使う1枚の JSON ───────────────────
+   * 練習の間は、この1枚だけを見る。7つの確認項目は、すべてこの1枚の中で聞ける。
+   * 名前と値は練習の始めに1回決めて、その回の間は変わらない。
+   *
+   *   1  [
+   *   2    {"switch": "SW18", "port": "ge2/41"},
+   *   3    {"router": "R20", "port": "te5/5"},
+   *   4    {"firewall": "FW42", "Access_Ports": ["fe3/24", "fe3/25"]}
+   *   5  ]
+   *
+   * 全体が配列（1）／2〜4 行目がオブジェクト（2）／switch がキー（3）／
+   * SW18 が値（4）／fe3/24 が角かっこの中の言葉（5）／数える（6）／
+   * 閉じかっこを1つ落として、何が足りないかを聞く（7）。
+   *
+   * 「オブジェクトの中に、文字列の値と配列が混ざる」形は本にもある（B2-0026-03）。
+   * **本に無い書き方は使わない。**
+   */
+  var SHEET = null;
+
+  /* 角かっこを持たせるキー。**PAIRKEY のうち、ポートの一覧を指すものだけ。**
+     Test_Questions のような言葉に fe3/24 を並べると、中身と名前が食い違って読めない */
+  var ARRAYKEY = PAIRKEY.filter(function (k) { return /_Ports$/.test(k); });
+
+  function makeSheet() {
+    var ks = some(KINDS, 3);
+    /* 4つとも違う値を取る。値（コロンの右）と、角かっこの中に並べる言葉が
+       同じ文字になると、聞かれたときにどちらの場所か決まらなくなる */
+    var pv = some(PORTVAL, 4);
+    var pk = pick(PORTKEY);
+    var s = {
+      rows: [
+        { key: ks[0].key, name: pick(ks[0].name), pkey: pk, pval: pv[0] },
+        { key: ks[1].key, name: pick(ks[1].name), pkey: pk, pval: pv[1] }
+      ],
+      last: { key: ks[2].key, name: pick(ks[2].name),
+              akey: pick(ARRAYKEY), items: [pv[2], pv[3]] }
+    };
+    var r0 = s.rows[0], r1 = s.rows[1], l = s.last;
+    s.body = [
+      "[",
+      "  {" + q(r0.key) + ": " + q(r0.name) + ", " + q(r0.pkey) + ": " + q(r0.pval) + "},",
+      "  {" + q(r1.key) + ": " + q(r1.name) + ", " + q(r1.pkey) + ": " + q(r1.pval) + "},",
+      "  {" + q(l.key) + ": " + q(l.name) + ", " + q(l.akey) + ": [" +
+        q(l.items[0]) + ", " + q(l.items[1]) + "]}",
+      "]"
+    ];
+    return s;
+  }
+
+  /* 練習の始めに1回だけ呼ばれる（engine.js → app.jsx の makePractice） */
+  function begin() { SHEET = makeSheet(); return SHEET; }
+
+  /* この1枚を、行の番号を振った文字にする。
+       drop なし   … そのまま
+       "tail"      … いちばん最後の ] の行を落とす（角かっこが1つ足りない形）
+       "brace"     … 4 行目の終わりの } を落とす（中かっこが1つ足りない形）
+     どのかっこが足りないかは、判定側が数えて決める。ここで決めうちにしない */
+  function sheetSrc(drop) {
+    if (!SHEET) begin();
+    var b = SHEET.body.slice();
+    if (drop === "tail") b = b.slice(0, b.length - 1);
+    if (drop === "brace") b[3] = b[3].replace(/\}$/, "");
+    return b.map(function (l, i) { return (i + 1) + "  " + l; }).join("\n");
+  }
+  function sheetEx(drop, asked) {
+    return { src: sheetSrc(drop), asked: asked };
+  }
+
+  /* 確認項目ごとの問題。並びは RULES と同じ。1項目につき2問（n は 0 か 1） */
+  var STEPS = [
+    /* 1 角かっこ [ ] と行の番号
+       1問目は外側の角かっこ（1行目）、2問目は内側の角かっこ（最後の行の中）。
+       **どちらも配列だが、見る場所が違う。**
+       「1行目」と「1行目から5行目まで」は同じ所を指していて、問いが重なる */
+    function (n) {
+      if (!SHEET) begin();
+      return n === 0
+        ? sheetEx(null, { mode: "line", lineno: 1 })
+        : sheetEx(null, { mode: "word", word: SHEET.last.items[0] });
+    },
+    /* 2 中かっこ { } と行の番号 */
+    function (n) { return sheetEx(null, { mode: "line", lineno: n === 0 ? 2 : 4 }); },
+    /* 3 コロンの左 */
+    function (n) {
+      if (!SHEET) begin();
+      return sheetEx(null, { mode: "word",
+        word: n === 0 ? SHEET.rows[0].key : SHEET.last.akey });
+    },
+    /* 4 コロンの右 */
+    function (n) {
+      if (!SHEET) begin();
+      return sheetEx(null, { mode: "word",
+        word: n === 0 ? SHEET.rows[0].name : SHEET.rows[1].pval });
+    },
+    /* 5 角かっこの中に並んでいる言葉 */
+    function (n) {
+      if (!SHEET) begin();
+      return sheetEx(null, { mode: "word", word: SHEET.last.items[n === 0 ? 0 : 1] });
+    },
+    /* 6 かっこの組の数 */
+    function (n) {
+      return n === 0
+        ? sheetEx(null, { mode: "count", what: pick(COUNTWORD) })
+        : sheetEx(null, { mode: "countset", whats: COUNTWORD.slice() });
+    },
+    /* 7 かっこの閉じ忘れ */
+    function (n) { return sheetEx(n === 0 ? "tail" : "brace", { mode: "missing" }); }
+  ];
+
+  /* 確認項目 i の n 問目。**この1枚に asked を組んで、1問にする。**
+     答えは、その場で読み取って計算する（answer / choices）。 */
+  function stepQ(i, n, ctx) {
+    if (!STEPS[i]) return null;
+    var ex = STEPS[i](n);
+    var v = read(ex);
+    var hit = ctx.judge(v);
+    var right = answer(v);
+    if (!hit || !right) return null;
+    return {
+      kind: "step",
+      ask: question(v),
+      exhibit: ex,
+      opts: ctx.shuffle(choices(v)),
+      right: right,
+      /* 答え合わせで出すもの。**問題文の上に出る values は空にする。**
+         「コロンのどちら側か」をここに出すと、答える前に答えが見えてしまう */
+      extra: { i: i, step: { look: hit.look.slice(), hit: true, next: null,
+                             verdict: hit.verdict, why: hit.why, values: [] } }
+    };
+  }
+
+  /* 説明の1枚に出す見本。**練習で使うのと同じ1枚を出す。**
+     かっこの閉じ忘れ（7つ目）だけは、閉じかっこを落とした形を出す */
+  function learnEx(block, i) {
+    return { src: sheetSrc(i === 6 ? "tail" : null) };
+  }
+
+  /* ── どこを光らせるか ────────────────────
+   * **行ごと光らせない。**JSON はどの行にもコロンとかっこがあるので、
+   * 行を光らせると画面のほとんどが光ってしまい、どこを見ればいいのか伝わらない。
+   *   hits …… 光らせる「行」。確認項目の説明では使わない（空）。
+   *            問題では、聞かれている言葉が入っている行だけを光らせる
+   *   marks …… 行の中で光らせる「言葉」。ここが本体。
+   *            例「コロンの左」なら、その JSON の中のキーだけを光らせる
+   */
+  var SPOTNAMES = ["角かっこ [ ]", "中かっこ { }", "行の番号",
+                   "コロンの左", "コロンの右", "かっこの組の数", "かっこの閉じ忘れ"];
+  var isSpot = function (name) { return SPOTNAMES.indexOf(name) >= 0; };
+
+  function hits(name) { return isSpot(name) ? [] : [name]; }
+
+  /* 確認項目の名前 → その JSON の中で光らせる言葉 */
+  function marks(name) {
+    if (!isSpot(name)) return [name];       /* 問題のとき。聞かれている言葉そのもの */
+    if (!SHEET) begin();
+    var r0 = SHEET.rows[0], r1 = SHEET.rows[1], l = SHEET.last;
+    if (name === "コロンの左") {
+      return [q(r0.key), q(r0.pkey), q(r1.key), q(l.key), q(l.akey)];
+    }
+    if (name === "コロンの右") {
+      return [q(r0.name), q(r0.pval), q(r1.name), q(r1.pval), q(l.name)];
+    }
+    if (name === "角かっこ [ ]") return ["[", "]"];
+    if (name === "中かっこ { }") return ["{", "}"];
+    if (name === "かっこの組の数") return ["{", "["];
+    if (name === "かっこの閉じ忘れ") return ["}", "]"];
+    return [];                              /* 行の番号は左端の数字なので光らせない */
   }
 
   var spec = {
@@ -613,18 +779,19 @@
     note: "JSON を見て、どこが名前で、どこが中身かを読む",
     obj: "6.7",
     spots: SPOTS, rules: RULES, gloss: GLOSS, same: SAME,
-    read: read, excerpt: excerpt, walk: walkQ,
+    read: read, excerpt: excerpt,
     /* 答えは決まった言葉ではなく、その場で計算した値になる */
     answer: answer, choices: choices,
     /* 提示物ぜんぶを見て答える問題の、聞き方。
-       **「何が足りないか」だけは聞き方が別**なので、読み取った値で切り替える */
-    ask: function (v) {
-      return v && v.mode === "missing"
-        ? "この JSON を読み込むには、何が足りないですか。"
-        : "聞かれていることの答えは、どれですか。";
-    },
+       **同じ JSON でも、聞かれているものが違えば答えが違う。**
+       だから聞き方も、読み取った値から組み立てる。
+       ここを「聞かれていることの答えは、どれですか」で済ませると、
+       画面には JSON しか出ないので、何を聞かれているのか分からない */
+    ask: question,
+    /* 練習は、1枚の JSON を始めに作って、その中の場所を順に指していく */
+    begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
-    expect: { spots: 6, rules: 7, questions: 41 },
+    expect: { spots: 7, rules: 7, questions: 41 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。
        B2-0031-03 は「apple は何を表しますか」に対して、選択肢が
        配列／オブジェクト／番号／文字列 で、キーも値も無い。本の答えは「文字列」。
