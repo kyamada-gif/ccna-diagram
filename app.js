@@ -1404,8 +1404,12 @@ function Drill({
      focus() を持たない分野は、いままでどおり確認項目の名前から引く */
   const look = it.kind === "step" ? it.extra.step.look : done && G && exv ? (G.judge(G.read(exv)) || {}).look : null;
   const focus = G && G.spec && typeof G.spec.focus === "function" && exv && (it.kind === "step" || done) ? G.spec.focus(G.read(exv)) : null;
-  const hitWords = focus ? focus.hits : toHits(look);
-  const markWords = focus ? focus.marks : toMarks(look);
+  /* 「どの行を見ますか」の問題は、答えたあとに**その行を出力の中で光らせる。**
+     どこにあったのかが、そこで初めて目で分かる。
+     答える前は光らせない（答えが見えてしまう） */
+  const lineAns = done && it.kind === "step" && typeof exv === "string" ? rights.map(String).filter(r => exv.split("\n").some(l => l.trim() === r.trim())) : [];
+  const hitWords = lineAns.length ? lineAns : focus ? focus.hits : toHits(look);
+  const markWords = lineAns.length ? null : focus ? focus.marks : toMarks(look);
   const con = /*#__PURE__*/React.createElement(React.Fragment, null, it.image && /*#__PURE__*/React.createElement(Scan, {
     image: it.image,
     alt: it.note ? it.note.qid : ""
