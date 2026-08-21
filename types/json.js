@@ -99,7 +99,10 @@
      選択肢から決める。どれが正解かは見ていない） */
   var SAY = {
     ja: { key: "キー", value: "値", object: "オブジェクト", array: "配列" },
-    en: { key: "key", value: "value", object: "object", array: "array" }
+    en: { key: "key", value: "value", object: "object", array: "array" },
+    /* 本には「key（キー）」と両方を並べて刷ってある問題もある（B1-P12-017） */
+    both: { key: "key（キー）", value: "value（値）",
+            object: "object（オブジェクト）", array: "array（配列）" }
   };
 
   /* 数えるものの言葉 → 数。本は配列を「JSON リスト値」とも書く */
@@ -136,7 +139,7 @@
               lineno: asked.lineno == null ? null : asked.lineno,
               to: asked.to == null ? null : asked.to,
               what: asked.what || null, whats: asked.whats || null,
-              lang: asked.lang === "en" ? "en" : "ja",
+              lang: SAY[asked.lang] ? asked.lang : "ja",
               side: null, row: -1, top: "", num: null };
 
     if (v.mode === "word" || v.mode === "type") {
@@ -368,11 +371,23 @@
       test: function (v) { return v.mode === "missing"; } }
   ];
 
+  /* **本は同じことを3通りの書き方で刷っている。**どれで出されても同じもの。
+       日本語だけ … キー        （35問）
+       英語だけ   … key         （3問）
+       両方併記   … key（キー）  （1問） */
   var GLOSS = {
-    "キー": "コロンの左に書かれている名前",
-    "値": "コロンの右に書かれている値",
-    "オブジェクト": "中かっこ { } でひとまとめにしたもの",
-    "配列": "角かっこ [ ] の中に並べたもの",
+    "キー": "コロンの左に書かれている名前。本によっては key と書かれている",
+    "値": "コロンの右に書かれている値。本によっては value と書かれている",
+    "オブジェクト": "中かっこ { } でひとまとめにしたもの。本によっては object と書かれている",
+    "配列": "角かっこ [ ] の中に並べたもの。本によっては array と書かれている",
+    "key": "コロンの左に書かれている名前。日本語では キー",
+    "value": "コロンの右に書かれている値。日本語では 値",
+    "object": "中かっこ { } でひとまとめにしたもの。日本語では オブジェクト",
+    "array": "角かっこ [ ] の中に並べたもの。日本語では 配列",
+    "key（キー）": "コロンの左に書かれている名前",
+    "value（値）": "コロンの右に書かれている値",
+    "object（オブジェクト）": "中かっこ { } でひとまとめにしたもの",
+    "array（配列）": "角かっこ [ ] の中に並べたもの",
     "数えた数": "開くかっこを上から数えた個数が、そのまま答えになる",
     "閉じかっこが足りない": "開いた数と閉じた数を比べて、足りないほうの閉じかっこを補う"
   };
@@ -633,7 +648,7 @@
     var ks = some(KINDS, 3);
     /* 4つとも違う値を取る。値（コロンの右）と、角かっこの中に並べる言葉が
        同じ文字になると、聞かれたときにどちらの場所か決まらなくなる */
-    var pv = some(PORTVAL, 4);
+    var pv = some(PORTVAL, 5);
     var pk = pick(PORTKEY);
     var s = {
       rows: [
@@ -641,7 +656,7 @@
         { key: ks[1].key, name: pick(ks[1].name), pkey: pk, pval: pv[1] }
       ],
       last: { key: ks[2].key, name: pick(ks[2].name),
-              akey: pick(ARRAYKEY), items: [pv[2], pv[3]] }
+              akey: pick(ARRAYKEY), items: [pv[2], pv[3], pv[4]] }
     };
     var r0 = s.rows[0], r1 = s.rows[1], l = s.last;
     s.body = [
@@ -649,7 +664,7 @@
       "  {" + q(r0.key) + ": " + q(r0.name) + ", " + q(r0.pkey) + ": " + q(r0.pval) + "},",
       "  {" + q(r1.key) + ": " + q(r1.name) + ", " + q(r1.pkey) + ": " + q(r1.pval) + "},",
       "  {" + q(l.key) + ": " + q(l.name) + ", " + q(l.akey) + ": [" +
-        q(l.items[0]) + ", " + q(l.items[1]) + "]}",
+        l.items.map(q).join(", ") + "]}",
       "]"
     ];
     return s;
@@ -675,6 +690,18 @@
   }
 
   /* 確認項目ごとの問題。並びは RULES と同じ。1項目につき2問（n は 0 か 1） */
+  /* ── 答えの書き方を3通り出す ──────────────────
+   * **本は同じことを3通りの書き方で刷っている。**
+   *   日本語だけ … キー／値／オブジェクト／配列        （35問）
+   *   英語だけ   … key／value／object／array          （3問）
+   *   両方併記   … key（キー）／value（値）…            （1問）
+   * どれで出されても答えられるように、練習でも3通りを回す。
+   * 確認項目ごとに 1問目＝日本語、2問目＝英語、3問目以降＝併記。
+   * 問題文はいつも日本語（本もそうしていて、変わるのは選択肢だけ）。
+   */
+  var LANGS = ["ja", "en", "both"];
+  function langOf(n) { return LANGS[n % LANGS.length]; }
+
   var STEPS = [
     /* 1 角かっこ [ ] と行の番号
        **本が配列を聞くときの2つの形を、そのまま出す。**
@@ -684,37 +711,47 @@
        何を表しているのか決まらないため */
     function (n) {
       if (!SHEET) begin();
+      /* 外側の角かっこを指す言い方は、本に2つしかない
+         （まとまりで聞く／全体を聞く）。3問目は作らない */
+      if (n >= 2) return null;
       return n === 0
-        ? sheetEx(null, { mode: "line", lineno: 1, to: SHEET.body.length })
-        : sheetEx(null, { mode: "whole" });
+        ? sheetEx(null, { mode: "line", lineno: 1, to: SHEET.body.length, lang: langOf(n) })
+        : sheetEx(null, { mode: "whole", lang: langOf(n) });
     },
     /* 2 中かっこ { } と行の番号 */
-    function (n) { return sheetEx(null, { mode: "line", lineno: n === 0 ? 2 : 4 }); },
+    function (n) {
+      return sheetEx(null, { mode: "line", lineno: [2, 4, 3][n], lang: langOf(n) });
+    },
     /* 3 コロンの左 */
     function (n) {
       if (!SHEET) begin();
-      return sheetEx(null, { mode: "word",
-        word: n === 0 ? SHEET.rows[0].key : SHEET.last.akey });
+      return sheetEx(null, { mode: "word", lang: langOf(n),
+        word: [SHEET.rows[0].key, SHEET.last.akey, SHEET.rows[1].key][n] });
     },
     /* 4 コロンの右 */
     function (n) {
       if (!SHEET) begin();
-      return sheetEx(null, { mode: "word",
-        word: n === 0 ? SHEET.rows[0].name : SHEET.rows[1].pval });
+      return sheetEx(null, { mode: "word", lang: langOf(n),
+        word: [SHEET.rows[0].name, SHEET.rows[1].pval, SHEET.last.name][n] });
     },
     /* 5 角かっこの中に並んでいる言葉 */
     function (n) {
       if (!SHEET) begin();
-      return sheetEx(null, { mode: "word", word: SHEET.last.items[n === 0 ? 0 : 1] });
+      return sheetEx(null, { mode: "word", lang: langOf(n),
+        word: SHEET.last.items[n] });
     },
-    /* 6 かっこの組の数 */
+    /* 6 かっこの組の数。答えは数字なので、書き方の違いが無い。2問だけ */
     function (n) {
+      if (n >= 2) return null;
       return n === 0
         ? sheetEx(null, { mode: "count", what: pick(COUNTWORD) })
         : sheetEx(null, { mode: "countset", whats: COUNTWORD.slice() });
     },
-    /* 7 かっこの閉じ忘れ */
-    function (n) { return sheetEx(n === 0 ? "tail" : "brace", { mode: "missing" }); }
+    /* 7 かっこの閉じ忘れ。ここも書き方の違いが無い。2問だけ */
+    function (n) {
+      if (n >= 2) return null;
+      return sheetEx(n === 0 ? "tail" : "brace", { mode: "missing" });
+    }
   ];
 
   /* 確認項目 i の n 問目。**この1枚に asked を組んで、1問にする。**
@@ -796,6 +833,9 @@
        画面には JSON しか出ないので、何を聞かれているのか分からない */
     ask: question,
     /* 練習は、1枚の JSON を始めに作って、その中の場所を順に指していく */
+    /* 1つの確認項目につき3問。**答えの書き方3通りを1周させるため。**
+       日本語 → 英語 → 併記。数える問題と足りない問題は2問で止まる */
+    perSpot: 3,
     begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 7, rules: 7, questions: 41 },
