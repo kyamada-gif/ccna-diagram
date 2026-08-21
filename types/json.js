@@ -876,7 +876,7 @@
    *   決まり  「[ の数 ＝ 配列」
    *   この場合「[ は 2 個」
    */
-  function note(v) {
+  function answerNote(v) {
     if (!v) return null;
     /* **解説では、答えの言葉を日本語と英語の両方で出す。**
        問題は片方の書き方で聞いてくるが、どちらも同じものだと分かるように */
@@ -976,7 +976,10 @@
        日本語 → 英語 → 併記。数える問題と足りない問題は2問で止まる */
     perSpot: 3,
     begin: begin, stepQ: stepQ, learnEx: learnEx, hits: hits, marks: marks, focus: focus,
-    brief: brief, note: note,
+    /* 分野の1行説明。**answerNote と名前を分ける**（前は note で
+       ぶつかっていて、こちらの文が消えていた） */
+    note: "JSON を見て、どこが名前で、どこが中身かを読む",
+    brief: brief, answerNote: answerNote,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 7, rules: 7, questions: 25 },
     /* 判定ルールでは答えを出さないが、本の答えで出題はする1問。

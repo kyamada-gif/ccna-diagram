@@ -1414,10 +1414,10 @@ function Drill({
   if (done) {
     if (it.kind === "step") {
       const st = it.extra.step;
-      /* 答え合わせの言葉。分野が note() を持っていれば、そちらを使う。
+      /* 答え合わせの言葉。分野が answerNote() を持っていれば、そちらを使う。
          **決まりと、この場合の数字を、別々の行に出す。**
          持っていない分野は、いままでどおり判定ルールの文をそのまま出す */
-      const sn = G && G.spec && typeof G.spec.note === "function" && exv ? G.spec.note(G.read(exv)) : null;
+      const sn = G && G.spec && typeof G.spec.answerNote === "function" && exv ? G.spec.answerNote(G.read(exv)) : null;
       note = /*#__PURE__*/React.createElement(Note, {
         title: it.right[0],
         body: sn ? sn.body : st.why,
