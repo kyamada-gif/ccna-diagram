@@ -248,6 +248,143 @@
                    runts: 1876, crc: 4, inerr: 0, coll: 11, rate: 0 });
   }
 
+  /* ── 短い説明の1枚 ───────────────────────────
+   * **文字は読まれない。**「こう出ていたら、こう答える」だけを残す。
+   * 判定ルール11本の test() を、そのまま1行の言葉にしたもの。
+   * **ルールは増やさない。**ここにある行と RULES は1対1で対応する。
+   */
+  var IF = {
+    linkdown: "line protocol is down",
+    queue: "Input queue か Output queue が 0 でない",
+    oversub: "Total output drops が桁違いに多い",
+    throughput: "txload も rxload も 255/255 で、input errors と CRC が 0",
+    dup_full: "Full-duplex なのに collisions がある",
+    dup_half: "Half-duplex で collisions か CRC がある",
+    coll_many: "collisions が桁違いに多い",
+    physical: "collisions が 0 で、CRC がある",
+    bad_nic: "runts があり、CRC も collisions も 0",
+    storm: "ほかが 0 で、broadcasts だけ多い",
+    half_only: "ほかに手がかりが無く、Half-duplex"
+  };
+
+  /* 添える一言。**取り違えやすい所だけ。**説明を足さない */
+  var NOTE = {
+    linkdown: "下に並ぶエラーの数は、切れる前の記録",
+    queue: "同じ行の Total output drops は別のもの",
+    oversub: "Input queue と同じ行に並んでいる",
+    throughput: "255/255 が満杯。1/255 はほとんど流れていない",
+    dup_full: "全二重では衝突は起きない",
+    physical: "input errors は合計なので、これだけでは決めない",
+    bad_nic: "runts は、途中で切れた 64 バイト未満のフレーム",
+    storm: "broadcasts は時間とともに増える。これだけでは決めない",
+    half_only: "collisions が出ていれば、デュプレックスの不一致のほう"
+  };
+
+  function ruleOf(key) {
+    for (var i = 0; i < RULES.length; i++) if (RULES[i].key === key) return RULES[i];
+    return null;
+  }
+
+  /* 確認項目1つに判定ルールが2本以上ぶら下がっているものがある
+     （duplex と collisions と CRC には3本）。**そのときは3行並べる。**
+     どの形で出ていても答えは同じ、というのがこの項目の中身だから */
+  function brief(block, i) {
+    var keys = (block && block.keys) || [];
+    var out = [];
+    keys.forEach(function (k) {
+      var r = ruleOf(k);
+      if (!r || !IF[k]) return;
+      out.push({ if: IF[k], then: r.verdict, note: NOTE[k] || null });
+    });
+    return out.length ? out : null;
+  }
+
+  /* ── 答え合わせの言葉 ──────────────────────
+   * **決まりと、この出力の数字を、別々の行に出す。**
+   * 決まりは説明の1枚（brief）と同じ言葉にそろえる。
+   *   決まり  「Full-duplex なのに collisions がある ＝ デュプレックスの不一致」
+   *   この場合「duplex は Full、collisions は 233」
+   *
+   * **どの確認項目を聞かれた問題かは、ここには渡ってこない。**渡ってくるのは
+   * 読み取った値だけなので、その出力が最後にどのルールで決まるかを出す。
+   * 「ここでは決まらない」問題では、どこで決まるのかが分かる形になる。
+   */
+  /* 決まりの言葉に値がそのまま入っているものは、数字の行を出さない。
+     「line protocol is down ＝ …」の下に「line protocol は down」と
+     書いても、同じことを2回読ませるだけになる */
+  var NONUM = { linkdown: 1, half_only: 1 };
+
+  function answerNote(v) {
+    if (!v) return null;
+    var hit = null;
+    for (var i = 0; i < RULES.length; i++) {
+      if (RULES[i].test(v)) { hit = RULES[i]; break; }
+    }
+    if (!hit || !IF[hit.key]) return null;
+    var body = "";
+    if (!NONUM[hit.key]) {
+      body = hit.steps(v).map(function (x) {
+        return x[0] + " は " + x[1];
+      }).join("、");
+    }
+    return { gloss: IF[hit.key] + " ＝ " + hit.verdict, body: body };
+  }
+
+  /* ── どこを光らせるか ─────────────────────
+   * **行ごと光らせない。**1行に数字がいくつも並ぶ行がある
+   * （reliability 255/255, txload 1/255, rxload 1/255）。
+   * 行を塗ると、そのうちのどの数字を見ればいいのかが伝わらない。
+   *   hits  …… 塗る行。**空にする**（上の理由）
+   *   marks …… 行の中で光らせる言葉。ここが本体。
+   *             説明の1枚に出す見本は値が決まっているので、数字ごと光らせる。
+   *             練習で作った出力は値がその都度変わるので、英語の言葉だけが光る
+   */
+  var MARKS = {
+    "line protocol": ["line protocol is down", "line protocol is up"],
+    "duplex": ["Full-duplex", "Half-duplex"],
+    "txload": ["txload 1/255", "txload 255/255"],
+    "rxload": ["rxload 1/255", "rxload 255/255"],
+    "Input queue": ["Input queue: 0/300/0/0"],
+    "Output queue": ["Output queue: 185/300", "Output queue: 0/300"],
+    "Total output drops": ["Total output drops: 26290065", "Total output drops: 0"],
+    "broadcasts": ["2841260 broadcasts", "267 broadcasts"],
+    "runts": ["1876 runts", "0 runts"],
+    "input errors": ["4059 input errors", "0 input errors"],
+    "CRC": ["4051 CRC", "0 CRC"],
+    "collisions": ["233 collisions", "0 collisions"]
+  };
+  var SPOTNAME = SPOTS.map(function (s) { return s.name; });
+
+  function hits(name) { return SPOTNAME.indexOf(name) >= 0 ? [] : [name]; }
+  function marks(name) {
+    var m = MARKS[name];
+    return m ? m.concat([name]) : [name];
+  }
+
+  /* ── 説明の1枚に出す見本 ────────────────────
+   * 確認項目ごとに、そのルールが当たる出力を1つ出す。
+   * **値は決め打ち。**毎回同じものが出る（MARKS の数字はこの表と対になっている）。
+   */
+  var LEARN = [
+    { line: "down" },                                   /* line protocol */
+    { outq: 185 },                                      /* Input queue と Output queue */
+    { drops: 26290065 },                                /* Total output drops */
+    { txload: 255, rxload: 255, rate: 214000000 },      /* txload と rxload と … */
+    { duplex: "Full", coll: 233 },                      /* duplex と collisions と CRC */
+    { crc: 4051, inerr: 4059 },                         /* CRC と input errors */
+    { runts: 1876 },                                    /* runts と CRC と collisions */
+    { bcast: 2841260 },                                 /* broadcasts */
+    { duplex: "Half" }                                  /* duplex */
+  ];
+  function learnEx(block, i) {
+    var b = { host: "R19", seg: "sales_subnet", line: "up", duplex: "Full",
+              txload: 1, rxload: 1, inq: 0, outq: 0, drops: 0, bcast: 267,
+              runts: 0, crc: 0, inerr: 0, coll: 0, rate: 0 };
+    var o = LEARN[i] || {};
+    Object.keys(o).forEach(function (k) { b[k] = o[k]; });
+    return build(b);
+  }
+
 
   /* 本の答えとの言い換え表。判定の答えと、本に印刷された文言を突き合わせるのに使う */
   var SAME = {
@@ -288,6 +425,13 @@
     note: "出力を見て、何が起きているかを当てる",
     obj: "1.4",
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
+    /* 説明の1枚と、答え合わせの見せ方。**判定そのものは変えていない。**
+       focus は置かない。この分野の問題は「上から順に、いま見ている確認項目で
+       決まるか」を聞く形なので、光らせる所は確認項目の look がそのまま指している。
+       focus(v) には読み取った値しか渡ってこず、どの確認項目の問題かが分からないので、
+       置くとかえって別の所を光らせてしまう */
+    brief: brief, answerNote: answerNote,
+    hits: hits, marks: marks, learnEx: learnEx,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 13, rules: 11, questions: 17 },
     /* 本の答えが出力と食い違うため、演習から外した4問 */
