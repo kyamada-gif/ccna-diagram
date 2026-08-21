@@ -413,6 +413,38 @@ BLOCK_IDS.forEach((id) => {
   });
 }
 
+/* ── 正解が2つある問題を作っていないか ────────────
+ * 上から順に見る分野では、「◯◯だけでは決められない」が正解の問題を作る。
+ * ところが**提示物には後の決め手も写っている**ので、
+ * 最後まで見たときの答えを誤答に並べると、それも正しい答えになってしまう。
+ * （ルートブリッジの図には MACアドレスも書かれている。
+ *   優先度が並んだ図で「決められない」と SW3 の両方が選択肢にあると、
+ *   MAC の決まりを知っている人は SW3 を選ぶ。それも正解）
+ */
+{
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id], G = GENS[id];
+    if (!sp || !G || G.kind !== "rules") return;
+    if (G.begin) G.begin();
+    const bs = G.blocks();
+    let ng = 0, seen = 0;
+    for (let i = 0; i < bs.length; i++) {
+      for (let k = 0; k < 40; k++) {
+        const q = G.stepQ(i, 1);
+        if (!q || !/だけでは決められない/.test(String(q.right))) continue;
+        seen++;
+        const v = G.read(q.exhibit);
+        const full = G.answer ? G.answer(v) : (G.judge(v) || {}).verdict;
+        if (full && q.opts.indexOf(full) >= 0) ng++;
+      }
+    }
+    if (ng) {
+      bad.push(`${sp.name}: 「決められない」が正解の問題に、最後まで見たときの答えも` +
+        `選択肢に入っている（${seen} 回中 ${ng} 回）`);
+    }
+  });
+}
+
 /* ── 答え合わせが、先の答えを見せていないか ──────────
  * 上から順に見ていく分野では、**まだ見ていない所の答えを先に出してはいけない。**
  * 「line protocol を確認しました」の答え合わせに

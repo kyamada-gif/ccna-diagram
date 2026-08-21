@@ -180,9 +180,13 @@
       opts = [right].concat(st.next ? [undecided] : [])
         .concat(shuffle(others).slice(0, st.next ? 2 : 3));
     } else {
+      /* **決まらない問題では、最後まで見たときの答えを誤答に入れない。**
+         図には MACアドレス（ルータ ID）も書かれているので、その答えを並べると
+         「決められない」とその答えの2つが正解になってしまう */
       right = undecided;
-      opts = [right].concat(shuffle(v.sw ? v.sw.map(function (x) { return x.id; })
-        : others).slice(0, 3));
+      opts = [right].concat(shuffle(others.filter(function (id) {
+        return id !== ans;
+      })).slice(0, 3));
     }
     /* 同じ文が2つ出ないようにする */
     var seen = {}, uniq = [];

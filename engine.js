@@ -296,8 +296,13 @@
         /* **次の確認項目があるときだけ**「決められない」を誤答に混ぜる。
            最後の確認項目でこれを出すと、正しくない選び方を教えてしまう */
         if (st.hit && st.next) opts.push(undecided);
-        shuffle(VERDICTS.filter(function (v) { return v !== st.verdict; }))
-          .forEach(function (v) { if (opts.length < 4) opts.push(v); });
+        /* **決まらない問題では、最後まで見たときの答えを誤答に入れない。**
+           提示物には後の決め手も写っているので、その答えを並べると
+           「決められない」と「最後まで見た答え」の2つが正解になってしまう */
+        var full = st.hit ? null : (judge(read(r.text)) || {}).verdict;
+        shuffle(VERDICTS.filter(function (v) {
+          return v !== st.verdict && v !== full;
+        })).forEach(function (v) { if (opts.length < 4) opts.push(v); });
         /* 決め方が1つしかない分野は、ここで選択肢が足りなくなる。
            そのときだけ、本の誤答を借りて足す */
         spareWrongs().forEach(function (w) {
