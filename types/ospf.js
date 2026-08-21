@@ -725,29 +725,65 @@
    * 確認項目ごとに光る行が変わるので、5枚を通ると
    * 「同じ値が、形によってどの行に出るか」がそのまま見える。
    */
-  var LEARN_EX = [
-    "【show ip ospf interface の出力】",
-    "R1#show ip ospf interface g0/0/1",
-    "GigabitEthernet0/0/1 is up, line protocol is up",
-    "  Internet address is 192.168.30.1/24, Area 0",
-    "  Process ID 1, Router ID 1.1.1.1, Network Type POINT-TO-POINT, Cost: 1",
-    "  Transmit Delay is 1 sec, State POINT-TO-POINT,",
-    "  Timer intervals configured, Hello 5, Dead 20, Wait 20, Retransmit 5",
-    "    Hello due in 00:00:03",
-    "  Index 1/1, flood queue length 0",
-    "",
-    "【同じ1台の設定】",
-    "R1",
-    "interface GigabitEthernet0/0/1",
-    " ip address 192.168.30.1 255.255.255.0",
-    " ip ospf hello-interval 5",
-    " ip ospf dead-interval 20",
-    " no shutdown",
-    "router ospf 1",
-    " router-id 1.1.1.1",
-    " network 192.168.30.1 0.0.0.0 area 0"
-  ].join("\n");
-  function learnEx() { return LEARN_EX; }
+  /* ── 説明の1枚に出す見本 ───────────────────
+   * **判定ルールは「両側を見比べる」話なので、見本も2台出す。**
+   * 1台だけ見せて「片側に…が無い」と書いても、どこの何を言っているのか分からない。
+   * 確認項目ごとに、その決まりがそのまま目で見える2台を出す。
+   *
+   *   OSPF が動いているか … 設定の形。片側に router ospf の行が無い
+   *   Hello と Dead など  … show の出力。その値だけが両側で違う
+   */
+  function learnTwo(a, b) { return a.concat([""], b).join("\n"); }
+
+  /* show ip ospf interface の出力を1台ぶん作る */
+  function learnShow(name, area, pid, rid, hello, dead) {
+    return ["【" + name + " の show ip ospf interface】",
+            name + "#show ip ospf interface g0/0/1",
+            "GigabitEthernet0/0/1 is up, line protocol is up",
+            "  Internet address is 192.168.30." + (name === "R1" ? "1" : "2") +
+              "/24, Area " + area,
+            "  Process ID " + pid + ", Router ID " + rid +
+              ", Network Type POINT-TO-POINT, Cost: 1",
+            "  Timer intervals configured, Hello " + hello + ", Dead " + dead +
+              ", Wait " + dead + ", Retransmit 5",
+            "    Hello due in 00:00:03"];
+  }
+
+  /* 設定を1台ぶん作る。ospf が false のときは OSPF の行を書かない */
+  function learnConf(name, last, ospf) {
+    var out = ["【" + name + " の設定】",
+               "interface GigabitEthernet0/0/1",
+               " ip address 192.168.30." + last + " 255.255.255.0",
+               " no shutdown"];
+    if (ospf) {
+      out.push("router ospf 1");
+      out.push(" network 192.168.30." + last + " 0.0.0.0 area 0");
+    }
+    return out;
+  }
+
+  var LEARN_EX = {
+    /* 片側で OSPF が動いていない。**設定の形でしか見えない**
+       （動いていない側は show ip ospf interface に何も出ない） */
+    off: learnTwo(learnConf("R1", "1", true), learnConf("R2", "2", false)),
+    /* Hello も Dead も違う */
+    both: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 5, 20),
+              learnShow("R2", 0, 1, "2.2.2.2", 10, 40)),
+    /* Hello だけ違う */
+    hello: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 5, 40),
+               learnShow("R2", 0, 1, "2.2.2.2", 10, 40)),
+    /* Dead だけ違う */
+    dead: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 10, 20),
+              learnShow("R2", 0, 1, "2.2.2.2", 10, 40)),
+    /* 両側の Router ID が同じ */
+    rid: learnTwo(learnShow("R1", 0, 1, "1.1.1.1", 10, 40),
+             learnShow("R2", 0, 1, "1.1.1.1", 10, 40))
+  };
+
+  function learnEx(block) {
+    var k = (block && block.keys && block.keys[0]) || "off";
+    return LEARN_EX[k] || LEARN_EX.off;
+  }
 
   /* ── 短い説明の1枚 ────────────────────────
    * **文字は読まれない。**見たらすぐ「こう出ていたら、こう直す」と
@@ -759,7 +795,7 @@
    * 値の名前だけを書いても、初めて見る人は出力の中からその値を探せない。
    */
   var IF = {
-    off: "片側に Process ID の行が無い",
+    off: "片側に router ospf の行が無い",
     both: "Hello も Dead も、両側で数が違う",
     hello: "Hello だけ、両側で数が違う",
     dead: "Dead だけ、両側で数が違う",
@@ -768,7 +804,7 @@
 
   /* 添える一言。**取り違えやすい所だけ。**説明を足さない */
   var NOTE = {
-    off: "設定では router ospf の行。エリアは Internet address の行の末尾",
+    off: "エリアは network の行の末尾。show の出力なら Process ID の行が無く、エリアは Internet address の行の末尾",
     both: "Timer intervals configured の行に並ぶ数字の、1つめと2つめ",
     hello: "1つめの数字が Hello。すぐ下の Hello due in は別のもの",
     dead: "2つめの数字が Dead。設定では ip ospf dead-interval の行",

@@ -1098,16 +1098,13 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
       {it.extra.maclist && <MacList sw={it.extra.sw} />}
     </>
   );
-  const vals = it.kind === "step" ? (
-    <div className="vals">
-      {it.extra.step.values.map((v, i) => (
-        <div className="val" key={i}>
-          <span className="val-k">{v.name}</span>
-          <span className="val-v">{v.value}</span>
-        </div>
-      ))}
-    </div>
-  ) : null;
+  /* 読み取った値の札は出さない。
+     **問いが本物の問いになったので、値を抜き出して見せると
+     読む練習ごと答えを渡してしまう。**
+     例「その優先度のルータ 1 台」と出ると、答えが決まることまで先に分かる。
+     決め手の語は提示物の中で光るので、どこを見るかは伝わる。
+     答え合わせでは、いままでどおり数字を出す（answerNote の body） */
+  const vals = null;
   let ask = it.ask || "";
   /* 問題文が自分で「2つ選択」と言っているときは、重ねて書かない */
   /* 結ぶ問題は「いくつ選ぶ」ではないので、この一言を足さない */
