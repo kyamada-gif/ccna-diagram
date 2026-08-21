@@ -111,6 +111,14 @@ function markOf(r, of) {
 /* バッジの置き場。**空の枠を先に見せる。**
    ipcalc2 と同じ形（破線の枠 → バッジが付くと金色の枠に 🏅）。
    途中の点数は、枠の下に小さく添える */
+/* 字の大きさを、文の長さで決める。**折り返して単語が割れないように。**
+   短い答え（配列・キー）は大きく、長い答え（インターフェースの設定…）は小さく */
+function sizeOf(text, small) {
+  const n = (text || "").length;
+  if (small) return n > 26 ? " xs" : n > 16 ? " sm" : "";
+  return n <= 5 ? " lg" : n <= 10 ? "" : n <= 16 ? " sm" : " xs";
+}
+
 function Mark({ mark, sm }) {
   const cls = "slot" + (sm ? " sm" : "") + (mark.kind === "done" ? " got" : "");
   if (mark.kind === "part") {
@@ -1009,11 +1017,13 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
         <div className="sec">
           {brief.map((r, i) => (
             <div className="rule" key={i}>
-              <span className="rule-if">{r.if}</span>
+              <span className={"rule-if" + sizeOf(String(r.if), true)}>{r.if}</span>
               <span className="rule-ar">▼</span>
-              {/* 答えが2つ以上あるときは、同じ箱の中に縦に並べる */}
+              {/* 答えが2つ以上あるときは、同じ箱の中に縦に並べる。
+                  **長い答えは字を小さくする。**大きいままだと、
+                  「ルートブリ／ッジ」のように単語の途中で折れて読みにくい */}
               {(Array.isArray(r.then) ? r.then : [r.then]).map((x, k) => (
-                <span className="rule-then" key={k}>{x}</span>
+                <span className={"rule-then" + sizeOf(String(x))} key={k}>{x}</span>
               ))}
               {r.note && <span className="rule-n">{r.note}</span>}
             </div>

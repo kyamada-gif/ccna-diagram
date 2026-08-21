@@ -190,6 +190,13 @@ function markOf(r, of) {
 /* バッジの置き場。**空の枠を先に見せる。**
    ipcalc2 と同じ形（破線の枠 → バッジが付くと金色の枠に 🏅）。
    途中の点数は、枠の下に小さく添える */
+/* 字の大きさを、文の長さで決める。**折り返して単語が割れないように。**
+   短い答え（配列・キー）は大きく、長い答え（インターフェースの設定…）は小さく */
+function sizeOf(text, small) {
+  const n = (text || "").length;
+  if (small) return n > 26 ? " xs" : n > 16 ? " sm" : "";
+  return n <= 5 ? " lg" : n <= 10 ? "" : n <= 16 ? " sm" : " xs";
+}
 function Mark({
   mark,
   sm
@@ -1318,11 +1325,11 @@ function Drill({
       className: "rule",
       key: i
     }, /*#__PURE__*/React.createElement("span", {
-      className: "rule-if"
+      className: "rule-if" + sizeOf(String(r.if), true)
     }, r.if), /*#__PURE__*/React.createElement("span", {
       className: "rule-ar"
     }, "\u25BC"), (Array.isArray(r.then) ? r.then : [r.then]).map((x, k) => /*#__PURE__*/React.createElement("span", {
-      className: "rule-then",
+      className: "rule-then" + sizeOf(String(x)),
       key: k
     }, x)), r.note && /*#__PURE__*/React.createElement("span", {
       className: "rule-n"
