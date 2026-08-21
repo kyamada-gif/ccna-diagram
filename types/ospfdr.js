@@ -56,9 +56,7 @@
     var top = node.length
       ? Math.max.apply(null, node.map(function (x) { return x.pri; })) : 0;
     var tied = node.filter(function (x) { return x.pri === top; });
-    var win = tied.slice().sort(function (a, b) {
-      return a.key < b.key ? 1 : a.key > b.key ? -1 : 0;
-    })[0];
+    var win = tied.slice().sort(byKeyDesc)[0];
     /* sw は画面側（app.jsx）が誤答を作るのに使う並び。node と同じもの */
     return { node: node, sw: node, top: top, tied: tied, win: win || null };
   }
@@ -69,8 +67,14 @@
   function listPri(v) {
     return v.node.map(function (x) { return x.id + " " + x.pri; }).join("　");
   }
+  /* 優先度が並んだ分だけを、ルータ ID の大きい順に並べる。
+     **並べ替えて ＞ でつなぐ。**図の順のまま並べても、どちらが大きいのかは伝わらない。
+     左に来たものが代表ルータ */
+  function byKeyDesc(a, b) { return a.key < b.key ? 1 : a.key > b.key ? -1 : 0; }
   function listRid(v) {
-    return v.tied.map(function (x) { return x.id + " " + x.rid; }).join("　");
+    return v.tied.slice().sort(byKeyDesc).map(function (x) {
+      return x.id + " " + x.rid;
+    }).join(" ＞ ");
   }
 
   /* ── 判定ルール。上から順に当てて、最初に当たったところで決める ── */
@@ -239,6 +243,111 @@
     };
   }
 
+  /* ── 説明の1枚に出す見本 ──────────────────────
+   * 提示物は図だが、説明の画面は図を出せない（app.jsx の learn は文字だけを出す）。
+   * そこで、図の箱と同じ3つ（名前・優先度・ルータ ID）を4行の文字にして出す。
+   * 確認項目ごとに1枚。**変えるのは R2 の優先度だけ。**
+   *   1 OSPF の優先度 … 255 が R3 の1台だけ。R3 に決まる
+   *   2 ルータ ID     … 255 が R2 と R3 の2台。ルータ ID が大きい R2 に決まる
+   * 同じ4台のまま優先度が1つ変わると答えが入れかわるので、
+   * 2枚を続けて見ると、2つ目の確認項目が何のためにあるのかが分かる。
+   *
+   * **ルータ ID は必ず書く。**書かないと read が Loopback や
+   * インターフェースの IP アドレスから補ってしまい、
+   * 「比べるルータ ID」に出る値が、見本の行と食い違う。
+   *
+   * ルータ ID は 3.3.3.3 と 10.10.10.10 にしてある。
+   * 左の数字から順に比べると 10 のほうが大きい。
+   * 文字の並びとして左から1字ずつ見ると 1 より 3 のほうが大きく見えるので、
+   * 数として比べることが、この見本でそのまま分かる。
+   */
+  var LEARN = [
+    [{ id: "R1", pri: 100, rid: "1.1.1.1" },
+     { id: "R2", pri: 100, rid: "10.10.10.10" },
+     { id: "R3", pri: 255, rid: "3.3.3.3" },
+     { id: "R4", pri: 100, rid: "4.4.4.4" }],
+    [{ id: "R1", pri: 100, rid: "1.1.1.1" },
+     { id: "R2", pri: 255, rid: "10.10.10.10" },
+     { id: "R3", pri: 255, rid: "3.3.3.3" },
+     { id: "R4", pri: 100, rid: "4.4.4.4" }]
+  ];
+  function learnEx(block, i) {
+    return (LEARN[i] || []).map(function (s) {
+      return s.id + "  優先度 " + s.pri + "  ルータ ID " + s.rid;
+    }).join("\n");
+  }
+
+  /* ── どこを光らせるか ────────────────────
+   * 上の見本の中で、その確認項目で見比べる所だけを光らせる。
+   *   hits  … 塗る行。1つ目は4台とも見るので塗らない。
+   *           2つ目は、優先度が並んだ2台の行だけを塗る
+   *   marks … 行の中で光らせる言葉。見比べる数そのもの
+   * **問題の画面では効かない。**提示物が図（SVG）で、行という単位が無いため。
+   * 優先度は 100 と 255 の3けたにしてある。1けたの数にすると、
+   * ルータの名前やルータ ID の中の数字まで光ってしまう。
+   */
+  function marks(name) {
+    if (name === "OSPF の優先度") {
+      var out = [];
+      LEARN[0].forEach(function (s) {
+        var p = String(s.pri);
+        if (out.indexOf(p) < 0) out.push(p);
+      });
+      return out;
+    }
+    if (name === "ルータ ID") {
+      return read({ node: LEARN[1] }).tied.map(function (x) { return x.rid; });
+    }
+    return [];
+  }
+  function hits(name) {
+    if (name !== "ルータ ID") return [];
+    return read({ node: LEARN[1] }).tied.map(function (x) { return x.id; });
+  }
+
+  /* ── 短い説明の1枚 ────────────────────────
+   * **文字は読まれない。**見たらすぐ「こう来たら、こう答える」と
+   * 分かる形だけを残す。上の見本と合わせて、見る所と答えを1組ずつ出す。
+   * ルートブリッジと向きが逆なので、そこだけ補足に1行入れる。
+   */
+  var BRIEF = [
+    [{ if: "優先度が最も大きいルータが1台",
+       then: "そのルータが代表ルータ（DR）",
+       note: "既定は 1。大きいほうが選ばれる（スイッチのルートブリッジは小さいほう）" }],
+    [{ if: "優先度が並んだ",
+       then: "ルータ ID が大きいほう",
+       note: "左の数字から順に比べる。図にルータ ID が無いときは Loopback、それも無ければ IP アドレス" }]
+  ];
+  function brief(block, i) { return BRIEF[i] || null; }
+
+  /* ── 答え合わせの言葉 ───────────────────────
+   * **決まりと、この図の数字を、別々の行に出す。**同じことを2回書かない。
+   *   決まり  「優先度が最も大きいルータが1台 ＝ そのルータが代表ルータ（DR）」
+   *   この図  「優先度 255 は R3 だけ」
+   * 説明の1枚（brief）と同じ書き方にそろえてある。
+   *
+   * **いま見ている確認項目のことだけを書く。**
+   * 優先度の所で決まらなかったのに「ルータ ID が大きいほう」まで書くと、
+   * まだ見ていない所の答えを先に見せてしまう。
+   */
+  function answerNote(v, st) {
+    if (!v || !v.node.length || !v.win) return null;
+    var tied = v.tied.length;
+    /* 決まらなかったとき。**次にどうするかは、答えの行にもう書いてある。**
+       ここに書くのは「なぜ決まらないか」だけ */
+    if (st && !st.hit) {
+      return { gloss: "",
+               body: "優先度 " + v.top + " のルータが " + tied +
+                     " 台あるので、優先度だけでは決まらない" };
+    }
+    if (tied === 1) {
+      return { gloss: "優先度が最も大きいルータが1台 ＝ そのルータが代表ルータ（DR）",
+               body: "優先度 " + v.top + " は " + v.win.id + " だけ" };
+    }
+    return { gloss: "優先度が並んだ ＝ ルータ ID が大きいほう",
+             body: "優先度 " + v.top + " が " + tied + " 台。" + listRid(v) };
+  }
+
   var spec = {
     id: "ospfdr",
     kind: "rules",
@@ -251,6 +360,9 @@
     read: read, answer: answer, excerpt: excerpt,
     ask: "この構成で、どのルータが DR になりますか。",
     walk: walkQ,
+    /* 説明の1枚（見本と、短い決まり）と、答え合わせの言葉 */
+    learnEx: learnEx, hits: hits, marks: marks,
+    brief: brief, answerNote: answerNote,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 2, rules: 2, questions: 2 },
     /* 本の答えが出力と食い違っていて使えない問題。いまは無い */

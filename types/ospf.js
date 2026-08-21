@@ -74,6 +74,39 @@
   };
   function hits(name) { return HITS[name] || [name]; }
 
+  /* ── 行の中で光らせる言葉（marks） ────────────────
+   * **行を塗るだけでは、どの数字かが伝わらない。**
+   * Timer intervals configured の行は
+   *   Timer intervals configured, Hello 15, Dead 20, Wait 20, Retransmit 5
+   * と、1行に数字が4つ並ぶ。Wait も Retransmit も同じ顔で並んでいるので、
+   * 行を塗ると「どれを見ればいいのか」が消えてしまう。
+   * そこで、その確認項目で見る数字だけを重ねて光らせる。
+   *
+   * **「Hello」とだけ書いて探さない。**すぐ下の Hello due in の行まで光ってしまう。
+   * 出てくる数は決まっている（HELLOS・DEADS）ので、「Hello 15」のように
+   * 数までふくめた形で探す。こうすると Hello due in には当たらない。
+   */
+  var AREAS = [0, 1, 2];
+  function withNums(word, list) {
+    return list.map(function (x) { return word + " " + x; });
+  }
+  function marks(name) {
+    if (name === "OSPF が動いているか") return ["Process ID", "router ospf"];
+    if (name === "エリアの番号") {
+      return withNums("Area", AREAS).concat(withNums("area", AREAS));
+    }
+    if (name === "Hello") {
+      return withNums("Hello", HELLOS)
+        .concat(withNums("hello-interval", HELLOS), ["hello-interval"]);
+    }
+    if (name === "Dead") {
+      return withNums("Dead", DEADS)
+        .concat(withNums("dead-interval", DEADS), ["dead-interval"]);
+    }
+    if (name === "Router ID") return ["Router ID", "router-id"];
+    return [];
+  }
+
   /* ── 提示物から値を読む ───────────────────────
    * 1) 何行目からが何というルータの話か、で切り分ける
    * 2) 1台ぶんから、5つの値を取り出す
@@ -216,7 +249,10 @@
       frag: function (v) { return [["dead-interval " + v.A.dead], ["dead"]]; } },
 
     { key: "rid", cond: "両側の Router ID が同じ番号",
-      verdict: "両側の Router ID が同じなので、片方の設定を削除する",
+      /* **条件は verdict に書かない。**説明の1枚では
+         「両側の Router ID が同じ番号 ▼ 片方の Router ID の設定を削除する」と
+         上下に並ぶので、verdict にも「同じなので」と入れると2回読ませることになる */
+      verdict: "片方の Router ID の設定を削除する",
       why: "見分けるための番号が同じだと、相手と自分を区別できない",
       look: ["Router ID"],
       steps: function (v) { return [["Router ID", pair(v, "rid")]]; },
@@ -243,7 +279,7 @@
       "通知を送る間隔。ここが違うと隣接関係になれない",
     "Dead を、相手と同じ値にそろえる":
       "相手の停止を判断するまでの時間。ここが違うと隣接関係になれない",
-    "両側の Router ID が同じなので、片方の設定を削除する":
+    "片方の Router ID の設定を削除する":
       "設定を削除すると、そのルータのアドレスから番号が自動で付け直される"
   };
 
@@ -253,7 +289,7 @@
     "Hello と Dead の両方を、相手と同じ値にそろえる": ["hello-interval", "hello"],
     "Hello を、相手と同じ値にそろえる": ["hello-interval", "hello"],
     "Dead を、相手と同じ値にそろえる": ["dead-interval", "dead"],
-    "両側の Router ID が同じなので、片方の設定を削除する": ["router-id", "ルータ ID", "ルーター ID"]
+    "片方の Router ID の設定を削除する": ["router-id", "ルータ ID", "ルーター ID"]
   };
 
   /* ── 出力を作る ─────────────────────────────
@@ -367,7 +403,7 @@
     var p = pick(PAIRS), h = pick(HELLOS);
     var d = pick(DEADS.filter(function (x) { return x > h; }));
     var r1 = pick(RIDS), r2 = other(RIDS, r1);
-    var a = pick([0, 1, 2]);
+    var a = pick(AREAS);
     var pid1 = pick(PIDS);
     var it = pick(INTFS);
     var shape = pick(["show", "show", "show", "cfg", "typed"]);
@@ -461,37 +497,76 @@
   }
 
   /* ── 練習の問題文と選択肢 ─────────────────────
-   * **「この値なら、どうしますか」では何を聞かれているか分からない。**
-   * その所で何をたしかめるのかを、そのまま文にする。
-   *   Hello と Dead を確認します。「Hello も Dead も、二つの数がちがう」になっていますか。
-   *     ・はい。Hello と Dead を、どちらも相手と同じ数にする
-   *     ・いいえ。次に「Hello だけ、二つの数がちがう」を見る
+   * **問いは、いつもこの分野が最後に答えるべき問い（spec.ask）。**
+   * 「Hello と Dead を確認します。…になっていますか」のような聞き方はしない。
+   * 何を目指しているのか分からないまま、進み方だけ聞かれても答えようがない。
+   *
+   * 代わりに、選択肢に「◯◯だけでは決められない」を混ぜる。
+   * その選択肢が、次の確認項目へ進む思考をそのまま教える。
+   *
+   *   両側の設定を見比べて、どこをどう直しますか。
+   *     ・Hello を、相手と同じ値にそろえる
+   *     ・Dead を、相手と同じ値にそろえる
+   *     ・片方の Router ID の設定を削除する
+   *     ・Hello と Dead だけでは決められない
    */
   var VERDICTS = [];
   RULES.forEach(function (r) {
     if (VERDICTS.indexOf(r.verdict) < 0) VERDICTS.push(r.verdict);
   });
-  function condOf(verdict) {
-    for (var i = 0; i < RULES.length; i++) {
-      if (RULES[i].verdict === verdict) return RULES[i].cond;
-    }
-    return "";
+
+  /* 確認項目を短く言った名前。「◯◯だけでは決められない」に入れる。
+     look をそのままつなぐと「OSPF が動いているか と エリアの番号」になって、
+     選択肢として読みにくい */
+  var SHORT = {
+    off: "OSPF とエリアの番号",
+    both: "Hello と Dead",
+    hello: "Hello",
+    dead: "Dead",
+    rid: "Router ID"
+  };
+
+  function ruleOf(key) {
+    for (var i = 0; i < RULES.length; i++) if (RULES[i].key === key) return RULES[i];
+    return null;
+  }
+  function uniq(list) {
+    var seen = {}, out = [];
+    list.forEach(function (x) { if (x && !seen[x]) { seen[x] = 1; out.push(x); } });
+    return out;
   }
 
-  function walkQ(st, v, shuffle) {
-    var yes = "はい。" + st.verdict;
-    var no = st.nextVerdict
-      ? "いいえ。次に「" + condOf(st.nextVerdict) + "」を見る"
-      : "いいえ。ここでは決まらない";
-    var wrong = shuffle(VERDICTS.filter(function (x) { return x !== st.verdict; }))[0];
-    var right = st.hit ? yes : no;
-    var opts = [right, st.hit ? no : yes];
-    if (wrong) opts.push("はい。" + wrong);
-    var seen = {}, uniq = [];
-    opts.forEach(function (o) { if (!seen[o]) { seen[o] = 1; uniq.push(o); } });
-    return { ask: st.look.join(" と ") + " を確認します。「" + condOf(st.verdict) +
-                  "」になっていますか。",
-             opts: shuffle(uniq), right: right };
+  /* 提示物ぜんぶを見たときの答えと、その決め手 */
+  function fullRule(v) { return judge(v); }
+
+  function walkQ(st, key, v, shuffle) {
+    var undecided = SHORT[key] + " だけでは決められない";
+    var opts, right, full = fullRule(v);
+    if (st.hit) {
+      right = st.verdict;
+      opts = [right];
+      /* **次の確認項目があるときだけ**「決められない」を混ぜる。
+         最後の確認項目（Router ID）で出すと、正しくない選び方を教えてしまう。
+         決まる問題にも混ぜるのは、決まらない問題だけに出すと
+         「この選択肢が見えたらそれが正解」と形で覚えられてしまうため */
+      if (st.next) opts.push(undecided);
+      shuffle(VERDICTS.filter(function (x) { return x !== right; }))
+        .forEach(function (x) { if (opts.length < 4) opts.push(x); });
+    } else {
+      right = undecided;
+      /* **決まらない問題の誤答に、最後まで見たときの答えを入れない。**
+         提示物には後の決め手も写っているので、その答えを並べると
+         「決められない」とその答えの2つが正解になってしまう。
+         **食い違っている所を丸ごとふくむ答えも外す。**
+         Dead だけが違う出力に「Hello と Dead の両方をそろえる」を並べると、
+         そちらでも直ってしまい、やはり正解が2つになる */
+      opts = [right];
+      shuffle(RULES.filter(function (r) {
+        if (r.verdict === st.verdict) return false;
+        return !(full && within(full.look, r.look));
+      })).forEach(function (r) { if (opts.length < 4) opts.push(r.verdict); });
+    }
+    return { ask: spec.ask, opts: shuffle(uniq(opts)), right: right };
   }
 
   /* ── 練習の1問を、この分野で組み立てる ───────────────
@@ -517,11 +592,23 @@
     }
     return null;
   }
-  /* i 番目の確認項目まで進む出力。hit=true … そこで決まる／false … 決まらず次へ */
+  /* i 番目の確認項目まで進む出力。hit=true … そこで決まる／false … 決まらず次へ
+   *
+   * **「◯◯だけでは決められない」と言い切れる出力だけを作る。**
+   * Hello と Dead の両方を見る所で「Hello だけが違う」出力を出すと、
+   * Hello と Dead を見れば決まってしまい、決められないが正しくなくなる。
+   * そこで、決め手がこの確認項目の中に収まってしまうルールは外す。
+   */
+  function within(look, mine) {
+    return look.every(function (w) { return mine.indexOf(w) >= 0; });
+  }
   function genReach(i, hit, bs) {
     var pool = [], j;
     if (hit) pool = bs[i].keys.slice();
-    else for (j = i + 1; j < bs.length; j++) pool = pool.concat(bs[j].keys);
+    else for (j = i + 1; j < bs.length; j++) {
+      if (within(bs[j].look, bs[i].look)) continue;
+      pool = pool.concat(bs[j].keys);
+    }
     if (!pool.length) return null;
     for (var t = 0; t < 60; t++) {
       var text = genKey(pick(pool));
@@ -590,15 +677,13 @@
   function stepOf(i, v, hit, bs) {
     var b = bs[i];
     var rules = RULES.filter(function (r) { return b.keys.indexOf(r.key) >= 0; });
-    var vals = [];
-    rules.forEach(function (r) {
-      r.steps(v).forEach(function (x) {
-        if (!vals.some(function (y) { return y[0] === x[0]; })) vals.push(x);
-      });
-    });
     return {
       look: b.look.slice(),
-      values: vals.map(function (x) { return { name: x[0], value: String(x[1]) }; }),
+      /* **読み取った値の表は出さない。**「Hello　R1 15　R2 10」と先に出すと、
+         出力の中から数字を探す所が丸ごと済んでしまい、答える前に答えが見える。
+         この分野で難しいのは、まさにその「どこに書いてあるか」のほう。
+         数字は答え合わせ（answerNote）で出す */
+      values: [],
       hit: hit, verdict: b.verdict,
       why: hit ? b.why : rules[0].no(v),
       next: i + 1 < bs.length ? bs[i + 1].look.join(" と ") : null,
@@ -630,7 +715,7 @@
     if (!text) return null;
     var v = ctx.read(text);
     var st = stepOf(i, v, hit, bs);
-    var w = walkQ(st, v, ctx.shuffle);
+    var w = walkQ(st, b.keys[0], v, ctx.shuffle);
     return { kind: "step", ask: w.ask, exhibit: text, opts: w.opts, right: w.right,
              extra: { step: st, i: i } };
   }
@@ -664,6 +749,123 @@
   ].join("\n");
   function learnEx() { return LEARN_EX; }
 
+  /* ── 短い説明の1枚 ────────────────────────
+   * **文字は読まれない。**見たらすぐ「こう出ていたら、こう直す」と
+   * 分かる形だけを残す。判定ルール5本を、そのまま1行の言葉にしたもの。
+   * **ルールは増やさない。**ここにある行と RULES は1対1で対応する。
+   *
+   * この分野でいちばん難しいのは「どこに書いてあるか」なので、
+   * if には出力に実際に書いてある目印（Process ID・Timer intervals configured）を入れる。
+   * 値の名前だけを書いても、初めて見る人は出力の中からその値を探せない。
+   */
+  var IF = {
+    off: "片側に Process ID の行が無い",
+    both: "Hello も Dead も、両側で数が違う",
+    hello: "Hello だけ、両側で数が違う",
+    dead: "Dead だけ、両側で数が違う",
+    rid: "両側の Router ID が同じ番号"
+  };
+
+  /* 添える一言。**取り違えやすい所だけ。**説明を足さない */
+  var NOTE = {
+    off: "設定では router ospf の行。エリアは Internet address の行の末尾",
+    both: "Timer intervals configured の行に並ぶ数字の、1つめと2つめ",
+    hello: "1つめの数字が Hello。すぐ下の Hello due in は別のもの",
+    dead: "2つめの数字が Dead。設定では ip ospf dead-interval の行",
+    rid: "Router ID は Process ID の行の中。設定では router-id の行"
+  };
+
+  function brief(block, i) {
+    var keys = (block && block.keys) || [];
+    var out = [];
+    keys.forEach(function (k) {
+      var r = ruleOf(k);
+      if (!r || !IF[k]) return;
+      out.push({ if: IF[k], then: r.verdict, note: NOTE[k] || null });
+    });
+    return out.length ? out : null;
+  }
+
+  /* ── 答え合わせの言葉 ──────────────────────
+   * **決まりと、この出力の数字を、別々の行に出す。**同じことを2回書かない。
+   * 決まりは説明の1枚（brief）と同じ言葉にそろえる。
+   *   決まり  「Hello だけ、両側で数が違う ＝ Hello を、相手と同じ値にそろえる」
+   *   この場合「Hello は R1 15　R2 10。Dead は R1 40　R2 40 で同じ」
+   *
+   * **いま見ている確認項目のことだけを書く。**
+   * まだ見ていない所の答えを先に出すと、練習の順番が壊れる。
+   *   ここで決まったとき   … その決まりと、この出力の数字
+   *   ここで決まらないとき … なぜ決まらないかだけ（次にどうするかは、答えの行にある）
+   */
+  /* 両側が同じ数のときの言い方。**同じ数を2回並べない。**
+     「Dead は R1 書いていない（既定の 40 を使う）　R2 書いていない（既定の 40 を使う）」
+     と並べても、そろっていることが読み取れない */
+  function level(v, k, label) {
+    var a = v.A[k], b = v.B[k];
+    if (a === null || b === null || a !== b) return label + " は " + pair(v, k);
+    if (v.A[k + "Def"] && v.B[k + "Def"]) {
+      return label + " は両側とも書いていないので、どちらも既定の " + a + " 秒";
+    }
+    if (v.A[k + "Def"] || v.B[k + "Def"]) {
+      return label + " は " + pair(v, k) + " で、どちらも " + a + " 秒";
+    }
+    return label + " は両側とも " + a;
+  }
+
+  function bodyHit(key, v) {
+    if (key === "off") {
+      var on = v.A.on ? v.A : v.B, off = v.A.on ? v.B : v.A;
+      return off.host + " には OSPF の行が無い。" + on.host + " のエリアは " + on.area;
+    }
+    if (key === "both") {
+      return "Hello は " + pair(v, "hello") + "、Dead は " + pair(v, "dead");
+    }
+    /* Hello だけ・Dead だけのときは、**そろっているほうも書く。**
+       「だけ」と言い切れる理由が、そこにあるため */
+    if (key === "hello") {
+      return "Hello は " + pair(v, "hello") + "。" + level(v, "dead", "Dead");
+    }
+    if (key === "dead") {
+      return "Dead は " + pair(v, "dead") + "。" + level(v, "hello", "Hello");
+    }
+    return "Router ID は " + pair(v, "rid") + " で、同じ番号";
+  }
+  function bodyNot(key, v) {
+    if (key === "off") {
+      return "OSPF は " + v.A.host + " も " + v.B.host + " も動いていて、エリアはどちらも " +
+             v.A.area;
+    }
+    if (key === "both") {
+      return level(v, "hello", "Hello") + "。" + level(v, "dead", "Dead");
+    }
+    if (key === "hello") return level(v, "hello", "Hello");
+    if (key === "dead") return level(v, "dead", "Dead");
+    return "";
+  }
+
+  function answerNote(v, st) {
+    if (!v) return null;
+    if (st) {
+      /* 1問目「どの行を見ますか」は、確認項目の look が空。
+         ここで決まりを出すと、まだ答えていない問題の答えになってしまう。
+         null を返すと、いままでどおり確認項目の説明（st.why）が出る */
+      if (!st.look || !st.look.length) return null;
+      var mine = RULES.filter(function (r) {
+        return r.look.join(" と ") === st.look.join(" と ");
+      })[0];
+      if (!mine) return null;
+      if (st.hit) {
+        return { gloss: IF[mine.key] + " ＝ " + mine.verdict,
+                 body: bodyHit(mine.key, v) };
+      }
+      return { gloss: "", body: bodyNot(mine.key, v) };
+    }
+    /* 提示物ぜんぶを見て答える問題 */
+    var full = judge(v);
+    if (!full || !IF[full.key]) return null;
+    return { gloss: IF[full.key] + " ＝ " + full.verdict, body: bodyHit(full.key, v) };
+  }
+
   /* 見本（検算に使う。5つの確認項目がすべて出ている出力） */
   function sample() {
     return build({ shape: "show", n1: "R1", n2: "R2", pid1: 1, pid2: 2,
@@ -685,7 +887,9 @@
     obj: "3.4",
     spots: SPOTS, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    hits: hits, learnEx: learnEx, stepQ: stepQ, perSpot: 4,
+    /* 説明の1枚（短い決まり）と、答え合わせの言葉。**判定そのものは変えていない** */
+    brief: brief, answerNote: answerNote,
+    hits: hits, marks: marks, learnEx: learnEx, stepQ: stepQ, perSpot: 4,
     ask: "両側の設定を見比べて、どこをどう直しますか。",
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 5, rules: 5, questions: 7 },
