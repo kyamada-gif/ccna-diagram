@@ -2,16 +2,22 @@
  *
  * ほかのブロックに入らなかった、一点ものの集まり。決め方は4つ。
  *
- *   ① QoS の図から動作を読み取る      2問
- *   ② OSPF の代表ルータにする設定     1問
- *   ③ IPv6 の自動アドレス            1問
- *   ④ ARP を受け取ったスイッチの動き  1問
+ *   ① QoS の図から動作を読み取る       2問
+ *   ② OSPF の代表ルータにする設定      1問
+ *   ③ IPv6 の自動アドレス             1問
+ *   ④ 衝突が多すぎることを知らせるログ   1問
+ *   ⑤ ARP を受け取ったスイッチの動き    1問
  *
  * **どれも図か、1回きりの知識**なので、その場で作り直せる問題が無い。
  * 説明の1枚だけを出し、問題は作らない。テストには本の問題がそのまま出る。
  *
  * 2026-08-21：JSON の「何が足りないか」3問は、JSON のブロックへ移した。
  * 中身が JSON の書き方そのものなので、そちらで練習したほうが身に付く。
+ *
+ * 2026-08-21：「ログの読み取り」ブロックを、ここへ入れて1問にまとめた（オーナーの判断）。
+ * 3冊とも同じ問題で、決め方も1つしかない。分野として立てても、練習もテストも
+ * 同じ問題がくり返し出るだけで、「16回と書いてあるものを選ぶ」と形で覚えてしまう。
+ * 本の3問は from にまとめてある（B1-P16-005 ＝ B2-0054-01 ＝ B3-M3-047）。
  */
 (function (global) {
   "use strict";
@@ -36,6 +42,11 @@
       mean: "機器の MAC アドレスから、アドレスの後半 64 ビットを自動で生成する仕組み",
       use: "ipv6 address （前半）::/64 eui-64 と設定する。後半は機器が自分で生成する" },
 
+    { key: "coll", name: "ログの本文の言葉",
+      re: /(excessive collisions)/i,
+      mean: "機器が出したログの本文に書かれている言葉。何が起きているのかがここに出ている",
+      use: "見出しの末尾が COLL で、本文に excessive collisions と書いてあれば、衝突が多すぎるという知らせ。大文字で始まる行と小文字の行が混ざるが、同じもの。送り直しに16回続けて失敗すると、そのフレームは破棄される" },
+
     { key: "arp", name: "ARP を受け取ったスイッチの動き",
       re: /(ARP|フラッディング)/,
       mean: "宛先の MAC アドレスを学習していないスイッチが、どう動作するか",
@@ -54,6 +65,7 @@
     qos: /(ホップごとの\s*QoS|QoS\s*動作)/i,
     dr: /(中心点|代表|DR)/,
     eui: /(自動アドレス割り当て|eui-64)/i,
+    coll: /(excessive collisions)/i,
     arp: /(ARP)/,
     open: /[{[]/g,
     close: /[}\]]/g
@@ -67,6 +79,11 @@
       var m = q.match(PAT[k]);
       out[k] = m ? (m[1] || m[0]) : null;
     });
+    /* **ログだけは、決め手が問題文ではなく提示物のほうにある。**
+       問題文は「このスイッチでは何が起こっているのでしょうか?」だけで、
+       excessive collisions はログの中に書いてある */
+    var cm = t.match(PAT.coll);
+    out.coll = cm ? cm[1] : null;
     out.open = (t.match(PAT.open) || []).length;
     out.close = (t.match(PAT.close) || []).length;
     out.all = t;
@@ -77,6 +94,7 @@
     var t = join(x), lines = t.split("\n"), out = [lines[0], ""];
     lines.slice(1).forEach(function (l) {
       if (/欠けている|足りない|不足|QoS|中心点|代表|自動アドレス|ARP/.test(l)
+          || /excessive collisions/i.test(l)
           || /[{}\[\]]/.test(l)) out.push(l);
     });
     return out.join("\n");
@@ -87,7 +105,7 @@
     { key: "qos", cue: "ホップごとの QoS 動作", cond: "QoS の図から動作を読み取る",
       verdict: "キューイング（順番待ち）",
       why: "図の右側が1列に並んでいたらキューイング。破棄されているならポリシング、流量をならしているならシェーピング",
-      look: ["絵の右側の並び（QoS）"],
+      look: ["図の右側のパケットの並び（QoS）"],
       steps: function (v) { return [["問題文のことば", v.qos || "-"]]; },
       no: function () { return "QoS の絵の話ではない"; },
       test: function (v) { return !!v.qos; } },
@@ -108,6 +126,15 @@
       no: function () { return "IPv6 の自動アドレスの話ではない"; },
       test: function (v) { return !!v.eui; } },
 
+    { key: "coll", cue: "excessive collisions のログ",
+      cond: "ログの本文に excessive collisions と書かれている",
+      verdict: "送信に16回失敗すると、そのフレームは破棄される",
+      why: "衝突するたびに送り直すが、16回続けて失敗した時点で、そのフレームは破棄される",
+      look: ["ログの本文の言葉"],
+      steps: function (v) { return [["ログの本文の言葉", v.coll || "-"]]; },
+      no: function () { return "excessive collisions のログではない"; },
+      test: function (v) { return !!v.coll; } },
+
     /* いちばん下は受け皿。ここまでで決まらなければ、これになる */
     { key: "arp", cue: "ARP を受け取ったとき", cond: "そのほか（ARP を受け取ったスイッチの動き）",
       verdict: "受信したポート以外の、すべてのポートへ転送する",
@@ -123,13 +150,17 @@
     "ip ospf priority を、最も大きい 255 にする": "0 にすると代表ルータには選ばれない",
     "ipv6 address （前半）::/64 eui-64 と設定する": "後半 64 ビットは、機器が自分で生成する",
     "受信したポート以外の、すべてのポートへ転送する": "宛先をまだ学習していないので、すべてのポートへ転送して探す",
+    "送信に16回失敗すると、そのフレームは破棄される":
+      "衝突するたびに送り直すが、16回続けて失敗したらそこで打ち切る決まりになっている"
   };
 
   var SAME = {
     "キューイング（順番待ち）": ["キューイング"],
     "ip ospf priority を、最も大きい 255 にする": ["ip ospf priority"],
     "ipv6 address （前半）::/64 eui-64 と設定する": ["eui-64"],
-    "受信したポート以外の、すべてのポートへ転送する": ["フラッディング"]
+    "受信したポート以外の、すべてのポートへ転送する": ["フラッディング"],
+    "送信に16回失敗すると、そのフレームは破棄される":
+      ["16回の送信試行に失敗", "送信試行が 16 回失敗", "16 回失敗"]
   };
 
   /* ── 問題は作らない ────────────────────────
@@ -145,12 +176,27 @@
       "  ・QoS の図から、ホップごとの動作を読み取る",
       "  ・OSPF の代表ルータにする設定（ip ospf priority を 255 にする）",
       "  ・IPv6 の自動アドレス割り当て（eui-64）",
+      "  ・衝突が多すぎることを知らせるログ（excessive collisions）",
       "  ・ARP を受け取ったスイッチの動作（フラッディング）"
     ].join("\n");
   }
 
+  /* ── 説明の1枚に添える一言 ─────────────────────
+   * **取り違えやすい所だけ。**判定ルールの理由（why）をもう一度書かない。
+   */
+  var NOTE = {
+    qos: "図の右側が破棄されているならポリシング、流量をならしているならシェーピング",
+    dr: "設定できる最大値は 255。0 にすると代表ルータには選ばれない",
+    eui: "後半 64 ビットは機器が自分の MAC アドレスから作るので、前半だけ指定する",
+    coll: "見出しの末尾が COLL。大文字で始まる行と小文字の行が混ざるが、同じもの",
+    arp: "宛先の MAC アドレスを学習済みであれば、そのポートだけに転送する"
+  };
+
   var spec = {
     id: "misc",
+    /* 出題パターン＝どのルールで答えにたどり着くか。
+       絞ったせいでパターンが消えていないかを、build.js が毎回見る */
+    pattern: E.cuePattern, patterns: ["arp", "coll", "dr", "eui", "qos"],
     kind: "rules",
     card: "misc",
     name: "そのほか",
@@ -160,8 +206,9 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    sample: sample, walk: E.cueWalk(RULES, "答えはどれですか。"),
-    expect: { spots: 4, rules: 4, questions: 5 },
+    brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
+    sample: sample, stepQ: E.cueStepQ(RULES, "答えはどれですか。"),
+    expect: { spots: 5, rules: 5, questions: 6 },
     dropped: []
   };
 

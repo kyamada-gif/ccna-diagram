@@ -43,7 +43,7 @@
     });
 
     /* ── 誤答が足りないときの借り先 ──────────────
-     * 決め方が1つしかない分野（ログの読み取りなど）は、答えの顔ぶれも1つになる。
+     * 決め方が1つしかない分野は、答えの顔ぶれも1つになる。
      * そのままだと選択肢が1個しか出ず、問題にならない。
      * **そこで、同じ分野の本の問題が出している「正解でない選択肢」を借りる。**
      * こちらで誤答を考え出さない。借りるのは本の言葉だけ。
@@ -80,13 +80,15 @@
       return spare;
     }
 
-    /* 選ぶものが3つに満たないとき、本の誤答で埋める */
+    /* 選ぶものが4つに満たないとき、本の誤答で埋める。
+       **本のテストは4択**なので、練習も4つにそろえる。
+       前は3つで止めていたので、ログの練習だけ3択になっていた */
     function padOpts(opts, right) {
-      if (opts.length >= 3) return opts;
+      if (opts.length >= 4) return opts;
       var seen = {};
       opts.forEach(function (o) { seen[o] = 1; });
       spareWrongs().forEach(function (w) {
-        if (opts.length >= 3 || seen[w] || w === right) return;
+        if (opts.length >= 4 || seen[w] || w === right) return;
         seen[w] = 1; opts.push(w);
       });
       return opts;
@@ -263,9 +265,14 @@
          stepQ を持たない分野は、いままでどおり下の共通の形になる */
       if (typeof spec.stepQ === "function") {
         return spec.stepQ(i, n, { blocks: blocks, read: read, shuffle: shuffle,
-                                  judge: judge, VERDICTS: VERDICTS });
+                                  judge: judge, VERDICTS: VERDICTS,
+                                  make: make, gloss: gloss, pat: PAT });
       }
+      /* **最後の確認項目には「決まらない出力」が無い。**
+         そこまで来たら必ず決まるので、次へ進む出力が作れず、2問目が空になっていた。
+         そのときは、決まる問題をもう1問（別の出力で）作る */
       var r = reach(i, n === 0);
+      if (!r && n > 0) r = reach(i, true);
       if (!r) return null;
       var st = r.step, ask, opts, right;
       if (spec.walk) {
@@ -296,7 +303,14 @@
          *   → 次の確認項目（MACアドレス）を学ぶ
          * この順で「まず優先度、次に MAC」という思考が積み上がる。
          */
-        var look = (st.look && st.look.length) ? st.look.join(" と ") : "この値";
+        /* 「◯◯だけでは決められない」に入れる名前。
+           **look をそのままつなぐと、選択肢として長すぎることがある。**
+           「txload と rxload と input errors と CRC だけでは決められない」など。
+           分野が短い名前（spec.short）を持っていれば、そちらを使う */
+        var bsi = blocks()[i];
+        var shortName = (spec.short && bsi) ? spec.short[bsi.keys[0]] : null;
+        var look = shortName ||
+          ((st.look && st.look.length) ? st.look.join(" と ") : "この値");
         var undecided = look + " だけでは決められない";
         right = st.hit ? st.verdict : undecided;
         opts = [right];
@@ -325,7 +339,15 @@
                opts: opts, right: right, extra: { step: st, i: i } };
     }
 
-    function wholeQ() {
+    function wholeQ(n) {
+      /* **分野が自分で作れるなら、そちらを先に使う。**
+         n は何問目か（0・1・2）。null を返してきたら、下の共通の形にする。
+         OSPF の隣接関係は、2問目と3問目を「打つコマンドの並び」で出す */
+      if (typeof spec.wholeQ === "function") {
+        var own = spec.wholeQ(n, { read: read, judge: judge, shuffle: shuffle,
+                                   blocks: blocks, VERDICTS: VERDICTS });
+        if (own) return own;
+      }
       var g = makeAny();
       if (!g.text) return null;
       var r = RULES.filter(function (x) { return x.key === g.key; })[0];
@@ -338,8 +360,20 @@
         opts = shuffle(v.sw.map(function (x) { return x.id; }));
       } else {
         right = r.verdict;
-        opts = shuffle(padOpts([r.verdict].concat(
-          shuffle(VERDICTS.filter(function (v) { return v !== r.verdict; })).slice(0, 3)), right));
+        /* **見ている所を丸ごとふくむ答えは、誤答にしない。**
+           「Hello だけ違う」出力に「Hello と Dead の両方をそろえる」を並べると、
+           そちらでも直ってしまい、正解が2つになる。
+           練習の1問ずつ（stepQ）では外していたのに、ここでは外していなかった。
+           見る所どうしにこの関係が無い分野では、何も起きない */
+        var pool = [];
+        RULES.forEach(function (x) {
+          if (x.verdict === r.verdict || pool.indexOf(x.verdict) >= 0) return;
+          if ((r.look || []).every(function (w) {
+            return (x.look || []).indexOf(w) >= 0;
+          })) return;
+          pool.push(x.verdict);
+        });
+        opts = shuffle(padOpts([right].concat(shuffle(pool).slice(0, 3)), right));
       }
       /* 聞き方は分野ごとに1つ。ただし**同じ分野の中で聞かれ方が変わる題材**
          （JSON の「何を表すか」と「何が足りないか」）は、
@@ -349,6 +383,52 @@
         : (spec.ask || "この出力で起きていることはどれですか。");
       return { kind: "whole", ask: askText,
                exhibit: g.text, opts: opts, right: right, extra: {} };
+    }
+
+    /* ── 決め手が出力の中にあるルールだけ、見本の現物を出す ────────
+     * **問題文の中にある決め手には、見本を出さない。**
+     * 説明の1枚の「もし」の行に、その言葉がもう大きく出ているので、
+     * 見本を足すと同じものを2度見せることになる（実測で 33 ルールがこれ）。
+     * 出力の中にある決め手（Administrative Mode: static access を
+     * 長い出力から探す、など）は、現物を1度見せる値打ちがある（13 ルール）。
+     *
+     * **値は毎回作る。**showint の見本は決め打ちだが、あれは光らせる言葉を
+     * 手で書いた表と対にしていたため。ここは光らせる言葉を
+     * その本文から取り出すので、値が変わってもずれない。
+     */
+    if (spec.learnOut && spec.learnOut.length && !spec.learnEx) {
+      var LSAMPLE = {};
+      var lineOf = function (k) {
+        if (!(k in LSAMPLE)) LSAMPLE[k] = make(k) || null;
+        return LSAMPLE[k];
+      };
+      spec.learnEx = function (block) {
+        var k = block && block.keys && block.keys[0];
+        if (!k || spec.learnOut.indexOf(k) < 0) return null;
+        return lineOf(k);
+      };
+      /* 見本の中で光らせる言葉。**その見本から取り出す**ので、必ず本文にある */
+      spec.hits = function () { return []; };
+      spec.marks = function (name) {
+        var out = [];
+        RULES.forEach(function (r) {
+          if ((r.look || []).indexOf(name) < 0) return;
+          if (spec.learnOut.indexOf(r.key) < 0) return;
+          var t = lineOf(r.key);
+          if (!t) return;
+          var v = read(t);
+          (r.mark || []).forEach(function (w) {
+            if (t.indexOf(w) >= 0 && out.indexOf(w) < 0) out.push(w);
+          });
+          (r.steps ? r.steps(v) : []).forEach(function (x) {
+            var w = String(x[1] == null ? "" : x[1]).trim();
+            if (!w || w === "-" || w.length > 24) return;
+            if (t.indexOf(w) < 0 || out.indexOf(w) >= 0) return;
+            out.push(w);
+          });
+        });
+        return out;
+      };
     }
 
     return {
@@ -586,52 +666,192 @@
     };
   }
 
-  /* 設定を選ぶ題材の、共通の聞き方。
+  /* ── 決め手が問題文にある題材の、練習の1問 ────────────────
+   * **札1 の「上から順に絞る」やり方を、そのまま使ってはいけない。**
+   * こちらは絞り込みではないので、「この項目では決まらない提示物」という考えが無い。
+   * ところが前は、共通の stepQ が2問目にそれを作っていた。その結果、
+   * 問1で「問題文の中の決め手を探せ」と教えた直後に、
+   * **問題文を読むと別の答えに見える提示物**で解かせていた（8分野の 83%）。
    *
-   * この種類の問題は「上から順に絞り込む」形ではない。
-   * 問題文の中の**決め手になる言葉**を見つけ、そこから打つコマンドが1つに決まる。
-   * だから練習も2段にする。
+   *   問1 … その確認項目の提示物を出し、答えを決めている言葉を選ばせる
+   *   問2 … 同じ確認項目の提示物（値は作り直す）を出し、打つ設定を選ばせる
    *
-   *   1問目 … この問題文で、答えを決めているのはどれか（決め手を探す）
-   *   2問目 … その決め手なら、何をするか（設定を選ぶ）
+   * **ルールは key で引く。**前は答え（verdict）で引いていたので、
+   * 答えが同じルールが2本あると、別のルールの決め手が正解になっていた
+   * （EtherChannel の vendor と peer、トランクの access2trunk と totrunk）。
    *
-   * 各ルールに cue（決め手を短く言った言葉）が要る。
+   * 誤答は、ほかのルールの決め手・答えから採る。**こちらで文を作らない。**
+   *
+   * ask2 … 問2の聞き方。渡さなければ「この要件を満たす設定はどれですか。」
    */
-  /* 問題文が決め手になる分野の、2段の聞き方。
-   * **どこを探すか → 何を答えるか**の順にたどらせる。
-   *   1問目「この問題文の中に、答えを決める言葉があります。どれですか。」
-   *   2問目 その分野の本物の問い（spec.ask）。決め手を示したうえで答えさせる
-   *
-   * ask2 … 2問目の聞き方。分野ごとに変えたいときに渡す
-   *        （例 つながらない原因は「何をしますか」ではなく「原因はどれですか」）
-   */
-  function cueWalk(rules, ask2) {
-    return function (step, v, sh, n) {
-      var me = rules.filter(function (r) { return r.verdict === step.verdict; })[0]
-        || rules[rules.length - 1];
-      if (n === 0 && me.cue) {
-        var opts = [me.cue];
-        sh(rules.filter(function (r) { return r.cue && r.cue !== me.cue; }))
-          .slice(0, 3).forEach(function (r) { opts.push(r.cue); });
-        return { ask: "この問題文の中に、答えを決める言葉があります。どれですか。",
-                 opts: sh(opts), right: me.cue,
-                 why: "問題文の中の「" + me.cue + "」が決め手" };
+  function cueStepQ(rules, ask2) {
+    return function (i, n, ctx) {
+      var bs = ctx.blocks(), b = bs[i];
+      if (!b || !b.keys || !b.keys.length) return null;
+      var key = b.keys[0];
+      var me = null, k;
+      for (k = 0; k < rules.length; k++) if (rules[k].key === key) me = rules[k];
+      if (!me) return null;
+      var text = ctx.make(key);
+      if (!text) return null;
+
+      var opts = [], right, ask, why, look, hit = true;
+      /* ── 答え合わせのあとに光らせる言葉 ─────────────
+       * **表を手で書かない。**手で書くと、提示物に無い言葉を書いてしまい、
+       * どこも光らないうえに、書き間違いにも気づけない。
+       * 判定ルールが「何を見て決めたか」を出す steps() の値を使う。
+       * これは実際に読み取れた文字なので、**提示物に必ずある。**
+       * 長すぎるもの（問題文まるごとなど）は、光らせても意味が無いので外す */
+      var vv = ctx.read(text);
+      var q1 = String(text).split(/\n\s*\n/)[0];
+      var mark = [];
+      /* ルールが自分で書いている言葉があれば、そちらを先に使う。
+         steps() の値が長すぎて光らせられない所（問題文まるごとなど）のため。
+         **書いた言葉が提示物に無ければ、下の突き合わせで落ちる**ので、
+         書き間違えたまま気づかない、ということにはならない
+         （`node build.js` も、全ルールぶん確かめている） */
+      (me.mark || []).forEach(function (w) {
+        if (String(text).indexOf(w) >= 0 && mark.indexOf(w) < 0) mark.push(w);
+      });
+      (me.steps ? me.steps(vv) : []).forEach(function (x) {
+        var w = String(x[1] == null ? "" : x[1]).trim();
+        /* 24字より長いものと、問題文まるごとは光らせない。
+           1行ぜんぶが光ると、どこを見ればいいのかが逆に伝わらない */
+        if (!w || w === "-" || w.length > 24) return;
+        if (w === q1.trim()) return;
+        if (String(text).indexOf(w) < 0) return;
+        if (mark.indexOf(w) < 0) mark.push(w);
+      });
+      if (n === 0) {
+        /* 問1。**決め手は、問題文にあることも、出力の中にあることもある。**
+           だから「問題文の中に」とは言い切らない */
+        if (!me.cue) return null;
+        right = me.cue;
+        opts = [right];
+        /* **誤答の決め手が、この問題文にも当てはまってはいけない。**
+           暗号化を聞く問題文には「事前共有キー」が入るので、
+           「RADIUS サーバの代わりに事前共有キー」を誤答に並べると、
+           それも当てはまって見え、正解が2つになる。
+           読み取りの目印（pat）が問題文の段に当たる決め手は、誤答にしない */
+        var head = String(text).split(/\n\s*\n/)[0];
+        ctx.shuffle(rules.filter(function (r) {
+          if (!r.cue || r.cue === me.cue) return false;
+          var p = ctx.pat && ctx.pat[r.key];
+          return !(p && p.test(head));
+        })).forEach(function (r) { if (opts.length < 4) opts.push(r.cue); });
+        ask = "この問題で、答えを決めているのはどれですか。";
+        /* 答えの行を先に光らせない（答えが見えてしまう） */
+        look = [];
+        why = "「" + me.cue + "」が決め手";
+        /* **問1では、まだ答え（打つ設定）は決まっていない。**
+           hit を true にしておくと、画面が「その確認項目の答えの一言説明」を
+           答え合わせに出してしまい、**問2の答えを先に教えることになる**
+           （8分野の確認項目 43 か所すべてで起きていた）。
+           false にすると、その行が空になる。
+           `node build.js` の「決まらない問題の答え合わせに先の答えが出ていないか」も、
+           これで問1を見るようになる */
+        hit = false;
+      } else {
+        right = me.verdict;
+        opts = [right];
+        ctx.shuffle(rules.filter(function (r) {
+          return r.verdict !== me.verdict;
+        })).forEach(function (r) {
+          if (opts.length < 4 && opts.indexOf(r.verdict) < 0) opts.push(r.verdict);
+        });
+        ask = (me.cue ? "決め手は「" + me.cue + "」です。" : "") +
+              (ask2 || "この要件を満たす設定はどれですか。");
+        look = (b.look || []).slice();
+        /* 決め手は問いにもう書いてある。**判定ルールの理由をそのまま出さない。**
+           答えの一言説明（gloss）だけが、答えの下に出ればよい */
+        why = ctx.gloss(me.verdict);
       }
-      var opts2 = [step.verdict];
-      sh(rules.filter(function (r) { return r.verdict !== step.verdict; }))
-        .slice(0, 3).forEach(function (r) { opts2.push(r.verdict); });
-      var seen2 = {}, uq2 = [];
-      opts2.forEach(function (o) { if (!seen2[o]) { seen2[o] = 1; uq2.push(o); } });
-      var tail = ask2 || "この要件を満たす設定はどれですか。";
-      /* 決め手は問いにもう書いてある。答えも上に出る。
-         **ここに判定ルールの理由をそのまま出さない。**
-         一言の説明（gloss）だけが、答えの下に出ればよい */
-      return { ask: me.cue ? "決め手は「" + me.cue + "」です。" + tail : tail,
-               opts: sh(uq2), right: step.verdict, why: null };
+      var seen = {}, uq = [];
+      opts.forEach(function (o) { if (o && !seen[o]) { seen[o] = 1; uq.push(o); } });
+      return {
+        kind: "step", ask: ask, exhibit: text,
+        opts: ctx.shuffle(uq), right: right,
+        /* key も渡す。**答え（verdict）でルールを引かない。**
+           答えが同じルールが2本ある分野で、別のルールを引いてしまう */
+        extra: { i: i, step: { look: look, values: [], hit: hit, key: key,
+                               mark: mark.length ? mark : null,
+                               verdict: me.verdict, cue: me.cue,
+                               why: why, next: null, nextVerdict: null,
+                               step: i + 1, of: bs.length } }
+      };
     };
   }
 
-  var API = { makeEngine: makeEngine, makeMatchEngine: makeMatchEngine, cueWalk: cueWalk, R: R, pick: pick, shuffle: shuffle, n: n };
+  /* ── 決め手型の分野の、出題パターン ────────────────────
+   * パターン＝**どのルールで答えにたどり着くか。**答えでまとめない。
+   * 絞ったせいでパターンが1つでも消えていないかを、build.js が毎回確かめる。
+   */
+  function cuePattern(q, G) {
+    if (!G || !G.read || !G.judge) return null;
+    var ex = q.fig || q.exhibit || "";
+    var r = G.judge(G.read({ text: q.text, exhibit: ex }));
+    return r ? r.key : null;
+  }
+
+  /* ── 決め手型の分野の、短い説明の1枚 ──────────────────
+   * **文字は読まれない。**見たらすぐ「こう来たら、こう答える」と分かる形だけを残す。
+   *   もし … その問題で答えを決めている言葉（＝練習の問1の答えと同じ言葉）
+   *   なら … 打つ設定
+   *   一言 … 取り違えやすい所だけ（note の表を分野ごとに渡す）
+   * 覚えた行が、そのまま問1の答えになるように、もし の側は cue と同じ言葉にする。
+   */
+  function cueBrief(rules, note) {
+    function ruleOf(k) {
+      for (var i = 0; i < rules.length; i++) if (rules[i].key === k) return rules[i];
+      return null;
+    }
+    return function (block) {
+      var out = [];
+      ((block && block.keys) || []).forEach(function (k) {
+        var r = ruleOf(k);
+        if (!r || !r.cue) return;
+        out.push({ if: r.cue, then: r.verdict, note: (note && note[k]) || null });
+      });
+      return out.length ? out : null;
+    };
+  }
+
+  /* ── 決め手型の分野の、答え合わせ ────────────────────
+   * **同じことを2回書かない。**決め手は問いに、答えは見出しに、もう書いてある。
+   *
+   *   問1（決め手を選ぶ）… null を返す。画面は「「◯◯」が決め手」だけを出す
+   *   問2（設定を選ぶ）  … 答えの一言説明だけ。
+   *                        前は判定ルールの理由と一言説明が同じ文で、2行並んでいた（43か所中32か所）
+   *   テスト・練習の最後 … 決め手と、答えの一言説明
+   *
+   * body(v, rule) を渡すと、この問題の値を1行足せる（渡さなくてよい）。
+   * **ルールは key で引く。**答えが同じルールが2本ある分野で取り違えるため。
+   */
+  function cueAnswerNote(rules, gloss, body) {
+    function ruleOf(k) {
+      for (var i = 0; i < rules.length; i++) if (rules[i].key === k) return rules[i];
+      return null;
+    }
+    return function (v, st) {
+      if (!v) return null;
+      if (st) {
+        if (!st.look || !st.look.length) return null;     /* 問1。まだ答えは決まっていない */
+        var me = ruleOf(st.key);
+        if (!me) return null;
+        return { gloss: gloss[me.verdict] || "",
+                 body: (body && body(v, me)) || "" };
+      }
+      /* 提示物ぜんぶを見て答える問題（テストの本の問題・練習の最後の3問） */
+      var hit = null, i;
+      for (i = 0; i < rules.length; i++) if (rules[i].test(v)) { hit = rules[i]; break; }
+      if (!hit) return null;
+      return { gloss: hit.cue ? "決め手は「" + hit.cue + "」" : "",
+               body: (body && body(v, hit)) || gloss[hit.verdict] || "" };
+    };
+  }
+
+  var API = { makeEngine: makeEngine, makeMatchEngine: makeMatchEngine, cueStepQ: cueStepQ,
+              cueAnswerNote: cueAnswerNote, cueBrief: cueBrief, cuePattern: cuePattern, R: R, pick: pick, shuffle: shuffle, n: n };
   global.ENGINE = API;
   if (typeof module !== "undefined" && module.exports) module.exports = API;
 })(typeof window !== "undefined" ? window : globalThis);

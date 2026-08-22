@@ -226,6 +226,15 @@
              coll: 0, rate: 0 };
   }
   var MAKERS = {
+    /* line protocol が down。**下に並ぶエラーの数も残す。**
+       本の問題（B2-0137-01）も Half Duplex・50 collisions・10 input errors が
+       残ったまま down になっている。すべて 0 の出力にすると、
+       「切れているときは下の数字を見ない」という肝心の所が練習にならない */
+    linkdown: function (b) {
+      b.line = "down"; b.duplex = "Half";
+      b.coll = R(10, 90); b.inerr = R(1, 30);
+      return b;
+    },
     queue: function (b) { b.outq = R(40, 260); return b; },
     oversub: function (b) { b.drops = R(20000, 900000000); return b; },
     throughput: function (b) {
@@ -278,6 +287,13 @@
     bad_nic: "runts は、途中で切れた 64 バイト未満のフレーム",
     storm: "broadcasts は時間とともに増える。これだけでは決めない",
     half_only: "collisions が出ていれば、デュプレックスの不一致のほう"
+  };
+
+  /* 「◯◯だけでは決められない」に入れる、短い名前。
+     **確認項目の名前をそのままつなぐと、選択肢が長くなりすぎる。**
+     ここに書いた分野だけ、短い名前に置きかわる */
+  var SHORT = {
+    throughput: "txload と rxload とエラーの数"
   };
 
   function ruleOf(key) {
@@ -451,7 +467,7 @@
     name: "show interface の障害",
     note: "出力を見て、何が起きているかを当てる",
     obj: "1.4",
-    spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
+    spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME, short: SHORT,
     /* 説明の1枚と、答え合わせの見せ方。**判定そのものは変えていない。**
        focus は置かない。この分野の問題は「上から順に、いま見ている確認項目で
        決まるか」を聞く形なので、光らせる所は確認項目の look がそのまま指している。

@@ -130,6 +130,7 @@
       test: function (v) { return !!v.notag; } },
 
     { key: "access2trunk", cue: "Administrative Mode が static access", cond: "いまアクセスのままになっている",
+      mark: ["static access"],
       verdict: "switchport mode trunk にして、カプセル化を dot1q にする",
       why: "Administrative Mode が static access のままでは、複数の VLAN を転送できない。カプセル化の設定より先に、まず mode trunk にする",
       look: ["現在のモード（Administrative Mode）"],
@@ -170,6 +171,7 @@
       test: function (v) { return !!v.role; } },
 
     { key: "totrunk", cue: "対向の出力に合わせる", cond: "そのほか（いまアクセスのままなので、トランクにする）",
+      mark: ["同じにそろえ"],
       verdict: "switchport mode trunk にして、カプセル化を dot1q にする",
       why: "Administrative Mode が static access のままでは、複数の VLAN を転送できない。まず mode trunk にする",
       look: ["現在のモード（Administrative Mode）", "カプセル化（Encapsulation）"],
@@ -307,8 +309,181 @@
   }
 
 
+  /* ── 最後の3問のうち2問は、打つコマンドの並びで答える ─────────
+   * 本の19問のうち17問は、選択肢が打つコマンドの並び。
+   * **誤答の顔ぶれは、本の同じ問題が出しているものを写す。**出どころは各行に書いた。
+   */
+  function cmdSet(key, v) {
+    var L = function () {
+      return Array.prototype.slice.call(arguments).join("\n");
+    };
+    if (key === "sub") {                         /* B1-P15-083。番号のずらしが罠 */
+      return { right: L("interface " + v.ifn + "." + v.v,
+                        "encapsulation dot1Q " + v.v,
+                        "ip address " + v.ip + " 255.255.255.0"),
+               wrong: [L("interface " + v.ifn + "." + v.v,
+                         "encapsulation dot1Q " + v.nv,
+                         "ip address " + v.ip + " 255.255.255.0"),
+                       L("interface " + v.ifn,
+                         "ip address " + v.ip + " 255.255.255.0"),
+                       L("interface " + v.ifn + "." + v.v,
+                         "encapsulation dot1Q " + v.v + " native",
+                         "ip address " + v.ip + " 255.255.255.0")] };
+    }
+    if (key === "voice") {                       /* B2-0150-01 */
+      return { right: L("interface " + v.ifn, "switchport mode access",
+                        "switchport access vlan " + v.v,
+                        "switchport voice vlan " + v.nv),
+               wrong: [L("interface " + v.ifn, "switchport voice vlan dot1p"),
+                       L("interface " + v.ifn, "switchport mode trunk",
+                         "switchport trunk allowed vlan " + v.v + "," + v.nv),
+                       L("interface " + v.ifn, "switchport mode trunk",
+                         "channel-group " + v.nv + " mode active")] };
+    }
+    if (key === "dtp") {                         /* B2-0140-01 */
+      return { right: L("switchport mode dynamic desirable",
+                        "switchport trunk allowed vlan add " + v.v),
+               wrong: [L("switchport mode dynamic auto",
+                         "switchport trunk encapsulation negotiate"),
+                       L("switchport mode trunk",
+                         "switchport trunk pruning vlan add " + v.v),
+                       L("switchport mode dynamic auto",
+                         "switchport private-vlan association host " + v.v)] };
+    }
+    if (key === "notag") {                       /* B1-P11-038 */
+      return { right: L("switchport mode trunk",
+                        "switchport trunk native vlan " + v.v),
+               wrong: [L("switchport mode access",
+                         "switchport trunk native vlan " + v.v),
+                       L("switchport mode trunk",
+                         "switchport trunk native vlan 1"),
+                       L("switchport mode access",
+                         "switchport access vlan " + v.v)] };
+    }
+    if (key === "access2trunk" || key === "totrunk") {   /* B1-P12-048・B1-P11-053 */
+      return { right: L("switchport mode trunk",
+                        "switchport trunk encapsulation dot1q"),
+               wrong: [L("switchport mode trunk",
+                         "switchport trunk allowed vlan all",
+                         "switchport dot1q ethertype 0800"),
+                       L("switchport mode dynamic desirable",
+                         "switchport trunk allowed vlan all"),
+                       L("switchport dynamic auto", "switchport nonegotiate")] };
+    }
+    if (key === "isl") {                         /* B1-P13-001 */
+      return { right: L("no switchport trunk encapsulation isl",
+                        "switchport trunk encapsulation dot1q",
+                        "switchport trunk allowed vlan add " + v.v),
+               wrong: [L("no switchport mode trunk",
+                         "switchport trunk encapsulation isl",
+                         "switchport mode access vlan " + v.v),
+                       L("switchport nonegotiate",
+                         "switchport trunk allowed vlan " + v.list + "," + v.v),
+                       L("switchport mode dynamic",
+                         "switchport trunk allowed vlan " + v.list)] };
+    }
+    if (key === "addvlan") {                     /* B1-P16-001 */
+      return { right: "switchport trunk allowed vlan add " + v.v,
+               wrong: ["switchport trunk allowed vlan " + v.v,
+                       "switchport trunk allowed vlan " + v.list,
+                       "switchport trunk allowed vlan 2-1001"] };
+    }
+    if (key === "native") {                      /* B1-P13-091 */
+      return { right: L("switchport mode trunk",
+                        "switchport trunk encapsulation dot1q",
+                        "switchport trunk native vlan " + v.nv),
+               wrong: [L("switchport mode trunk",
+                         "switchport trunk encapsulation isl",
+                         "switchport trunk native vlan " + v.nv),
+                       L("switchport mode trunk",
+                         "switchport trunk encapsulation dot1q",
+                         "switchport trunk native vlan 1"),
+                       L("switchport mode access",
+                         "switchport access vlan " + v.nv)] };
+    }
+    /* role。B2-0111-01。スイッチ間はトランク、端末側はアクセス */
+    return { right: L("interface " + v.ifn, "switchport mode access",
+                      "switchport access vlan " + v.v,
+                      "!", "interface Gi1/0/24", "switchport mode trunk"),
+             wrong: [L("interface " + v.ifn, "switchport access vlan " + v.v,
+                       "!", "interface Gi1/0/24", "switchport mode trunk"),
+                     L("interface " + v.ifn, "switchport mode trunk",
+                       "!", "interface Gi1/0/24", "switchport mode trunk"),
+                     L("interface " + v.ifn, "switchport mode access",
+                       "switchport access vlan " + v.v,
+                       "!", "interface Gi1/0/24", "switchport mode access")] };
+  }
+
+  /* その答えだけが当てはまる印。誤答が1つも当てはまらないことを build.js が見る */
+  var CMDMARK = {
+    sub: function (o, v) { return o.indexOf("encapsulation dot1Q " + v.v + "\n") >= 0; },
+    voice: function (o, v) { return o.indexOf("switchport voice vlan " + v.nv) >= 0; },
+    dtp: function (o) { return o.indexOf("mode dynamic desirable") >= 0; },
+    notag: function (o, v) {
+      return o.indexOf("mode trunk") >= 0 && o.indexOf("native vlan " + v.v) >= 0;
+    },
+    access2trunk: function (o) {
+      return o.indexOf("mode trunk") >= 0 && o.indexOf("encapsulation dot1q") >= 0;
+    },
+    totrunk: function (o) {
+      return o.indexOf("mode trunk") >= 0 && o.indexOf("encapsulation dot1q") >= 0;
+    },
+    isl: function (o) { return o.indexOf("no switchport trunk encapsulation isl") >= 0; },
+    addvlan: function (o, v) { return o.indexOf("allowed vlan add " + v.v) >= 0; },
+    native: function (o, v) {
+      return o.indexOf("encapsulation dot1q") >= 0 && o.indexOf("native vlan " + v.nv) >= 0;
+    },
+    role: function (o) {
+      return o.indexOf("switchport mode access") >= 0 && o.indexOf("mode trunk") >= 0;
+    }
+  };
+
+  function wholeQ(n, ctx) {
+    if (n === 0) return null;
+    for (var t = 0; t < 40; t++) {
+      var key = pick(Object.keys(MAKERS));
+      var v = MAKERS[key](baseVals());
+      var text = build(v);
+      var r = ctx.judge(ctx.read(text));
+      if (!r || r.key !== key) continue;
+      var c = cmdSet(key, v);
+      var seen = {}, opts = [c.right];
+      seen[c.right] = 1;
+      ctx.shuffle(c.wrong).forEach(function (w) {
+        if (opts.length >= 4 || seen[w]) return;
+        seen[w] = 1; opts.push(w);
+      });
+      if (opts.length < 4) continue;
+      return { kind: "whole", ask: "どのコマンドを設定しますか。",
+               exhibit: text, opts: ctx.shuffle(opts), right: c.right, extra: {} };
+    }
+    return null;
+  }
+
+  /* ── 説明の1枚に添える一言 ─────────────────────
+   * **取り違えやすい所だけ。**判定ルールの理由（why）をもう一度書かない。
+   */
+  var NOTE = {
+    sub: "サブインターフェースの番号（0/0.20 の .20）は名前にすぎない。" +
+         "VLAN を決めているのは encapsulation dot1q の後ろの番号のほう",
+    voice: "1本のケーブルにパソコンと IP 電話をつなぐが、トランクにはしない。" +
+           "データが access vlan、音声が voice vlan",
+    dtp: "desirable は自分から交渉を始める側、auto は受けたときだけ応じる側",
+    notag: "タグを付けない VLAN がネイティブVLAN。そこにその機器の VLAN 番号を入れて通す",
+    access2trunk: "決め手は自分側の出力の Administrative Mode。" +
+                  "dot1q は業界の標準の方式で、isl はシスコ独自の古い方式",
+    isl: "両側で同じ方式でないとトランクにならない。no で isl を消してから dot1q にする",
+    addvlan: "add を付けないと置きかえになり、いま通っている VLAN が消える",
+    native: "既定は 1。1 以外であれば番号は自由に選んでよい",
+    role: "トランクにするのはスイッチどうしをつなぐ線だけ。パソコンやサーバの側はアクセス",
+    totrunk: "決め手は相手側の出力。自分側の出力の Administrative Mode を見る問題とは、見る場所が逆になる"
+  };
+
   var spec = {
     id: "trunk",
+    /* 出題パターン＝どのルールで答えにたどり着くか。
+       絞ったせいでパターンが消えていないかを、build.js が毎回見る */
+    pattern: E.cuePattern, patterns: ["access2trunk", "addvlan", "dtp", "isl", "native", "notag", "role", "sub", "totrunk", "voice"],
     kind: "rules",
     card: "config",
     name: "トランクと VLAN",
@@ -318,10 +493,14 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES),
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, /* 決め手が出力の中にあるルール。ここだけ見本の現物を出す */
+    learnOut: ["access2trunk", "isl", "addvlan", "native"],
+    wholeQ: wholeQ, cmdSet: cmdSet, cmdMark: CMDMARK,
+    brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
+    stepQ: E.cueStepQ(RULES),
     /* 規則では出せないが、テストには出す問題 */
     bookOnly: ["B3-M3-020"],
-    expect: { spots: 5, rules: 10, questions: 19 },
+    expect: { spots: 5, rules: 10, questions: 17 },
     dropped: []
   };
 

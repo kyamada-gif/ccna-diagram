@@ -9,7 +9,7 @@
 (function (global) {
   "use strict";
   global.BANKS = global.BANKS || {};
-  var IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr", "log",
+  var IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr",
                  "parts", "autoword", "ipv6word", "cable", "aaa", "guardword", "dhcpword",
                  "etherchannel", "trunk", "access", "ipsvc", "portsec",
                  "wlangui", "nolink", "misc"];

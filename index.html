@@ -112,6 +112,8 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .fg{display:block;width:100%;max-width:340px;margin:0 auto;height:auto}
 .fg-l{stroke:var(--ink3);stroke-width:1.5}
 .fg-box{fill:var(--bg-tile);stroke:var(--line);stroke-width:1.5}
+/* 説明の1枚で、見比べる機器の箱を光らせる（fig.mark） */
+.fg-on{fill:var(--blue-bg);stroke:var(--blue);stroke-width:2.5}
 .fg-id{fill:var(--ink);font-size:13px;font-weight:700;text-anchor:middle;
   font-family:-apple-system,"Hiragino Sans",sans-serif}
 .fg-v{fill:var(--blue-t);font-size:11px;text-anchor:middle;font-family:ui-monospace,Menlo,monospace}
@@ -261,7 +263,7 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .opt:active{background:var(--bg2)}
 .opt[disabled]{cursor:default}
 .opt-k{font-family:var(--mono);font-size:var(--f2);color:var(--ink3);flex:0 0 auto;padding-top:2px}
-.opt-t{flex:1 1 auto;min-width:0;font-size:var(--f3)}
+.opt-t{flex:1 1 auto;min-width:0;font-size:var(--f3);white-space:pre-line}
 .opt-m{flex:0 0 auto;font-size:var(--f3)}
 .opt-ok{background:var(--green-bg);border-color:var(--green-s);color:var(--green-t)}
 .opt-ok .opt-k{color:var(--green-t)}
@@ -302,7 +304,7 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .note{margin-top:var(--s4);border-left:3px solid var(--green-s);
   background:var(--green-bg);border-radius:0 8px 8px 0;padding:var(--s3) var(--s4)}
 .note-bad{border-left-color:var(--red);background:var(--red-bg)}
-.note-t{font-size:var(--f3);font-weight:700}
+.note-t{font-size:var(--f3);font-weight:700;white-space:pre-line}
 .note-b{font-size:var(--f2);color:var(--ink2);margin-top:var(--s1)}
 .note-h{font-size:var(--f1);color:var(--ink2);margin-top:var(--s3);
   letter-spacing:.06em}
@@ -339,55 +341,53 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <body>
 <div id="root"></div>
 <!-- 共通の仕掛け（判定・道すじ・出力作り）。題材の中身は入っていない -->
-<script src="./store.js?v=232445" charset="utf-8"></script>
-<script src="./fig.js?v=232445" charset="utf-8"></script>
-<script src="./engine.js?v=232445" charset="utf-8"></script>
+<script src="./store.js?v=279870" charset="utf-8"></script>
+<script src="./fig.js?v=279870" charset="utf-8"></script>
+<script src="./engine.js?v=279870" charset="utf-8"></script>
 <!-- ブロックごとの中身。ブロックを増やしたら、ここに1行足す -->
-<script src="./types/rootbridge.js?v=232445" charset="utf-8"></script>
-<script src="./types/log.js?v=232445" charset="utf-8"></script>
-<script src="./types/ospf.js?v=232445" charset="utf-8"></script>
-<script src="./types/ospfdr.js?v=232445" charset="utf-8"></script>
-<script src="./types/json.js?v=232445" charset="utf-8"></script>
-<script src="./types/showint.js?v=232445" charset="utf-8"></script>
-<script src="./types/etherchannel.js?v=232445" charset="utf-8"></script>
-<script src="./types/trunk.js?v=232445" charset="utf-8"></script>
-<script src="./types/access.js?v=232445" charset="utf-8"></script>
-<script src="./types/ipsvc.js?v=232445" charset="utf-8"></script>
-<script src="./types/portsec.js?v=232445" charset="utf-8"></script>
-<script src="./types/wlangui.js?v=232445" charset="utf-8"></script>
-<script src="./types/nolink.js?v=232445" charset="utf-8"></script>
-<script src="./types/misc.js?v=232445" charset="utf-8"></script>
+<script src="./types/rootbridge.js?v=279870" charset="utf-8"></script>
+<script src="./types/ospf.js?v=279870" charset="utf-8"></script>
+<script src="./types/ospfdr.js?v=279870" charset="utf-8"></script>
+<script src="./types/json.js?v=279870" charset="utf-8"></script>
+<script src="./types/showint.js?v=279870" charset="utf-8"></script>
+<script src="./types/etherchannel.js?v=279870" charset="utf-8"></script>
+<script src="./types/trunk.js?v=279870" charset="utf-8"></script>
+<script src="./types/access.js?v=279870" charset="utf-8"></script>
+<script src="./types/ipsvc.js?v=279870" charset="utf-8"></script>
+<script src="./types/portsec.js?v=279870" charset="utf-8"></script>
+<script src="./types/wlangui.js?v=279870" charset="utf-8"></script>
+<script src="./types/nolink.js?v=279870" charset="utf-8"></script>
+<script src="./types/misc.js?v=279870" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
-<script src="./q/showint.js?v=221173" charset="utf-8"></script>
-<script src="./q/parts.js?v=221173" charset="utf-8"></script>
-<script src="./q/autoword.js?v=221173" charset="utf-8"></script>
-<script src="./q/ipv6word.js?v=221173" charset="utf-8"></script>
-<script src="./q/cable.js?v=221173" charset="utf-8"></script>
-<script src="./q/aaa.js?v=221173" charset="utf-8"></script>
-<script src="./q/guardword.js?v=221173" charset="utf-8"></script>
-<script src="./q/dhcpword.js?v=221173" charset="utf-8"></script>
-<script src="./q/etherchannel.js?v=221173" charset="utf-8"></script>
-<script src="./q/trunk.js?v=221173" charset="utf-8"></script>
-<script src="./q/access.js?v=221173" charset="utf-8"></script>
-<script src="./q/ipsvc.js?v=221173" charset="utf-8"></script>
-<script src="./q/portsec.js?v=221173" charset="utf-8"></script>
-<script src="./q/wlangui.js?v=221173" charset="utf-8"></script>
-<script src="./q/nolink.js?v=221173" charset="utf-8"></script>
-<script src="./q/misc.js?v=221173" charset="utf-8"></script>
-<script src="./q/log.js?v=221173" charset="utf-8"></script>
-<script src="./q/ospf.js?v=221173" charset="utf-8"></script>
-<script src="./q/ospfdr.js?v=221173" charset="utf-8"></script>
-<script src="./q/json.js?v=221173" charset="utf-8"></script>
-<script src="./q/rootbridge.js?v=221173" charset="utf-8"></script>
+<script src="./q/showint.js?v=196044" charset="utf-8"></script>
+<script src="./q/parts.js?v=196044" charset="utf-8"></script>
+<script src="./q/autoword.js?v=196044" charset="utf-8"></script>
+<script src="./q/ipv6word.js?v=196044" charset="utf-8"></script>
+<script src="./q/cable.js?v=196044" charset="utf-8"></script>
+<script src="./q/aaa.js?v=196044" charset="utf-8"></script>
+<script src="./q/guardword.js?v=196044" charset="utf-8"></script>
+<script src="./q/dhcpword.js?v=196044" charset="utf-8"></script>
+<script src="./q/etherchannel.js?v=196044" charset="utf-8"></script>
+<script src="./q/trunk.js?v=196044" charset="utf-8"></script>
+<script src="./q/access.js?v=196044" charset="utf-8"></script>
+<script src="./q/ipsvc.js?v=196044" charset="utf-8"></script>
+<script src="./q/portsec.js?v=196044" charset="utf-8"></script>
+<script src="./q/wlangui.js?v=196044" charset="utf-8"></script>
+<script src="./q/nolink.js?v=196044" charset="utf-8"></script>
+<script src="./q/misc.js?v=196044" charset="utf-8"></script>
+<script src="./q/ospf.js?v=196044" charset="utf-8"></script>
+<script src="./q/ospfdr.js?v=196044" charset="utf-8"></script>
+<script src="./q/json.js?v=196044" charset="utf-8"></script>
+<script src="./q/rootbridge.js?v=196044" charset="utf-8"></script>
 <!-- 紙面から切り出した提示物。qid で引く -->
 <script src="./img/index.js?v=1" charset="utf-8"></script>
 <!-- 言い換え表。練習で「同じものを指す言い方」を1つにまとめるのに使う -->
-<script src="./q/synonym.js?v=221173" charset="utf-8"></script>
-<script src="./questions.js?v=221173" charset="utf-8"></script>
+<script src="./q/synonym.js?v=196044" charset="utf-8"></script>
+<script src="./questions.js?v=196044" charset="utf-8"></script>
 <!-- 上のものを組み立てる。画面側では判定しない。
      **questions.js より後に読むこと。**対応づけのエンジンは過去問の対から組む -->
-<script src="./gen.js?v=232445" charset="utf-8"></script>
+<script src="./gen.js?v=279870" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=52659" charset="utf-8"></script>
+<script src="./app.js?v=55062" charset="utf-8"></script>
 </body>
 </html>

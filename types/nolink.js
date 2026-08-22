@@ -205,8 +205,21 @@
   }
 
 
+  /* ── 説明の1枚に添える一言 ─────────────────────
+   * **取り違えやすい所だけ。**判定ルールの理由（why）をもう一度書かない。
+   */
+  var NOTE = {
+    optic: "-SR は最大 300m、-LR は最大 10km。距離に合わないものを使うと光が届かない",
+    cable: "インターフェースは有効なのに notconnect なら、ストレートとクロスの取り違え",
+    first: "そこで届いていなければ、その先を調べる必要がない",
+    gw: "パソコンの Default gateway の値を、図に書かれているルータの IP アドレスと見比べる"
+  };
+
   var spec = {
     id: "nolink",
+    /* 出題パターン＝どのルールで答えにたどり着くか。
+       絞ったせいでパターンが消えていないかを、build.js が毎回見る */
+    pattern: E.cuePattern, patterns: ["cable", "first", "gw", "optic"],
     kind: "rules",
     card: "misc",
     name: "つながらない原因をさがす",
@@ -216,7 +229,10 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES, "つながらない原因は、どれですか。"),
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, /* 決め手が出力の中にあるルール。ここだけ見本の現物を出す */
+    learnOut: ["gw"],
+    brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
+    stepQ: E.cueStepQ(RULES, "つながらない原因は、どれですか。"),
     expect: { spots: 5, rules: 4, questions: 5 },
     dropped: []
   };

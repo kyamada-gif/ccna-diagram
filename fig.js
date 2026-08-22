@@ -51,11 +51,20 @@
        決め打ちにすると、ルータ ID が長いときに文字がはみ出し、
        左右の箱が中央の箱と重なる（左 8〜130、中央 114〜206 で 16 重なっていた）。 */
     var HH = 30, NH = 54, GAP = 62, GAPX = 14;
+    /* 見分ける番号は、**どこに書いてあるかで名前が変わる。**
+       ルータ ID の行があればそれ、無ければ Loopback、それも無ければ
+       インターフェースの IP アドレス。名前を付けずに数字だけ出すと、
+       どれを見ているのか分からない（本の図には名前が書いてある） */
+    var idText = function (n) {
+      if (n.rid) return "ルータ ID " + n.rid;
+      if (n.lo) return "Loopback " + n.lo;
+      return n.ip ? "IP アドレス " + n.ip : "";
+    };
     var wide = 0;
     (fig.node || []).forEach(function (n) {
       [String(n.id) + (n.tag ? "（" + n.tag + "）" : ""),
        "優先度 " + n.pri,
-       String(n.rid || n.lo || n.ip || "")].forEach(function (t) {
+       idText(n)].forEach(function (t) {
         if (t.length > wide) wide = t.length;
       });
     });
@@ -86,14 +95,17 @@
     (fig.node || []).forEach(function (n) {
       var p = spot[n.at];
       if (!p) return;
+      /* fig.mark に名前があれば、その箱を光らせる。
+         **説明の1枚で、どの2台を見比べているのかを目で見せるため。** */
       out.push('<rect x="' + p.x + '" y="' + p.y + '" width="' + NB + '" height="' + NH +
-               '" rx="8" class="fg-box" />');
+               '" rx="8" class="fg-box' +
+               ((fig.mark || []).indexOf(n.id) >= 0 ? " fg-on" : "") + '" />');
       out.push('<text x="' + (p.x + NB / 2) + '" y="' + (p.y + 16) + '" class="fg-id">' +
                esc(n.id) + (n.tag ? "（" + esc(n.tag) + "）" : "") + '</text>');
       out.push('<text x="' + (p.x + NB / 2) + '" y="' + (p.y + 32) +
                '" class="fg-v">優先度 ' + esc(n.pri) + '</text>');
       out.push('<text x="' + (p.x + NB / 2) + '" y="' + (p.y + 47) +
-               '" class="fg-v">' + esc(n.rid || n.lo || n.ip || "") + '</text>');
+               '" class="fg-v">' + esc(idText(n)) + '</text>');
     });
     return '<svg viewBox="0 0 ' + SW + ' ' + H + '" class="fg" ' +
            'preserveAspectRatio="xMidYMid meet" role="img">' + out.join("") + '</svg>';
@@ -128,7 +140,8 @@
     L.slot.forEach(function (p) {
       var s = fig.sw[p.i] || {};
       out.push('<rect x="' + p.x + '" y="' + p.y + '" width="' + L.bw + '" height="' + L.bh +
-               '" rx="8" class="fg-box" />');
+               '" rx="8" class="fg-box' +
+               ((fig.mark || []).indexOf(s.id) >= 0 ? " fg-on" : "") + '" />');
       out.push('<text x="' + (p.x + L.bw / 2) + '" y="' + (p.y + 17) +
                '" class="fg-id">' + esc(s.id) + '</text>');
       out.push('<text x="' + (p.x + L.bw / 2) + '" y="' + (p.y + 34) +

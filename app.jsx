@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 
 /* 計算なしの図表問題。ipcalc2 と同じ形（札 → 説明の1枚 → 練習／テスト）。
  *
@@ -34,10 +34,9 @@ const CARDS = [
     blocks: [
       { id: "showint", name: "show interface の障害", n: 17 },
       { id: "json", name: "JSON の読み取り", n: 25 },
-      { id: "rootbridge", name: "ルートブリッジの決まり方", n: 23 },
+      { id: "rootbridge", name: "ルートブリッジの決まり方", n: 10 },
       { id: "ospf", name: "OSPF の隣接関係", n: 7 },
-      { id: "ospfdr", name: "OSPF の代表ルータ", n: 2 },
-      { id: "log", name: "ログの読み取り", n: 3 }
+      { id: "ospfdr", name: "OSPF の代表ルータ", n: 2 }
     ] },
   { id: "words", name: "言葉と意味の組み合わせ",
     note: "説明と用語の対応を覚える",
@@ -53,10 +52,10 @@ const CARDS = [
   { id: "config", name: "足りない設定を選ぶ",
     note: "要件と現在の設定を読み、必要なコマンドを選ぶ",
     blocks: [
-      { id: "etherchannel", name: "EtherChannel", n: 20 },
-      { id: "trunk", name: "トランクと VLAN", n: 19 },
+      { id: "etherchannel", name: "EtherChannel", n: 16 },
+      { id: "trunk", name: "トランクと VLAN", n: 17 },
       { id: "access", name: "機器への入り方", n: 10 },
-      { id: "ipsvc", name: "DHCP・NAT・NTP の設定", n: 9 },
+      { id: "ipsvc", name: "DHCP・NAT・NTP の設定", n: 8 },
       { id: "portsec", name: "ポートの守り", n: 4 }
     ] },
   { id: "misc", name: "そのほか",
@@ -64,7 +63,7 @@ const CARDS = [
     blocks: [
       { id: "wlangui", name: "無線の画面を読む", n: 13 },
       { id: "nolink", name: "つながらない原因をさがす", n: 5 },
-      { id: "misc", name: "そのほか", n: 5 }
+      { id: "misc", name: "そのほか", n: 6 }
     ] }
 ];
 
@@ -372,7 +371,9 @@ function makePractice(G, id) {
     }
   });
   for (let k = 0; k < 3; k++) {
-    const q = G.wholeQ();
+    /* 何問目かを渡す。**分野によっては、問い方を変える**
+       （OSPF の隣接関係は、2問目と3問目を「打つコマンドの並び」で出す） */
+    const q = G.wholeQ(k);
     if (!q) continue;
     out.push(item({ kind: q.kind, ask: q.ask, exhibit: asExhibit(q.exhibit),
       opts: q.opts, right: q.right,
@@ -482,12 +483,22 @@ function makeTest(id, ci) {
 }
 
 /* ── 答えの出し方を、実際の数字で見せる ───────── */
+/* 本の解説は、**文の途中で切らない。**
+   前は 150字で機械的に切っていたので、札1だけで8問が文の途中で終わっていた。
+   100字を過ぎたところにある最初の句点までを出す。句点が無ければ、そのまま全部出す */
+function trimBook(t) {
+  const s = String(t == null ? "" : t).trim();
+  if (s.length <= 150) return s;
+  const at = s.indexOf("。", 100);
+  return at >= 0 ? s.slice(0, at + 1) : s;
+}
+
 function Steps({ t, answer, book }) {
   if (!t) {
     return (
       <div className="note">
         <div className="note-t">{answer || ""}</div>
-        {book && <div className="note-b">本の解説：{book.slice(0, 150)}</div>}
+        {book && <div className="note-b">本の解説：{trimBook(book)}</div>}
       </div>
     );
   }
@@ -513,17 +524,18 @@ function Steps({ t, answer, book }) {
           </div>
         ))}
       </div>
-      {book && <div className="note-b">本の解説：{book.slice(0, 150)}</div>}
+      {book && <div className="note-b">本の解説：{trimBook(book)}</div>}
     </div>
   );
 }
 
-function Note({ title, body, gloss }) {
+function Note({ title, body, gloss, book }) {
   return (
     <div className="note">
       <div className="note-t">{title}</div>
       {gloss && <div className="gloss">{gloss}</div>}
       {body && <div className="note-b">{body}</div>}
+      {book && <div className="note-b">本の解説：{trimBook(book)}</div>}
     </div>
   );
 }
@@ -711,8 +723,10 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   const ok = done && picked === null;
   const cram = !isTest;
 
-  /* 次の問題・結果の画面に移ったら、上から見せる */
-  useEffect(() => { toTop(); }, [at, end]);
+  /* 次の問題・結果の画面に移ったら、上から見せる。
+     **描く前に戻す（useLayoutEffect）。**useEffect だと描き終わってから動くので、
+     一瞬だけ前の位置が見えてしまう */
+  useLayoutEffect(() => { toTop(); }, [at, end]);
 
   function choose(o) {
     if (done) return;
@@ -999,9 +1013,15 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
           <div className="sec">
             {!brief && <span className="sec-l">どこに書いてあるか</span>}
             {it.exhibit.image && <Scan image={it.exhibit.image} alt={lb.name} />}
-            {it.exhibit.text
-              ? <Console text={it.exhibit.text} hits={toHits(lb.look)}
-                          marks={toMarks(lb.look)} /> : null}
+            {/* **見本は、問題と同じ見え方にする。**
+                図で出る分野（ルートブリッジ・OSPF の代表ルータ）の見本を
+                文字の表で出していたので、説明と問題で目の置き所が変わっていた。
+                見比べる機器の箱は、図のほうで光る（fig.mark） */}
+            {it.exhibit.kind === "topology"
+              ? <Figure fig={it.exhibit.fig} />
+              : it.exhibit.text
+                ? <Console text={it.exhibit.text} hits={toHits(lb.look)}
+                            marks={toMarks(lb.look)} /> : null}
           </div>
         )}
         {/* 対応づけは、規則ではなく覚えるもの。
@@ -1090,15 +1110,28 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
 
   /* **kind で場合分けしない。**あるものを出すだけ */
   const exv = exValue(it.exhibit);
+  /* ── 判定に渡す中身 ─────────────────────────
+   * **問題文が決め手になる分野（`spec.wantsQuestion`）では、問題文もいっしょに渡す。**
+   * 渡さないと提示物だけで判定してしまい、決め手が見つからず、
+   * いちばん下の受け皿ルールに落ちる。答え合わせに別の問題の説明が出ていた
+   * （本の問題 86問のうち 47問）。`build.js` は前から正しく渡していて、
+   * 取りこぼしていたのは画面だけだった。
+   *
+   * **練習の問題は、そのままでよい。**作った提示物の1行目に問題文が入っているので、
+   * 判定側（各分野の read）が自分でそこを読む。ここで ask を渡すと、
+   * 問2の「決め手は『◯◯』です。」の中の言葉まで読んでしまう。
+   */
+  const jv = (G && exv && G.spec && G.spec.wantsQuestion && it.kind === "past")
+    ? { text: it.ask || "", exhibit: exv } : exv;
   /* 問題の画面で光らせる所。
      **確認項目の名前ではなく、その問題が実際に聞いている所を光らせる。**
      「IDS は何を表しますか」なら、光らせるのは IDS だけ。
      確認項目の名前（コロンの左）から引くと、キーを全部光らせてしまう。
      focus() を持たない分野は、いままでどおり確認項目の名前から引く */
   const look = it.kind === "step" ? it.extra.step.look
-    : (done && G && exv ? (G.judge(G.read(exv)) || {}).look : null);
+    : (done && G && exv ? (G.judge(G.read(jv)) || {}).look : null);
   const focus = (G && G.spec && typeof G.spec.focus === "function" && exv
-    && (it.kind === "step" || done)) ? G.spec.focus(G.read(exv)) : null;
+    && (it.kind === "step" || done)) ? G.spec.focus(G.read(jv)) : null;
   /* 「どの行を見ますか」の問題は、答えたあとに**その行を出力の中で光らせる。**
      どこにあったのかが、そこで初めて目で分かる。
      答える前は光らせない（答えが見えてしまう） */
@@ -1106,8 +1139,17 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
     ? rights.map(String).filter((r) =>
         exv.split("\n").some((l) => l.trim() === r.trim()))
     : [];
-  const hitWords = lineAns.length ? lineAns : (focus ? focus.hits : toHits(look));
-  const markWords = lineAns.length ? null : (focus ? focus.marks : toMarks(look));
+  /* 決め手型の分野では、**答えたあとに、決め手になった言葉を提示物の中で光らせる。**
+     答える前は光らせない（答えが見えてしまう）。
+     光らせる言葉は判定側が渡してくる（提示物から実際に読み取れた文字なので、必ずある） */
+  const cueMark = (done && it.kind === "step" && it.extra.step && it.extra.step.mark)
+    ? [].concat(it.extra.step.mark) : [];
+  const hitWords = lineAns.length ? lineAns
+    : cueMark.length ? []
+    : (focus ? focus.hits : toHits(look));
+  const markWords = lineAns.length ? null
+    : cueMark.length ? cueMark
+    : (focus ? focus.marks : toMarks(look));
   const con = (
     <>
       {/* **画像と文字は、両方出せる。**
@@ -1137,6 +1179,20 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
     ask = ask + "（" + rights.length + "つ選びます）";
   }
 
+  /* 本の答えでしか出せない問題（`spec.bookOnly`）。
+     判定ルールでは答えが出せないので、**こちらの説明は出さない。本の解説だけを出す。**
+     出すと、まったく別のルールの説明が並ぶ
+     （機器への入り方の B3-M1-092 は、本の答えが「SW3」なのに
+       「username（名前）secret（パスワード）で作成する」が出ていた） */
+  const bookOnly = !!(it.note && G && G.spec &&
+    (G.spec.bookOnly || []).indexOf(it.note.qid) >= 0);
+
+  /* 提示物ぜんぶを見て答える問題（テストの本の問題・練習の最後の3問）の答え合わせ。
+     **いま見ている確認項目は無い**ので、st は渡さない */
+  const fullNote = (done && !bookOnly && it.kind !== "step" && it.kind !== "match"
+    && G && G.spec && typeof G.spec.answerNote === "function" && exv)
+    ? G.spec.answerNote(G.read(jv)) : null;
+
   let note = null;
   if (done) {
     if (it.kind === "step") {
@@ -1147,7 +1203,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
       /* **いま見ている確認項目も渡す。**渡さないと、提示物ぜんぶを見て
          最後の答えを出してしまい、まだ見ていない所の解説が出てしまう */
       const sn = (G && G.spec && typeof G.spec.answerNote === "function" && exv)
-        ? G.spec.answerNote(G.read(exv), st) : null;
+        ? G.spec.answerNote(G.read(jv), st) : null;
       note = <Note title={it.right[0]}
         body={sn ? sn.body : st.why}
         gloss={sn ? sn.gloss : (st.hit ? G.gloss(st.verdict) : "")} />;
@@ -1165,16 +1221,26 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
             ))}
           </div>
           {it.note && it.note.explanation &&
-            <div className="note-b">本の解説：{it.note.explanation.slice(0, 150)}</div>}
+            <div className="note-b">本の解説：{trimBook(it.note.explanation)}</div>}
         </div>
       ) : (
         <>
           {/* 紙面の図はかすれていることがある。答え合わせでは、読み取った中身も出す */}
           {it.image && it.exhibit && it.exhibit.kind === "topology" &&
             <Figure fig={it.exhibit.fig} />}
-          <Steps t={G && exv ? G.trace(exv) : null}
-            answer={it.note ? rights.join(" ／ ") : null}
-            book={it.note ? it.note.explanation : null} />
+          {/* ── 答え合わせは、練習もテストも同じ短い形 ──────────────
+           * **決まりと、この場合の数字を、別々の行に出す。**
+           * 前はテストだけ古い長い形（判定ルールの理由 ＋ 見た所の一覧 ＋
+           * ほかが消える理由）のままで、show interface では「ほかが消える理由」
+           * だけで8行並んでいた。分野が answerNote() を持っていれば、
+           * 練習と同じ書き方にそろえる。持っていない分野は、いままでどおり */}
+          {fullNote
+            ? <Note title={it.note ? rights.join(" ／ ") : (it.right[0] || "")}
+                gloss={fullNote.gloss} body={fullNote.body}
+                book={it.note ? it.note.explanation : null} />
+            : <Steps t={G && exv && !bookOnly ? G.trace(jv) : null}
+                answer={it.note ? rights.join(" ／ ") : null}
+                book={it.note ? it.note.explanation : null} />}
         </>
       );
     }
@@ -1219,7 +1285,10 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
           return (
             <button key={i} className={cls} onClick={() => choose(o)} disabled={done}>
               <span className="opt-k">{LETTERS[i] || ""}</span>
-              <span className="opt-t">{o}</span>
+              {/* 本が3行に分けて刷っている選択肢がある（ルートブリッジ）。
+                  行はそのまま出す（CSS の white-space:pre-line）。
+                  末尾の改行だけは、空の行になるので落とす */}
+              <span className="opt-t">{String(o).replace(/\s+$/, "")}</span>
               {(done && right) || hitYet ? <span className="opt-m">✓</span> : null}
               {done && o === picked && !right && <span className="opt-m">✕</span>}
             </button>
@@ -1272,7 +1341,9 @@ export default function App() {
   const [open, setOpen] = useState(null);  // ホームで開いている行
   const homeY = useRef(0);
   /* ホームに戻ったときだけ、見ていた所に戻す。ほかは上から */
-  useEffect(() => { toTop(mode === null ? homeY.current : 0); }, [bid, mode]);
+  /* 分野・やり方が変わったときも、描く前に戻す。
+     ホームへ戻るときだけは、見ていた行の位置に戻す */
+  useLayoutEffect(() => { toTop(mode === null ? homeY.current : 0); }, [bid, mode]);
 
   if (mode === null) {
     return <Home prog={prog} open={open} setOpen={setOpen}

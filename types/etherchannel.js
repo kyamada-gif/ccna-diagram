@@ -106,6 +106,7 @@
    */
   var RULES = [
     { key: "vlan", cue: "ポートチャネルに参加できないインターフェースがある", cond: "1本だけポートチャネルに参加できず、許可VLAN が一致していない",
+      mark: ["2 番目のメンバー", "正常にバンドル"],
       verdict: "不足しているインターフェース側に、許可VLAN を追加する",
       why: "まとめるインターフェースは、許可VLAN が両側で一致していないとポートチャネルに参加できない。ポートチャネル側ではなく、不足しているインターフェース側に add で追加する",
       look: ["要件の行（問題文）"],
@@ -240,6 +241,11 @@
     },
     vendor: function (b) {
       b.layer = "SU"; b.peer = null;
+      /* **出力はいつも PAgP にする。**本の罠（B1-P11-068）はここにある。
+         出力に PAgP と出ているのを見て desirable を選んでしまうが、
+         別のベンダーと組めるのは LACP だけ。
+         出力が LACP のときもあると、この罠を一度も通らない回ができてしまう */
+      b.proto = "PAgP";
       b.need = "別のベンダーのスイッチと、同じグループ番号で EtherChannel を確立します。どの設定をしますか。";
       return b;
     },
@@ -269,8 +275,125 @@
   }
 
 
+  /* ── 最後の3問のうち2問は、打つコマンドの並びで答える ─────────
+   * **本の20問は、選択肢がすべて打つコマンドの並び。**
+   * 日本語の行動文で「どこを直すか」まで答えられても、
+   * テストでは「どのコマンドを、どこに打つか」まで要る。
+   *
+   * **誤答の顔ぶれは、本の同じ問題が出しているものをそのまま写す。**
+   * こちらで考え出さない。出どころは各ルールの下に書いた。
+   */
+  function cmdSet(key, v) {
+    var g = v.g, phy = v.ifname, po = "port-channel " + g;
+    var cg = "channel-group " + g + " mode ";
+    if (key === "vlan") {
+      /* B1-P13-006。打つ場所（物理か、ポートチャネルか）と add の有無で分かれる */
+      var add = "「switchport trunk allowed vlan add " + v.vlan + "」コマンドを設定します";
+      var noadd = "「switchport trunk allowed vlan " + v.vlan + "」コマンドを設定します";
+      return { right: v.sw + " の " + phy + " で" + add,
+               wrong: [v.sw + " の " + po + " に" + add,
+                       v.sw + " の " + po + " に" + noadd,
+                       v.sw + " の " + phy + " で" + noadd] };
+    }
+    if (key === "l3add") {                       /* B1-P15-082 */
+      return { right: "no switchport\n" + cg + "active",
+               wrong: ["switchport mode trunk\n" + cg + "active",
+                       "no switchport\n" + cg + "on",
+                       "switchport\nswitchport mode trunk"] };
+    }
+    if (key === "minlinks") {                    /* B1-P11-030 */
+      var head = v.sw + "(config)#interface " + po + "\n" + v.sw + "(config-if)#";
+      return { right: head + "port-channel min-links " + v.keep,
+               wrong: [head + "lacp max-bundle " + v.keep,
+                       head + "lacp port-priority 32000",
+                       v.sw + "(config)#lacp system-priority 32000"] };
+    }
+    if (key === "vendor") {                      /* B1-P11-068 */
+      return { right: "interface " + phy + "\n" + cg + "active",
+               wrong: ["interface " + po + "\n" + cg + "desirable",
+                       "interface " + phy + "\n" + cg + "on",
+                       "interface " + po + "\n" + cg + "auto"] };
+    }
+    if (key === "passive") {                     /* B1-P11-064 */
+      return { right: "interface " + po + "\n" + cg + "passive",
+               wrong: ["interface range " + phy + " - 15\n" + cg + "desirable",
+                       "interface range " + phy + " - 15\n" + cg + "on",
+                       "interface " + po + "\n" + cg + "auto"] };
+    }
+    /* peer。B1-P13-082。相手側の行も並べて、こちら側だけを選ばせる */
+    var mine = function (m) {
+      return v.sw + "(config-if-range)#" + cg + m + "\n" +
+             "（相手側）" + cg + (v.peer || "passive");
+    };
+    return { right: mine("active"),
+             wrong: [mine("desirable"), mine("on"), mine("auto")] };
+  }
+
+  /* その答えだけが持っている印。**誤答が1つも当てはまらないこと**を build.js が見る。
+     打つ場所（物理インターフェースか、ポートチャネルか）まで見ないと分けられないので、
+     作った値をいっしょに渡して判定する */
+  var CMDMARK = {
+    vlan: function (o, v) {
+      return o.indexOf("allowed vlan add") >= 0 && o.indexOf(" の " + v.ifname + " で") >= 0;
+    },
+    l3add: function (o) {
+      return o.indexOf("no switchport") === 0 && o.indexOf("mode active") >= 0;
+    },
+    minlinks: function (o) { return o.indexOf("port-channel min-links") >= 0; },
+    vendor: function (o, v) {
+      return o.indexOf("interface " + v.ifname) >= 0 && o.indexOf("mode active") >= 0;
+    },
+    passive: function (o) { return o.indexOf("mode passive") >= 0; },
+    /* **見るのは、こちら側の行だけ。**下に並ぶ相手側の行にも mode が書いてあるので、
+       全体で探すと、相手が active のときに誤答まで当てはまってしまう */
+    peer: function (o) { return String(o).split("\n")[0].indexOf("mode active") >= 0; }
+  };
+
+  /* 最後の3問。1問目は今までどおり日本語、2問目と3問目はコマンドの並び */
+  function wholeQ(n, ctx) {
+    if (n === 0) return null;
+    for (var t = 0; t < 40; t++) {
+      var key = pick(Object.keys(MAKERS));
+      var v = MAKERS[key](baseVals());
+      var text = build(v);
+      var r = ctx.judge(ctx.read(text));
+      if (!r || r.key !== key) continue;
+      var c = cmdSet(key, v);
+      var seen = {}, opts = [c.right];
+      seen[c.right] = 1;
+      ctx.shuffle(c.wrong).forEach(function (w) {
+        if (opts.length >= 4 || seen[w]) return;
+        seen[w] = 1; opts.push(w);
+      });
+      if (opts.length < 4) continue;
+      return { kind: "whole", ask: "どのコマンドを設定しますか。",
+               exhibit: text, opts: ctx.shuffle(opts), right: c.right, extra: {} };
+    }
+    return null;
+  }
+
+  /* ── 説明の1枚に添える一言 ─────────────────────
+   * **取り違えやすい所だけ。**判定ルールの理由（why）をもう一度書かない。
+   */
+  var NOTE = {
+    vlan: "設定するのはポートチャネルの側ではなく、許可VLAN が足りない物理インターフェースの側。" +
+          "add を付けないと、いま通っている VLAN の一覧が置きかわる",
+    l3add: "出力の Flags にある R はレイヤ3、S はレイヤ2。" +
+           "Po1(SU) と出ていればレイヤ2なので、no switchport は要らない",
+    minlinks: "指定する数は「残っていてほしい本数」。" +
+              "名前の似た lacp max-bundle は、束に入れられる上限なので別のもの",
+    vendor: "出力に PAgP と出ていても、別のベンダーと組めるのは LACP だけ。desirable を選ばない。" +
+            "設定するのは物理インターフェースの側",
+    passive: "自分から交渉を始めるのが active、受けたときだけ応答するのが passive。" +
+             "PAgP で同じ組になるのは desirable と auto",
+    peer: "相手が passive なので、こちらも passive にすると、どちらも交渉を始めず束にならない"
+  };
+
   var spec = {
     id: "etherchannel",
+    /* 出題パターン＝どのルールで答えにたどり着くか。
+       絞ったせいでパターンが消えていないかを、build.js が毎回見る */
+    pattern: E.cuePattern, patterns: ["l3add", "minlinks", "passive", "peer", "vendor", "vlan"],
     kind: "rules",
     card: "config",
     name: "EtherChannel",
@@ -281,8 +404,12 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES),
-    expect: { spots: 5, rules: 6, questions: 20 },
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, /* 決め手が出力の中にあるルール。ここだけ見本の現物を出す */
+    learnOut: ["l3add", "vendor", "peer"],
+    wholeQ: wholeQ, cmdSet: cmdSet, cmdMark: CMDMARK,
+    brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
+    stepQ: E.cueStepQ(RULES),
+    expect: { spots: 5, rules: 6, questions: 16 },
     dropped: []
   };
 

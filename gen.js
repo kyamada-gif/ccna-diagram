@@ -13,7 +13,7 @@
     (typeof require !== "undefined" ? require("./engine.js") : null);
 
   /* 規則で答えを出すブロック。中身は types/<id>.js に書く */
-  var RULE_IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr", "log",
+  var RULE_IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr",
                   "etherchannel", "trunk", "access", "ipsvc", "portsec", "wlangui", "nolink", "misc"];
 
   /* 言葉と説明を結んで覚えるブロック。

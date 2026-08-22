@@ -1,4 +1,4 @@
-/* 「ルートブリッジの決まり方」ブロックの中身（目標2.5・過去問23問）。
+/* 「ルートブリッジの決まり方」ブロックの中身（目標2.5・過去問10問）。
  *
  * show interface のブロックと形は同じ（spots / rules / makers）だが、
  * **提示物がテキストではなく図**なので、次の3つを自分で持つ。
@@ -6,7 +6,8 @@
  *   excerpt … 決め手だけを残す
  *   answer  … 答えが決まった言葉ではなく、その場のスイッチ名になる
  *
- * 判定は2本だけ。過去問23問すべてで本の答えと一致する。
+ * 判定は2本だけ。過去問10問すべてで本の答えと一致する。
+ * 本の23問は同じ見比べ方が20問も並んでいたので、出題パターンごとに絞った（→ 10問）。
  */
 (function (global) {
   "use strict";
@@ -49,10 +50,14 @@
   /* 優先度が並んだ分だけを、MACアドレスの小さい順に並べる。
      **並べ替えて ＜ でつなぐ。**図の順のまま並べても、どちらが小さいのかは伝わらない。
      左に来たものがルートブリッジ */
-  function listMac(v) {
-    return v.tied.slice().sort(byHex).map(function (s) {
-      return s.id + " " + s.mac;
-    }).join(" ＜ ");
+  /* max を渡すと、小さいほうから max 台だけ出す。
+     **答え合わせでは2台まで。**4台とも同じ優先度の問題（本に2問ある）で
+     4台ぶんつなぐと 129字になり、答え合わせが長くなりすぎる。
+     決め手は「いちばん小さい1台」と「その次」の2台で足りる */
+  function listMac(v, max) {
+    var s = v.tied.slice().sort(byHex);
+    if (max && s.length > max) s = s.slice(0, max);
+    return s.map(function (x) { return x.id + " " + x.mac; }).join(" ＜ ");
   }
 
   /* ── 判定ルール。上から順に当てて、最初に当たったところで決める ── */
@@ -97,9 +102,15 @@
   var PRIS = [4096, 8192, 12288, 16384, 20480, 24576, 28672, 32768, 36864, 40960, 45056, 49152, 53248, 57344, 61440];
 
   function hex2() { return ("0" + R(0, 255).toString(16)).slice(-2); }
-  function mac() {
-    var out = [];
-    for (var i = 0; i < 6; i++) out.push(hex2());
+  /* MACアドレスの前半3つは、機器を作った会社ごとに決まっている番号。
+     **本の問題では4台とも前半が同じ**（00:10:a1:… が4台、など）で、
+     差がつくのは4つめ以降。
+     前半までばらばらに作ると1文字目で答えが決まってしまい、
+     「左の文字から順に比べる」という練習にならない（実際に 400回中 381回がそうなっていた） */
+  var OUI = ["00:10:a1", "00:24:98", "08:0e:18", "2c:54:91", "d0:d0:fd", "50:57:a8"];
+  function mac(head) {
+    var out = [head];
+    for (var i = 0; i < 3; i++) out.push(hex2());
     return out.join(":");
   }
 
@@ -108,25 +119,27 @@
     return { names: names, pris: null, macs: null };
   }
 
+  /* つなぎ方。**答えには関係しないので、いつも同じ。**
+     説明の1枚も問題も、この同じつなぎ方で描く（線が無いと、
+     スイッチが4台ばらばらに置いてあるだけの絵になってしまう） */
+  function links(n) {
+    return [[n[0], "Gi1/0/1", n[1], "Gi1/0/1"], [n[0], "Gi1/0/3", n[3], "Gi1/0/1"],
+            [n[0], "Gi1/0/2", n[2], "Gi1/0/3"], [n[1], "Gi1/0/2", n[2], "Gi1/0/1"],
+            [n[3], "Gi1/0/2", n[2], "Gi1/0/2"]];
+  }
+
   function build(v) {
     var sw = v.names.map(function (id, i) {
       return { id: id, pri: v.pris[i], mac: v.macs[i] };
     });
-    var n = v.names;
-    return {
-      sw: sw,
-      link: [[n[0], "Gi1/0/1", n[1], "Gi1/0/1"], [n[0], "Gi1/0/3", n[3], "Gi1/0/1"],
-             [n[0], "Gi1/0/2", n[2], "Gi1/0/3"], [n[1], "Gi1/0/2", n[2], "Gi1/0/1"],
-             [n[3], "Gi1/0/2", n[2], "Gi1/0/2"]],
-      host: []
-    };
+    return { sw: sw, link: links(v.names), host: [] };
   }
 
-  /* 4つとも違う MACアドレス を作る */
+  /* 4つとも違う MACアドレス を作る。**前半3つは4台とも同じ**（上の覚え書き） */
   function macs4() {
-    var out = [];
+    var head = pick(OUI), out = [];
     while (out.length < 4) {
-      var m = mac();
+      var m = mac(head);
       if (out.indexOf(m) < 0) out.push(m);
     }
     return out;
@@ -232,39 +245,22 @@
      { id: "SW3", pri: 4096, mac: "00:10:a1:3a:9d:52" },
      { id: "SW4", pri: 32768, mac: "00:10:a1:c7:60:18" }]
   ];
-  /* 優先度のけたをそろえる。数の大小は、けたがそろっていないと見比べられない */
-  function pad5(v) { return ("     " + v).slice(-5); }
+  /* **問題と同じ図で出す。**前は文字4行の表で出していたので、
+     説明の1枚と問題とで、値の置き場所が変わっていた。
+     光らせるのは **優先度がいちばん小さいスイッチ**。決まりは2枚とも同じで、
+     1枚目は1台だけ光り、2枚目は並んだ2台が光る。
+     どれが小さいのかを目で見つけられないと、下に書いてある決まりが読めない */
   function learnEx(block, i) {
-    return (LEARN[i] || []).map(function (s) {
-      return s.id + "  優先度 " + pad5(s.pri) + "  " + s.mac;
-    }).join("\n");
+    var sw = LEARN[i] || [];
+    return { sw: sw, link: links(sw.map(function (s) { return s.id; })), host: [],
+             mark: read({ sw: sw }).tied.map(function (s) { return s.id; }) };
   }
 
   /* ── どこを光らせるか ────────────────────
-   * 上の見本の中で、その確認項目で見比べる所だけを光らせる。
-   *   hits  … 塗る行。1つ目は4台とも見るので塗らない。
-   *           2つ目は、優先度が並んだ2台の行だけを塗る
-   *   marks … 行の中で光らせる言葉。見比べる数そのもの
-   * **問題の画面では効かない。**提示物が図（SVG）で、行という単位が無いため。
+   * **この分野では持たない。**提示物も説明の1枚も図（SVG）で、
+   * 行という単位が無いので、行や言葉を光らせる仕掛けは効かない。
+   * 見比べるスイッチの箱は、図のほうで光らせる（learnEx が返す fig.mark）。
    */
-  function marks(name) {
-    if (name === "ブリッジ優先度") {
-      var out = [];
-      LEARN[0].forEach(function (s) {
-        var p = String(s.pri);
-        if (out.indexOf(p) < 0) out.push(p);
-      });
-      return out;
-    }
-    if (name === "MACアドレス") {
-      return read({ sw: LEARN[1] }).tied.map(function (s) { return s.mac; });
-    }
-    return [];
-  }
-  function hits(name) {
-    if (name !== "MACアドレス") return [];
-    return read({ sw: LEARN[1] }).tied.map(function (s) { return s.id; });
-  }
 
   /* ── 短い説明の1枚 ────────────────────────
    * **文字は読まれない。**見たらすぐ「こう来たら、こう答える」と
@@ -276,7 +272,10 @@
        note: "既定は 32768。小さいほうが選ばれる（OSPF の代表ルータは大きいほう）" }],
     [{ if: "優先度が並んだ",
        then: "MACアドレスが小さいほう",
-       note: "左の文字から順に比べる。数字は英字より小さい（0 < 9 < a < f）" }]
+       note: "SW2 と SW3 は優先度がどちらも 4096。MACアドレスの前半 00:10:a1 は" +
+             "機器を作った会社の番号で4台とも同じなので、その先から比べる。" +
+             "b4 と 3a では 3a のほうが小さいので SW3。" +
+             "左の文字から順に比べ、数字は英字より小さい（0 < 9 < a < f）" }]
   ];
   function brief(block, i) { return BRIEF[i] || null; }
 
@@ -306,12 +305,33 @@
       return { gloss: "優先度が最も小さいスイッチが1台 ＝ そのスイッチがルートブリッジ",
                body: "優先度 " + v.lowest + " は " + v.win.id + " だけ" };
     }
+    /* 4台とも同じ優先度のときは「4台とも優先度が同じ」と言ったほうが短くて分かる */
+    var head = (tied === v.sw.length)
+      ? v.sw.length + " 台とも優先度が同じ。"
+      : "優先度 " + v.lowest + " が " + tied + " 台。";
     return { gloss: "優先度が並んだ ＝ MACアドレスが小さいほう",
-             body: "優先度 " + v.lowest + " が " + tied + " 台。" + listMac(v) };
+             body: head + listMac(v, 2) + (tied > 2 ? "（残りはもっと大きい）" : "") };
   }
+
+  /* ── 出題パターン ─────────────────────────
+   * 本の23問は、**どこまで見れば決まるか**で3通りに分かれる。
+   *   pri  … 優先度が最も小さいスイッチが1台。そこで決まる          （1問）
+   *   mac2 … 優先度が並ぶのが2台。その2台の MACアドレスを見比べる    （20問）
+   *   mac4 … 4台とも同じ優先度。4台ぶんの MACアドレスを見比べる      （2問）
+   * **答えでまとめてはいけない。**mac2 と mac4 は答えの出し方は同じだが、
+   * 見比べる台数が違う。まとめると「4台ぜんぶ見る」形がテストから消える。
+   * 同じパターンが20問も並んでいたので、7問までに絞った（23 → 10 問）。
+   */
+  function patternOf(q, G) {
+    var v = (G && G.read) ? G.read(q.fig || q.exhibit) : read(q.fig || q.exhibit);
+    if (v.tied.length === 1) return "pri";
+    return v.tied.length >= v.sw.length ? "mac4" : "mac2";
+  }
+  var PATTERNS = ["pri", "mac2", "mac4"];
 
   var spec = {
     id: "rootbridge",
+    pattern: patternOf, patterns: PATTERNS,
     kind: "rules",
     view: "topology",          /* 画面は図で出す */
     card: "read",
@@ -324,10 +344,10 @@
     ask: "この構成の中で、どのスイッチがルートブリッジになりますか。",
     walk: walkQ,
     /* 説明の1枚（見本と、短い決まり）と、答え合わせの言葉 */
-    learnEx: learnEx, hits: hits, marks: marks,
+    learnEx: learnEx,
     brief: brief, answerNote: answerNote,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
-    expect: { spots: 2, rules: 2, questions: 23 },
+    expect: { spots: 2, rules: 2, questions: 10 },
     dropped: []
   };
 

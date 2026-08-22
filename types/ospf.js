@@ -177,7 +177,9 @@
   /* 画面に出る言葉。**書いていない所を null と出さない** */
   function shown(x, k) {
     if (x[k] === null || x[k] === undefined) return "書いていない";
-    if (x[k + "Def"]) return "書いていない（既定の " + x[k] + " を使う）";
+    /* **短く書く。**「書いていない（既定の 10 を使う）」だと、
+       両側ぶん並んだときに 91字になり、90字の決まりを1字だけ超えることがあった */
+    if (x[k + "Def"]) return "書いていない（既定は " + x[k] + "）";
     return String(x[k]);
   }
   function pair(v, k) {
@@ -550,8 +552,14 @@
          決まる問題にも混ぜるのは、決まらない問題だけに出すと
          「この選択肢が見えたらそれが正解」と形で覚えられてしまうため */
       if (st.next) opts.push(undecided);
-      shuffle(VERDICTS.filter(function (x) { return x !== right; }))
-        .forEach(function (x) { if (opts.length < 4) opts.push(x); });
+      /* **決まる問題でも、正解が2つにならないようにする。**
+         「Hello だけ違う」出力の誤答に「Hello と Dead の両方をそろえる」を並べると、
+         Dead はもうそろっているので、両方そろえてもやはり直る。それも正解になる。
+         下の「決められない」問題では外していたのに、こちら側では外していなかった。
+         **見ている所を丸ごとふくむ答え**は、誤答にしない */
+      shuffle(RULES.filter(function (r) {
+        return r.verdict !== right && !within(st.look, r.look);
+      })).forEach(function (r) { if (opts.length < 4) opts.push(r.verdict); });
     } else {
       right = undecided;
       /* **決まらない問題の誤答に、最後まで見たときの答えを入れない。**
@@ -560,9 +568,13 @@
          **食い違っている所を丸ごとふくむ答えも外す。**
          Dead だけが違う出力に「Hello と Dead の両方をそろえる」を並べると、
          そちらでも直ってしまい、やはり正解が2つになる */
+      /* **その所自身の答えも、誤答として使う。**
+         そこで決まらない出力だと分かって作っているので、
+         「Hello をそろえる」を選んでも Hello はもうそろっていて、何も直らない。
+         安全な誤答であるうえに、読んだかどうかを試す良い誤答になる。
+         前はこれを外していたので、選択肢が3つしかない問題ができていた（全体の 4.9%）*/
       opts = [right];
       shuffle(RULES.filter(function (r) {
-        if (r.verdict === st.verdict) return false;
         return !(full && within(full.look, r.look));
       })).forEach(function (r) { if (opts.length < 4) opts.push(r.verdict); });
     }
@@ -576,13 +588,21 @@
    *   ③ 決まらないので、次の確認項目へ進むか
    * ①を先に置くのは、**どこを見るか分からないままでは②が解けない**ため。
    */
-  function genKey(key) {
+  /* 作った提示物と、**それを作るのに使った値**を返す。
+     値は「打つコマンドの並び」を組むのに要る（ルータの名前・インターフェース名・
+     Process ID・ネットワークの番地は、提示物を読み直さなくても、ここにある） */
+  function genKeyV(key) {
     for (var t = 0; t < 60; t++) {
-      var text = build(MAKERS[key](baseVals()));
+      var vals = MAKERS[key](baseVals());
+      var text = build(vals);
       var r = judge(read(text));
-      if (r && r.key === key) return text;
+      if (r && r.key === key) return { text: text, vals: vals, key: key };
     }
     return null;
+  }
+  function genKey(key) {
+    var g = genKeyV(key);
+    return g ? g.text : null;
   }
   function genAny() {
     var keys = Object.keys(MAKERS);
@@ -642,8 +662,18 @@
     rid: "設定では router-id の行。show の出力では Process ID の行の中"
   };
 
+  /* 行当ての誤答に使ってはいけない行。
+     **「OSPF が動いているか」で network の行を誤答にしない。**
+     そのインターフェースで OSPF を動かしているのは、実際には network の行のほう。
+     知っている人ほどそちらを選び、正解が2つに近くなる（200問中 46問で出ていた） */
+  var AVOID = { run: ["network "] };
+
   function lineQ(spot, shuffle) {
     var hs = hits(spot.name);
+    var avoid = AVOID[spot.key] || [];
+    var isAvoid = function (ln) {
+      return avoid.some(function (w) { return ln.indexOf(w) >= 0; });
+    };
     var isHit = function (ln) {
       return hs.some(function (w) { return ln.indexOf(w) >= 0; });
     };
@@ -664,7 +694,7 @@
             if (s === target && right === null) right = x;
             return;                        /* 同じ行が相手側にもあるので、誤答にしない */
           }
-          if (seen[x]) return;
+          if (seen[x] || isAvoid(ln)) return;
           seen[x] = 1;
           (nearish(ln) ? good : rest).push(x);
         });
@@ -727,12 +757,95 @@
     /* ②③ その行を見て、ここで決まるか */
     var hit = (n === sp.length);
     var text = genReach(i, hit, bs);
+    /* **最後の確認項目（Router ID）には「決まらない出力」が無い。**
+       そこまで来たら必ず決まるので、決まる問題をもう1問作る */
+    if (!text && !hit) { hit = true; text = genReach(i, true, bs); }
     if (!text) return null;
     var v = ctx.read(text);
     var st = stepOf(i, v, hit, bs);
     var w = walkQ(st, b.keys[0], v, ctx.shuffle);
     return { kind: "step", ask: w.ask, exhibit: text, opts: w.opts, right: w.right,
              extra: { step: st, i: i } };
+  }
+
+  /* ── 最後の3問のうち2問は、打つコマンドの並びで答える ─────────
+   * **テストの選択肢は、ほとんどが「打つコマンドの並び」。**
+   * 本の7問のうち6問がこの形で、「どこが違うか」まででは足りず、
+   * **どの値に合わせるか**まで要る。
+   * 前は練習の選択肢がすべて日本語の行動文だったので、値を選ぶ所を一度も通らなかった。
+   *
+   * 誤答の顔ぶれは**本の4つをそのまま写す。**こちらで考え出さない。
+   *   ・hello-interval を、もうそろっている値に直す     … 何も直らない
+   *   ・dead-interval を、もうそろっている値に直す      … 何も直らない
+   *   ・router-id を設定する                         … 直らない
+   *   ・network …… area（相手と違うエリア）を足す      … 直らない
+   * 本の罠（B1-P12-061）も同じで、正解が dead-interval 40 のときに
+   * 「hello-interval 10」＝そろっている側の値、が誤答に並ぶ。
+   *
+   * **直すのは、いつも2台目のほう。**出力を作るとき（MAKERS）に
+   * 2台目の値だけを変えているので、合わせる先は1台目の値になる。
+   */
+  function intfCmd(h, intf, lines) {
+    return [h + "(config)#interface " + intf].concat(lines.map(function (l) {
+      return h + "(config-if)#" + l;
+    })).join("\n");
+  }
+  function routerCmd(h, pid, lines) {
+    return [h + "(config)#router ospf " + pid].concat(lines.map(function (l) {
+      return h + "(config-router)#" + l;
+    })).join("\n");
+  }
+
+  function cmdQ(shuffle) {
+    for (var t = 0; t < 60; t++) {
+      var g = genKeyV(pick(Object.keys(MAKERS)));
+      if (!g) continue;
+      var v = read(g.text), o = g.vals;
+      var a = v.A, b = v.B;
+      if (!a.host || !b.host) continue;
+      var h = o.n2, si = o.shortIntf, pid = o.pid1;
+      /* 相手と違うエリア。**「片側で動いていない」問題では、ここが決め手になる。**
+         同じエリアにすると、そちらでも直ってしまい正解が2つになる */
+      var bad = pick(AREAS.filter(function (x) { return x !== a.area; }));
+      var net = o.net2 + " 255.255.255.0 area " + bad;
+
+      var HELLO = intfCmd(h, si, ["ip ospf hello-interval " + a.hello]);
+      var DEAD = intfCmd(h, si, ["ip ospf dead-interval " + a.dead]);
+      var BOTH = intfCmd(h, si, ["ip ospf hello-interval " + a.hello,
+                                 "ip ospf dead-interval " + a.dead]);
+      var RID = routerCmd(h, pid, ["router-id " + a.rid]);
+      var NET = routerCmd(h, pid, ["network " + net]);
+      var ON = intfCmd(h, si, ["ip ospf " + pid + " area " + a.area]);
+      var ONBAD = intfCmd(h, si, ["ip ospf " + pid + " area " + bad]);
+
+      var right, wrong;
+      if (g.key === "hello") { right = HELLO; wrong = [DEAD, RID, NET]; }
+      else if (g.key === "dead") { right = DEAD; wrong = [HELLO, RID, NET]; }
+      else if (g.key === "both") { right = BOTH; wrong = [HELLO, DEAD, RID, NET]; }
+      else if (g.key === "rid") {
+        right = routerCmd(h, pid, ["no router-id " + b.rid]);
+        wrong = [HELLO, DEAD, RID, NET];
+      } else { right = ON; wrong = [ONBAD, NET, HELLO]; }
+
+      var seen = {}, opts = [right];
+      seen[right] = 1;
+      shuffle(wrong).forEach(function (w) {
+        if (opts.length >= 4 || seen[w]) return;
+        seen[w] = 1; opts.push(w);
+      });
+      if (opts.length < 4) continue;
+      return { kind: "whole", ask: h + " に、どの設定を適用しますか。",
+               exhibit: g.text, opts: shuffle(opts), right: right, extra: {} };
+    }
+    return null;
+  }
+
+  /* 最後の3問。1問目は今までどおり日本語で「どこをどう直すか」、
+     2問目と3問目は打つコマンドの並びで答える。
+     null を返すと、共通の形（engine.js）が使われる */
+  function wholeQ(n, ctx) {
+    if (n === 0) return null;
+    return cmdQ(ctx.shuffle);
   }
 
   /* ── 説明の1枚に出す現物 ─────────────────────
@@ -827,8 +940,8 @@
      どの行のことか分からない。見本のどこを見ればよいかまで書く */
   var NOTE = {
     off: "R1 には router ospf 1 と network …… area 0 の2行がある。R2 にはこの2行が無いので、" +
-         "R2 にも同じ2行を足す。show の出力で見るときは Process ID の行が無く、" +
-         "エリアは Internet address の行の末尾に出る",
+         "R2 にも同じ2行を足す。この形は設定でしか見えない。" +
+         "OSPF が動いていない側は、show ip ospf interface に何も出ないため",
     both: "R1 は Hello " + LV.both.h1 + "・Dead " + LV.both.d1 +
           "、R2 は Hello " + LV.both.h2 + "・Dead " + LV.both.d2 +
           "。どちらも違うので両方そろえる。数字は Timer intervals configured の行に4つ並び、" +
@@ -957,7 +1070,7 @@
     read: read, excerpt: excerpt,
     /* 説明の1枚（短い決まり）と、答え合わせの言葉。**判定そのものは変えていない** */
     brief: brief, answerNote: answerNote,
-    hits: hits, marks: marks, learnEx: learnEx, stepQ: stepQ, perSpot: 4,
+    hits: hits, marks: marks, learnEx: learnEx, stepQ: stepQ, wholeQ: wholeQ, perSpot: 4,
     ask: "両側の設定を見比べて、どこをどう直しますか。",
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 5, rules: 5, questions: 7 },

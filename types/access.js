@@ -87,6 +87,7 @@
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
     { key: "remove", cue: "必要のないコマンドを削除する", cond: "不要なコマンドを削除する、と書かれている",
+      mark: ["ip name-server", "service password-encryption"],
       verdict: "SSH に関係のないコマンドを no で削除する",
       why: "名前解決の設定（ip name-server）や、secret を使っているのに残っている service password-encryption は、SSH の動作には関係がない",
       look: ["要件の言葉（問題文）"],
@@ -127,6 +128,7 @@
       test: function (v) { return !!v.telnetonly; } },
 
     { key: "secret", cue: "パスワードを取り出せない形で保存する", cond: "そのほか（ユーザー名とパスワードを作成する）",
+      mark: ["取り出せない形で保存"],
       verdict: "username（名前）secret（パスワード）で作成する",
       why: "secret は元に戻せない形に変換して保存される。password で作成すると、入力した文字がそのまま設定に残る",
       look: ["パスワードの入れ方（password か secret か）"],
@@ -162,13 +164,27 @@
       dom: pick(["cisco.com", "CC-Net.com", "example.local"]),
       vty: pick(["0 4", "0 15"]),
       trans: pick(["telnet", "all"]),
-      key: pick([true, false])
+      key: pick([true, false]),
+      ns: pick(["198.51.100.210", "192.0.2.53", "203.0.113.9"]),
+      hash: pick(["Kx8q", "Tr4d", "9Lmz"])
     };
   }
 
   function conf(v) {
-    var out = [v.dev + "# show running-config | section line vty",
-               "line vty " + v.vty];
+    var out = [];
+    /* **「削除するコマンドはどれですか」の問題には、消す行そのものを出す。**
+       前は line vty と鍵の行しか出しておらず、消すべき行が提示物のどこにも無かった。
+       出す行は、本の B1-P12-065 の紙面と同じ（名前解決の設定と、
+       secret を使っているのに残っている service password-encryption）。 */
+    if (v.extra) {
+      out.push(v.dev + "# show running-config | include name-server|password-encryption|secret");
+      out.push("ip name-server " + v.ns);
+      out.push("service password-encryption");
+      out.push("username " + v.user + " secret 5 $1$mERr$" + v.hash);
+      out.push("");
+    }
+    out.push(v.dev + "# show running-config | section line vty");
+    out.push("line vty " + v.vty);
     if (v.trans) out.push(" transport input " + v.trans);
     out.push(" login");
     out.push("");
@@ -183,6 +199,7 @@
   var MAKERS = {
     remove: function (b) {
       b.need = "SSH に必要のないコマンドが混ざっています。削除するコマンドはどれですか。";
+      b.extra = true;
       return b;
     },
     sshsetup: function (b) {
@@ -220,8 +237,129 @@
   }
 
 
+  /* ── 最後の3問のうち2問は、打つコマンドの並びで答える ─────────
+   * 本の10問は、選択肢がすべて打つコマンドの並び。
+   * **誤答の顔ぶれは、本の同じ問題が出しているものを写す。**
+   */
+  function cmdSet(key, v) {
+    var L = function () { return Array.prototype.slice.call(arguments).join("\n"); };
+    if (key === "secret") {                      /* B1-P11-058 */
+      return { right: "username " + v.user + " secret " + v.pw,
+               wrong: ["username " + v.user + " password " + v.pw,
+                       "username " + v.user + " privilege 15 password " + v.pw,
+                       "username " + v.user + " privilege 10 password " + v.pw] };
+    }
+    if (key === "telnetonly") {                  /* B1-P11-069 */
+      var vty = "line vty " + v.vty;
+      return { right: L("enable secret level 15 0 " + v.pw, "!", vty,
+                        "login local", "transport input telnet"),
+               wrong: [L("enable password level 15 0 " + v.pw, "!", vty,
+                         "password " + v.pw, "transport input all"),
+                       L("enable secret level 1 0 " + v.pw, "!", vty,
+                         "login authentication", "password " + v.pw),
+                       L("enable password level 1 7 " + v.pw, "!", vty,
+                         "accounting exec default", "transport input telnet")] };
+    }
+    if (key === "sshonly") {                     /* B1-P12-015 */
+      return { right: L(v.dev + "(config)#line vty " + v.vty,
+                        v.dev + "(config-line)#transport input ssh",
+                        v.dev + "(config)#service password-encryption"),
+               wrong: [L(v.dev + "(config)#line vty " + v.vty,
+                         v.dev + "(config-line)#transport input all"),
+                       L(v.dev + "(config)#crypto key generate rsa"),
+                       L(v.dev + "(config)#username " + v.user + " secret " + v.pw)] };
+    }
+    if (key === "priv") {                        /* B1-P12-110 */
+      return { right: L(v.dev + "(config)#username " + v.user + " privilege 15 secret " + v.pw,
+                        v.dev + "(config)#line vty " + v.vty,
+                        v.dev + "(config-line)#login local"),
+               wrong: [L(v.dev + "(config)#username " + v.user + " secret " + v.pw,
+                         v.dev + "(config)#line vty " + v.vty,
+                         v.dev + "(config-line)#login local"),
+                       L(v.dev + "(config)#username " + v.user,
+                         v.dev + "(config)#line vty " + v.vty,
+                         v.dev + "(config-line)#password " + v.pw),
+                       L(v.dev + "(config)#username " + v.user,
+                         v.dev + "(config)#line vty " + v.vty,
+                         v.dev + "(config-line)#password " + v.pw,
+                         v.dev + "(config-line)#transport input telnet")] };
+    }
+    if (key === "sshsetup") {                    /* B3-M3-057 */
+      return { right: L("hostname " + v.dev, "ip domain-name " + v.dom,
+                        "crypto key generate rsa general-keys modulus 1024"),
+               wrong: [L("crypto key generate rsa general-keys modulus 1024",
+                         "ip ssh version 2", "line vty " + v.vty),
+                       L("hostname " + v.dev,
+                         "crypto key generate rsa general-keys modulus 1024",
+                         "line vty " + v.vty),
+                       L("ip domain-name " + v.dom,
+                         "crypto key generate rsa general-keys modulus 1024",
+                         "ip ssh version 2")] };
+    }
+    /* remove。B1-P12-065。消す行を選ぶ */
+    return { right: L("no ip name-server " + v.ns, "no service password-encryption"),
+             wrong: ["no ip domain name " + v.dom, "no login local", "no hostname " + v.dev] };
+  }
+
+  var CMDMARK = {
+    secret: function (o, v) { return o.indexOf("secret " + v.pw) >= 0 && o.indexOf("privilege") < 0; },
+    telnetonly: function (o) {
+      return o.indexOf("enable secret level 15") >= 0 && o.indexOf("transport input telnet") >= 0;
+    },
+    sshonly: function (o) { return o.indexOf("transport input ssh") >= 0; },
+    priv: function (o) { return o.indexOf("privilege 15 secret") >= 0 && o.indexOf("login local") >= 0; },
+    sshsetup: function (o, v) {
+      return o.indexOf("hostname " + v.dev) >= 0 && o.indexOf("ip domain-name") >= 0
+             && o.indexOf("crypto key generate") >= 0;
+    },
+    remove: function (o) { return o.indexOf("no ip name-server") >= 0; }
+  };
+
+  function wholeQ(n, ctx) {
+    if (n === 0) return null;
+    for (var t = 0; t < 40; t++) {
+      var key = pick(Object.keys(MAKERS));
+      var v = MAKERS[key](baseVals());
+      var text = build(v);
+      var r = ctx.judge(ctx.read(text));
+      if (!r || r.key !== key) continue;
+      var c = cmdSet(key, v);
+      if (!c) continue;                          /* コマンドの形にしない題材 */
+      var seen = {}, opts = [c.right];
+      seen[c.right] = 1;
+      ctx.shuffle(c.wrong).forEach(function (w) {
+        if (opts.length >= 4 || seen[w]) return;
+        seen[w] = 1; opts.push(w);
+      });
+      if (opts.length < 4) continue;
+      return { kind: "whole", ask: "どのコマンドを設定しますか。",
+               exhibit: text, opts: ctx.shuffle(opts), right: c.right, extra: {} };
+    }
+    return null;
+  }
+
+  /* ── 説明の1枚に添える一言 ─────────────────────
+   * **取り違えやすい所だけ。**判定ルールの理由（why）をもう一度書かない。
+   */
+  var NOTE = {
+    remove: "名前解決の設定は SSH の動作と関係がない。" +
+            "パスワードを secret で保存しているなら、service password-encryption も要らない",
+    sshsetup: "鍵はホスト名とドメイン名が無いと作れないので、この順で設定する。" +
+              "出力に鍵ができたと出ていれば、作り直さない",
+    sshonly: "transport input を書かないと Telnet も通ってしまう。" +
+             "service password-encryption は見た目を隠すだけで、secret ほど強くない",
+    priv: "privilege 15 のユーザーで入ると、その時点で特権モードになる。" +
+          "vty 側に login local が無いと、そのユーザー名では認証されない",
+    telnetonly: "SSH だけを許す設定とは、transport input の後ろが違うだけ。" +
+                "enable のパスワードは password ではなく secret で保存する",
+    secret: "secret は元に戻せない形で保存される。password で作ると、打った文字がそのまま設定に残る"
+  };
+
   var spec = {
     id: "access",
+    /* 出題パターン＝どのルールで答えにたどり着くか。
+       絞ったせいでパターンが消えていないかを、build.js が毎回見る */
+    pattern: E.cuePattern, patterns: ["priv", "remove", "secret", "sshonly", "sshsetup", "telnetonly"],
     kind: "rules",
     card: "config",
     name: "機器への入り方",
@@ -231,7 +369,11 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES),
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, /* 決め手が出力の中にあるルール。ここだけ見本の現物を出す */
+    learnOut: ["sshsetup", "sshonly"],
+    wholeQ: wholeQ, cmdSet: cmdSet, cmdMark: CMDMARK,
+    brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
+    stepQ: E.cueStepQ(RULES),
     /* 規則では出せないが、テストには出す問題 */
     bookOnly: ["B3-M1-092", "B3-M3-095"],
     expect: { spots: 5, rules: 6, questions: 10 },

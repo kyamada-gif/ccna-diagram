@@ -71,9 +71,14 @@
      **並べ替えて ＞ でつなぐ。**図の順のまま並べても、どちらが大きいのかは伝わらない。
      左に来たものが代表ルータ */
   function byKeyDesc(a, b) { return a.key < b.key ? 1 : a.key > b.key ? -1 : 0; }
-  function listRid(v) {
-    return v.tied.slice().sort(byKeyDesc).map(function (x) {
-      return x.id + " " + x.rid;
+  /* ルータ ID の行が無いルータは、Loopback やインターフェースの IP アドレスが
+     そのまま番号になる。**どこの値を比べているのかを書く。**
+     数字だけ並べると、図のどの行を見ればいいのか分からない */
+  function listRid(v, max) {
+    var s = v.tied.slice().sort(byKeyDesc);
+    if (max && s.length > max) s = s.slice(0, max);
+    return s.map(function (x) {
+      return x.id + " " + x.rid + (x.src === "ルータ ID" ? "" : "（" + x.src + "）");
     }).join(" ＞ ");
   }
 
@@ -125,26 +130,52 @@
   var PRIS = [1, 2, 5, 20, 50, 100, 106, 108, 120, 150, 200, 204, 240, 255];
   var PORTS = ["Gi0/0", "Gi0/1", "g0/0", "g0/1"];
 
-  function quad() {
-    return R(1, 250) + "." + R(0, 250) + "." + R(0, 250) + "." + R(1, 250);
-  }
-  function quads4() {
-    var out = [], q;
-    while (out.length < 4) {
-      q = quad();
-      if (out.indexOf(q) < 0 && !out.some(function (x) { return key(x) === key(q); })) {
-        out.push(q);
+  /* 見分ける番号に使う値。**本の図に出てくるのと同じ書き方にそろえる。**
+     前は 140.33.197.68 のような値をその場で作っていたが、本の図は
+     1.1.1.1・4.4.4.4・2.2.2.1・192.168.2.6 のような値しか出てこない */
+  var IDS = ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5", "9.9.9.9",
+             "10.10.10.10", "10.1.1.1", "10.1.1.2", "172.16.0.1",
+             "192.168.1.1", "192.168.1.2"];
+  /* Loopback のアドレスは、機器ごとに1つだけ置く小さな番号。
+     ルータ ID に使うものと同じ書き方だが、本の図では 2.2.2.1 のような値が出る */
+  var LOS = ["1.1.1.1", "2.2.2.1", "3.3.3.1", "4.4.4.1", "5.5.5.1", "9.9.9.1",
+             "10.0.0.1", "172.16.1.1"];
+
+  /* 4台ぶんの「見分ける番号」と、その**書き場所**を決める。
+   * 書き場所は3通り。**本の2問は、どちらもこの3通りが混ざっている。**
+   *   rid … ルータ ID の行がある
+   *   lo  … ルータ ID が無く、Loopback のアドレスがある
+   *   ip  … どちらも無く、インターフェースの IP アドレスがそのまま番号になる
+   * 前はどの図にも必ずルータ ID が書いてあり、**テストに出る形が練習に一度も出なかった。**
+   */
+  function idPlan(ips) {
+    for (var t = 0; t < 40; t++) {
+      var srcs = [0, 1, 2, 3].map(function () {
+        var r = R(1, 10);
+        return r <= 6 ? "rid" : r <= 8 ? "lo" : "ip";
+      });
+      var pool = E.shuffle(IDS), lop = E.shuffle(LOS);
+      var p = 0, q = 0, vals = [], seen = {}, ok = true, i;
+      for (i = 0; i < 4; i++) {
+        vals.push(srcs[i] === "ip" ? ips[i]
+                : srcs[i] === "lo" ? lop[q++] : pool[p++]);
       }
+      vals.forEach(function (x) {
+        var k = key(x);
+        if (seen[k]) ok = false;
+        seen[k] = 1;
+      });
+      if (ok) return { srcs: srcs, vals: vals };
     }
-    return out;
+    return { srcs: ["rid", "rid", "rid", "rid"], vals: E.shuffle(IDS).slice(0, 4) };
   }
 
   function baseVals() {
     var third = R(1, 250);
+    var ips = [0, 1, 2, 3].map(function (i) { return "192.168." + third + "." + (i * 2 + 1); });
     return {
       names: pick(NAMES), pid: pick([1, 10, 100]), port: pick(PORTS),
-      ips: [0, 1, 2, 3].map(function (i) { return "192.168." + third + "." + (i * 2 + 1); }),
-      rids: quads4(), pris: null
+      ips: ips, plan: idPlan(ips), pris: null
     };
   }
 
@@ -154,8 +185,11 @@
       hub: "スイッチ",
       title: "OSPF " + v.pid,
       node: v.names.map(function (id, i) {
-        return { id: id, at: AT[i], port: v.port, ip: v.ips[i], lo: null,
-                 rid: v.rids[i], pri: v.pris[i], tag: null };
+        var s = v.plan.srcs[i], val = v.plan.vals[i];
+        return { id: id, at: AT[i], port: v.port, ip: v.ips[i],
+                 lo: s === "lo" ? val : null,
+                 rid: s === "rid" ? val : null,
+                 pri: v.pris[i], tag: null };
       }),
       maclist: false,
       figvals: true
@@ -261,49 +295,40 @@
    * 文字の並びとして左から1字ずつ見ると 1 より 3 のほうが大きく見えるので、
    * 数として比べることが、この見本でそのまま分かる。
    */
+  /* R3 には**わざとルータ ID の行を書かない。**Loopback のアドレスが
+     そのまま番号になる、という本の形（B2-0076-01）をここで見せておく。
+     この形は練習の図にも出るので、見本と問題で見え方がそろう */
   var LEARN = [
     [{ id: "R1", pri: 100, rid: "1.1.1.1" },
      { id: "R2", pri: 100, rid: "10.10.10.10" },
-     { id: "R3", pri: 255, rid: "3.3.3.3" },
+     { id: "R3", pri: 255, lo: "3.3.3.3" },
      { id: "R4", pri: 100, rid: "4.4.4.4" }],
     [{ id: "R1", pri: 100, rid: "1.1.1.1" },
      { id: "R2", pri: 255, rid: "10.10.10.10" },
-     { id: "R3", pri: 255, rid: "3.3.3.3" },
+     { id: "R3", pri: 255, lo: "3.3.3.3" },
      { id: "R4", pri: 100, rid: "4.4.4.4" }]
   ];
+  /* **問題と同じ図で出す。**前は文字4行の表だったので、
+     説明の1枚と問題とで、値の置き場所が変わっていた。
+     光らせるのは **優先度がいちばん大きいルータ**。決まりは2枚とも同じで、
+     1枚目は1台だけ光り、2枚目は並んだ2台が光る */
   function learnEx(block, i) {
-    return (LEARN[i] || []).map(function (s) {
-      return s.id + "  優先度 " + s.pri + "  ルータ ID " + s.rid;
-    }).join("\n");
+    var list = LEARN[i] || [];
+    return {
+      shape: "star", hub: "スイッチ", title: "OSPF 1", figvals: true, maclist: false,
+      node: list.map(function (s, k) {
+        return { id: s.id, at: AT[k], port: "Gi0/0", ip: "192.168.2." + (k * 2 + 1),
+                 lo: s.lo || null, rid: s.rid || null, pri: s.pri, tag: null };
+      }),
+      mark: read({ node: list }).tied.map(function (x) { return x.id; })
+    };
   }
 
   /* ── どこを光らせるか ────────────────────
-   * 上の見本の中で、その確認項目で見比べる所だけを光らせる。
-   *   hits  … 塗る行。1つ目は4台とも見るので塗らない。
-   *           2つ目は、優先度が並んだ2台の行だけを塗る
-   *   marks … 行の中で光らせる言葉。見比べる数そのもの
-   * **問題の画面では効かない。**提示物が図（SVG）で、行という単位が無いため。
-   * 優先度は 100 と 255 の3けたにしてある。1けたの数にすると、
-   * ルータの名前やルータ ID の中の数字まで光ってしまう。
+   * **この分野では持たない。**提示物も説明の1枚も図（SVG）で、
+   * 行という単位が無いので、行や言葉を光らせる仕掛けは効かない。
+   * 見比べるルータの箱は、図のほうで光らせる（learnEx が返す fig.mark）。
    */
-  function marks(name) {
-    if (name === "OSPF の優先度") {
-      var out = [];
-      LEARN[0].forEach(function (s) {
-        var p = String(s.pri);
-        if (out.indexOf(p) < 0) out.push(p);
-      });
-      return out;
-    }
-    if (name === "ルータ ID") {
-      return read({ node: LEARN[1] }).tied.map(function (x) { return x.rid; });
-    }
-    return [];
-  }
-  function hits(name) {
-    if (name !== "ルータ ID") return [];
-    return read({ node: LEARN[1] }).tied.map(function (x) { return x.id; });
-  }
 
   /* ── 短い説明の1枚 ────────────────────────
    * **文字は読まれない。**見たらすぐ「こう来たら、こう答える」と
@@ -316,7 +341,10 @@
        note: "既定は 1。大きいほうが選ばれる（スイッチのルートブリッジは小さいほう）" }],
     [{ if: "優先度が並んだ",
        then: "ルータ ID が大きいほう",
-       note: "左の数字から順に比べる。図にルータ ID が無いときは Loopback、それも無ければ IP アドレス" }]
+       note: "R2 と R3 は優先度がどちらも 255。R3 にはルータ ID の行が無いので、" +
+             "Loopback の 3.3.3.3 が番号になる（それも無ければインターフェースの IP アドレス）。" +
+             "10.10.10.10 と 3.3.3.3 を左の数字から順に比べると 10 のほうが大きいので R2。" +
+             "文字の並びではなく、数として比べる" }]
   ];
   function brief(block, i) { return BRIEF[i] || null; }
 
@@ -344,8 +372,11 @@
       return { gloss: "優先度が最も大きいルータが1台 ＝ そのルータが代表ルータ（DR）",
                body: "優先度 " + v.top + " は " + v.win.id + " だけ" };
     }
+    var head = (tied === v.node.length)
+      ? v.node.length + " 台とも優先度が同じ。"
+      : "優先度 " + v.top + " が " + tied + " 台。";
     return { gloss: "優先度が並んだ ＝ ルータ ID が大きいほう",
-             body: "優先度 " + v.top + " が " + tied + " 台。" + listRid(v) };
+             body: head + listRid(v, 2) + (tied > 2 ? "（残りはもっと小さい）" : "") };
   }
 
   var spec = {
@@ -361,7 +392,7 @@
     ask: "この構成で、どのルータが DR になりますか。",
     walk: walkQ,
     /* 説明の1枚（見本と、短い決まり）と、答え合わせの言葉 */
-    learnEx: learnEx, hits: hits, marks: marks,
+    learnEx: learnEx,
     brief: brief, answerNote: answerNote,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample,
     expect: { spots: 2, rules: 2, questions: 2 },

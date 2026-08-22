@@ -43,8 +43,17 @@ const srcOf = (q) => {
   return typeof e === "string" ? e : (e.src || JSON.stringify(e));
 };
 
-/* その問題が、どのルールで答えにたどり着くか */
+/* その問題が、どのルールで答えにたどり着くか。
+   **分野が自分の数え方（spec.pattern）を持っていれば、そちらを使う。**
+   ルールの名前だけでは分けきれない分野がある（ルートブリッジは、
+   優先度が並ぶのが2台か4台かで、見比べる台数が変わる） */
 function patternOf(q) {
+  if (G && G.spec && typeof G.spec.pattern === "function") {
+    try {
+      const p = G.spec.pattern(q, G);
+      if (p) return p;
+    } catch (e) { /* 読めない問題は、下の決め方に落とす */ }
+  }
   if (G && G.kind === "rules" && G.judge && G.read) {
     try {
       const v = G.read(G.spec && G.spec.wantsQuestion
@@ -106,7 +115,13 @@ if (drop.length) {
 
 if (write) {
   const out = path.join(root, "q", `${id}.js`);
-  const head = fs.readFileSync(out, "utf8").split("\n").slice(0, 5).join("\n");
+  /* **先頭の行数を決め打ちにしない。**分野によって覚え書きの行数が違い、
+     5行で切ると `BANKS.<id> = [` の行まで落ちて、書き出したファイルが壊れる
+     （実際に q/etherchannel.js を壊した）。入れ物の行を探して、そこまでを残す */
+  const src = fs.readFileSync(out, "utf8").split("\n");
+  const at = src.findIndex((l) => l.indexOf(`BANKS.${id} = [`) >= 0);
+  if (at < 0) { console.error(`${out} に BANKS.${id} = [ の行が見つからない`); process.exit(1); }
+  const head = src.slice(0, at + 1).join("\n");
   const body = keep.map((r) => "    " + JSON.stringify(r)).join(",\n");
   fs.writeFileSync(out,
     `${head}\n${body}\n  ];\n  if (typeof module !== "undefined" && module.exports) ` +

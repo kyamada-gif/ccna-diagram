@@ -227,6 +227,16 @@ BLOCK_IDS.forEach((id) => {
     const sp = SPECS[id];
     if (!sp) return;
     ["spots", "rules", "gloss", "name", "note", "ask"].forEach((k) => look(sp[k], `${id}.${k}`));
+    /* **説明の1枚（brief）の中の文も見る。**ここは見張りの死角だった。
+       `**ここが大事**` と書くと、記号ごと画面に出てしまう */
+    if (typeof sp.brief === "function" && GENS[id] && GENS[id].blocks) {
+      if (GENS[id].begin) GENS[id].begin();
+      GENS[id].blocks().forEach((b, i) => {
+        let br = null;
+        try { br = sp.brief(b, i); } catch (e) { br = null; }
+        look(br, `${id}.brief`);
+      });
+    }
   });
   bad2.forEach((b) => bad.push(`画面の言葉に ** が残っている … ${b}`));
 }
@@ -267,6 +277,16 @@ BLOCK_IDS.forEach((id) => {
     const sp = SPECS[id];
     if (!sp) return;
     ["spots", "rules", "gloss", "name", "note", "ask"].forEach((k) => look(sp[k], `${id}.${k}`));
+    /* **説明の1枚（brief）の中の文も見る。**ここは見張りの死角だった。
+       `**ここが大事**` と書くと、記号ごと画面に出てしまう */
+    if (typeof sp.brief === "function" && GENS[id] && GENS[id].blocks) {
+      if (GENS[id].begin) GENS[id].begin();
+      GENS[id].blocks().forEach((b, i) => {
+        let br = null;
+        try { br = sp.brief(b, i); } catch (e) { br = null; }
+        look(br, `${id}.brief`);
+      });
+    }
   });
   /* 画面そのもの（app.jsx）も見る。文字列の中だけを見て、覚え書きは見ない */
   const jsx = fs.readFileSync(path.join(__dirname, "app.jsx"), "utf8").split("\n");
@@ -338,6 +358,16 @@ BLOCK_IDS.forEach((id) => {
     const sp = SPECS[id];
     if (!sp) return;
     ["spots", "rules", "gloss", "name", "note", "ask"].forEach((k) => look(sp[k], `${id}.${k}`));
+    /* **説明の1枚（brief）の中の文も見る。**ここは見張りの死角だった。
+       `**ここが大事**` と書くと、記号ごと画面に出てしまう */
+    if (typeof sp.brief === "function" && GENS[id] && GENS[id].blocks) {
+      if (GENS[id].begin) GENS[id].begin();
+      GENS[id].blocks().forEach((b, i) => {
+        let br = null;
+        try { br = sp.brief(b, i); } catch (e) { br = null; }
+        look(br, `${id}.brief`);
+      });
+    }
   });
   found.forEach((f) => bad.push(`画面の言葉が不自然 … ${f}`));
 }
@@ -440,6 +470,17 @@ BLOCK_IDS.forEach((id) => {
         if (shown.length > LIMIT && over.indexOf(shown) < 0) over.push(shown);
       }
     }
+    /* **テストの答え合わせも、同じ短い形になった。**だからここも見る。
+       前は練習だけを見ていたので、テストだけ長いままでも気づけなかった
+       （ルートブリッジの「4台とも同じ優先度」の問題が 129字になっていた） */
+    if (typeof sp.answerNote === "function") {
+      (BANKS[id] || []).forEach((q) => {
+        let nt = null;
+        try { nt = sp.answerNote(G.read(q.fig || q.exhibit)); } catch (e) { nt = null; }
+        const t = nt ? String(nt.body || "") : "";
+        if (t.length > LIMIT && over.indexOf(t) < 0) over.push(t);
+      });
+    }
     over.forEach((t) => bad.push(
       `${sp.name}: 答え合わせが長い（${t.length} 字）… ${t.slice(0, 30)}…`));
   });
@@ -506,6 +547,61 @@ BLOCK_IDS.forEach((id) => {
       }
     }
     if (ng) bad.push(`${sp.name}: 決まらない問題の答え合わせに、先の答えが出ている（${ng} か所）`);
+  });
+}
+
+/* ── 光らせる言葉が、提示物に本当にあるか ──────────────
+ * 決め手型の分野では、答え合わせのあとに「決め手になった言葉」を提示物の中で光らせる。
+ * **書いた言葉が提示物に無ければ、どこも光らない。**しかも黙って何も起きないので、
+ * 書き間違えても気づけない。ここで毎回、全部のルールを作って確かめる。
+ */
+{
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id], G = GENS[id];
+    if (!sp || !G || G.kind !== "rules") return;
+    (sp.rules || []).forEach((r) => {
+      if (!r.mark || !r.mark.length) return;
+      const text = G.make(r.key);
+      if (!text) { bad.push(`${sp.name}: ${r.key} の提示物が作れない`); return; }
+      r.mark.forEach((w) => {
+        if (String(text).indexOf(w) < 0) {
+          bad.push(`${sp.name}: ${r.key} の光らせる言葉「${w}」が、提示物に出てこない`);
+        }
+      });
+    });
+  });
+}
+
+/* ── コマンドの並びで答える問題に、正解が2つ無いか ──────────
+ * **誤答が正解になっていないことを、機械で確かめる。**
+ * 分野が cmdSet（答えと誤答の組）と cmdMark（その答えだけが持っている印）を
+ * 持っていれば、全ルールぶん作って、印を持つのが正解1つだけかを見る。
+ */
+{
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id], G = GENS[id];
+    if (!sp || !G || typeof sp.cmdSet !== "function" || !sp.cmdMark) return;
+    let ng = 0, seen = 0;
+    Object.keys(sp.makers || {}).forEach((key) => {
+      /* cmdSet が null を返す題材（本の選択肢が日本語の文のもの）は、
+         コマンドの形にしないので、印も要らない */
+      if (sp.cmdMark[key] === null) return;
+      const isRight = sp.cmdMark[key];
+      if (!isRight) { bad.push(`${sp.name}: ${key} の印が書かれていない`); return; }
+      for (let k = 0; k < 20; k++) {
+        const v = sp.makers[key](sp.baseVals());
+        const c = sp.cmdSet(key, v);
+        seen++;
+        if (!isRight(c.right, v)) { ng++; bad.push(`${sp.name}: ${key} の正解が印を持っていない`); break; }
+        const alsoRight = c.wrong.filter((w) => isRight(w, v));
+        if (alsoRight.length) {
+          ng++;
+          bad.push(`${sp.name}: ${key} の誤答も正解になっている … ${alsoRight[0].replace(/\n/g, " / ").slice(0, 40)}`);
+          break;
+        }
+      }
+    });
+    if (!ng) console.log(`  ${sp.name}: コマンドの並びの問題 ${seen} 通り、正解は1つだけ`);
   });
 }
 

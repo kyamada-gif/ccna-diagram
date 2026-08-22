@@ -66,7 +66,11 @@
     download: /(ソフトウェアをインストール|Download File|ポート\s*22)/i,
     p2p: /(P2P|ピアツーピア|クライアント同士)/i,
     band: /(デュアルバンド|バンド選択)/i,
-    aes: /(暗号化|AES|CCMP)/i,
+    /* 「事前共有キー ベースの SSID」は、本（B2-0250-01）の問題文の言い方。
+       この問題の正解は2つ（AES(CCMP128) を選ぶ ＋ PSK を選ぶ）だが、
+       「事前共有キー」だけを見て psk と判定していたので、
+       答えの半分（AES）が答え合わせに出ていなかった */
+    aes: /(暗号化|AES|CCMP|事前共有キー\s*ベース)/i,
     ft: /(Fast Transition|ローミング)/i,
     l2sec: /Layer 2 Security\s*[:：]?\s*(\S+)/i
   };
@@ -223,6 +227,10 @@
       "",
       "Security ＞ Layer 2",
       "  Layer 2 Security    " + v.l2,
+      /* 暗号の種類は、選べるものを並べて出す。
+         説明の一言で「CCMP256 や GCMP は WPA3 で使うもの」と注意しているので、
+         その名前が画面にも並んでいないと、注意のしようがない */
+      "  WPA2/WPA3 Encryption    AES(CCMP128) ／ CCMP256 ／ GCMP128 ／ GCMP256",
       "  MAC Filtering       チェックなし",
       "  PSK                 Enable（チェックなし）",
       "  802.1X              Enable（チェックなし）",
@@ -235,6 +243,11 @@
       "  Client Band Select         チェックなし",
       "  Allow AAA Override         チェックなし",
       "  Maximum Allowed Clients    0",
+      /* **名前の似た項目を、画面にも並べる。**
+         説明の一言で「名前が似ているだけの別の設定」と注意しているのに、
+         その行が画面に無いと、注意のしようがない（本の紙面には並んでいる） */
+      "  Maximum Allowed Clients Per AP Radio    200",
+      "  Wi-Fi Direct Clients Policy    Disabled",
       "  Fast Transition            Adaptive"
     ].join("\n");
   }
@@ -292,8 +305,27 @@
   }
 
 
+  /* ── 説明の1枚に添える一言 ─────────────────────
+   * **取り違えやすい所だけ。**判定ルールの理由（why）をもう一度書かない。
+   */
+  var NOTE = {
+    clients: "名前の似た Maximum Allowed Clients Per AP Radio は、" +
+             "アクセスポイント1台あたりの上限で、別の設定",
+    weblogin: "認証が済むまで通すのは、IP アドレスの取得（DHCP）と名前解決（DNS）だけ",
+    macf: "事前共有キーだけでは、キーを知っている機器がすべてつながってしまう",
+    download: "ポート 22 を使うのは SFTP。入れるのがソフトウェア本体なので、File Type は Code",
+    p2p: "名前の似た Wi-Fi Direct Clients Policy は、別の設定",
+    band: "接続ごとに設定を変えることになるので、AAA Override も一緒に有効にする",
+    subnet: "所属させる先を選ぶのは General タブ。Security タブではない",
+    aes: "CCMP256 や GCMP は WPA3 で使うもの。WPA2 で選ぶのは AES（CCMP128）",
+    psk: "802.1X は認証サーバを使う方式なので、ここでは選ばない"
+  };
+
   var spec = {
     id: "wlangui",
+    /* 出題パターン＝どのルールで答えにたどり着くか。
+       絞ったせいでパターンが消えていないかを、build.js が毎回見る */
+    pattern: E.cuePattern, patterns: ["aes", "band", "clients", "download", "macf", "p2p", "psk", "subnet", "weblogin"],
     kind: "rules",
     card: "misc",
     name: "無線の画面を読む",
@@ -303,7 +335,10 @@
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
-    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, walk: E.cueWalk(RULES, "画面のどこを触りますか。"),
+    build: build, baseVals: baseVals, makers: MAKERS, sample: sample, /* 決め手が出力の中にあるルール。ここだけ見本の現物を出す */
+    learnOut: ["psk", "macf"],
+    brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
+    stepQ: E.cueStepQ(RULES, "画面のどこを触りますか。"),
     /* 「この画面から何が分かるか」を聞く問題。規則では出せないが、テストには出す */
     bookOnly: ["B1-P15-046", "B1-P16-065"],
     expect: { spots: 5, rules: 9, questions: 13 },
