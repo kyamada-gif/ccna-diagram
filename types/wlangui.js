@@ -1,4 +1,4 @@
-/* 「無線の画面を読む」ブロック（過去問13問）。
+/* 「無線の画面を読む」ブロック（過去問14問）。
  *
  * 無線の親機をまとめる機械（WLC）の設定画面を見て、どこを触るかを答える。
  * 本の13問は「要件の言葉 → 画面のどの行か」の対応で決まる。決め方は9つ。
@@ -203,7 +203,8 @@
   };
 
   var SAME = {
-    "Maximum Allowed Clients に、許可する台数を指定する": ["Maximam Allowed Clients", "Maximum Allowed Clients"],
+    /* 本によって書き方が違う。B1 は英語の項目名、B2 は日本語に訳してある */
+    "Maximum Allowed Clients に、許可する台数を指定する": ["Maximam Allowed Clients", "Maximum Allowed Clients", "最大許可クライアント数"],
     "Layer 3 の Web ポリシーと認証を有効にする": ["Web ポリシー"],
     "WPA2 Policy を有効にし、MAC フィルタリングも有効にする": ["MAC フィルタリング"],
     "File Type を Code、Transfer Mode を SFTP にして、サーバの IP アドレスを指定する": ["SFTP"],
@@ -355,7 +356,7 @@
     stepQ: E.cueStepQ(RULES, "画面のどこを触りますか。"),
     /* 「この画面から何が分かるか」を聞く問題。規則では出せないが、テストには出す */
     bookOnly: ["B1-P15-046", "B1-P16-065"],
-    expect: { spots: 5, rules: 9, questions: 13 },
+    expect: { spots: 5, rules: 9, questions: 14 },
     dropped: []
   };
 

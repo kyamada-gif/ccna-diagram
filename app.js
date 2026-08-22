@@ -64,7 +64,7 @@ const CARDS = [{
   blocks: [{
     id: "wlangui",
     name: "無線の画面を読む",
-    n: 13
+    n: 14
   }, {
     id: "nolink",
     name: "繋がらない原因を探す",

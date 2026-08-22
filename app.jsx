@@ -42,7 +42,7 @@ const CARDS = [
   { id: "misc", name: "図表付きの問題を覚える",
     note: "想定問題を、図や出力ごとそのまま覚えてから解く",
     blocks: [
-      { id: "wlangui", name: "無線の画面を読む", n: 13 },
+      { id: "wlangui", name: "無線の画面を読む", n: 14 },
       { id: "nolink", name: "繋がらない原因を探す", n: 5 },
       { id: "misc", name: "その他", n: 11 }
     ] }
