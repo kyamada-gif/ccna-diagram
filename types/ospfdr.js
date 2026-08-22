@@ -341,10 +341,16 @@
        note: "既定は 1。大きいほうが選ばれる（スイッチのルートブリッジは小さいほう）" }],
     [{ if: "優先度が並んだ",
        then: "ルータ ID が大きいほう",
-       note: "R2 と R3 は優先度がどちらも 255。R3 にはルータ ID の行が無いので、" +
-             "Loopback の 3.3.3.3 が番号になる（それも無ければインターフェースの IP アドレス）。" +
-             "10.10.10.10 と 3.3.3.3 を左の数字から順に比べると 10 のほうが大きいので R2。" +
-             "文字の並びではなく、数として比べる" }]
+       /* **並べて見比べるものは、文章にしない。**値は上の見本（LEARN）から作る */
+       note: { rows: [{ h: "優先度が同じ2台" }]
+           .concat(LEARN[1].filter(function (s) { return s.pri === 255; })
+             .map(function (s) {
+               var f = from(s);
+               return { c: s.id + "  " + f.src + " " + f.rid };
+             }))
+           .concat([{ t: "ルータ ID の行が無ければ Loopback、それも無ければ IP アドレス" },
+                    { t: "10 と 3 では 10 のほうが大きいので R2" },
+                    { t: "文字の並びではなく、数として比べる" }]) } }]
   ];
   function brief(block, i) { return BRIEF[i] || null; }
 
@@ -372,11 +378,21 @@
       return { gloss: "優先度が最も大きいルータが1台 ＝ そのルータが代表ルータ（DR）",
                body: "優先度 " + v.top + " は " + v.win.id + " だけ" };
     }
+    /* **見比べる2台は、上下に並べる。**1行につなぐと、
+       どちらが大きいのかを目で追い直すことになる */
+    var two = v.tied.slice().sort(byKeyDesc).slice(0, 2);
     var head = (tied === v.node.length)
-      ? v.node.length + " 台とも優先度が同じ。"
-      : "優先度 " + v.top + " が " + tied + " 台。";
+      ? v.node.length + " 台とも優先度が同じ"
+      : "優先度 " + v.top + " が " + tied + " 台";
     return { gloss: "優先度が並んだ ＝ ルータ ID が大きいほう",
-             body: head + listRid(v, 2) + (tied > 2 ? "（残りはもっと小さい）" : "") };
+             body: { rows: [{ t: head }]
+               .concat(two.map(function (x, i) {
+                 var r = { c: x.id + "  " + x.rid +
+                              (x.src === "ルータ ID" ? "" : "（" + x.src + "）") };
+                 if (i === 0) r.m = "こちらが大きい";
+                 return r;
+               }))
+               .concat(tied > 2 ? [{ t: "残りはもっと小さい" }] : []) } };
   }
 
   var spec = {

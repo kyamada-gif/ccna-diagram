@@ -272,10 +272,14 @@
        note: "既定は 32768。小さいほうが選ばれる（OSPF の代表ルータは大きいほう）" }],
     [{ if: "優先度が並んだ",
        then: "MACアドレスが小さいほう",
-       note: "SW2 と SW3 は優先度がどちらも 4096。MACアドレスの前半 00:10:a1 は" +
-             "機器を作った会社の番号で4台とも同じなので、その先から比べる。" +
-             "b4 と 3a では 3a のほうが小さいので SW3。" +
-             "左の文字から順に比べ、数字は英字より小さい（0 < 9 < a < f）" }]
+       /* **並べて見比べるものは、文章にしない。**値は上の見本（LEARN）から作る */
+       note: { rows: [{ h: "優先度が同じ2台" }]
+           .concat(read({ sw: LEARN[1] }).tied.map(function (s) {
+             return { c: s.id + "  " + s.mac };
+           }))
+           .concat([{ t: "前半 00:10:a1 は会社の番号で、4台とも同じ" },
+                    { t: "その先を左から比べると 3a のほうが小さいので SW3" },
+                    { t: "数字は英字より小さい（0 < 9 < a < f）" }]) } }]
   ];
   function brief(block, i) { return BRIEF[i] || null; }
 
@@ -305,12 +309,18 @@
       return { gloss: "優先度が最も小さいスイッチが1台 ＝ そのスイッチがルートブリッジ",
                body: "優先度 " + v.lowest + " は " + v.win.id + " だけ" };
     }
-    /* 4台とも同じ優先度のときは「4台とも優先度が同じ」と言ったほうが短くて分かる */
+    /* **見比べる2台は、上下に並べる。**1行につなぐと、
+       どちらが小さいのかを目で追い直すことになる */
+    var two = v.tied.slice().sort(byHex).slice(0, 2);
     var head = (tied === v.sw.length)
-      ? v.sw.length + " 台とも優先度が同じ。"
-      : "優先度 " + v.lowest + " が " + tied + " 台。";
+      ? v.sw.length + " 台とも優先度が同じ"
+      : "優先度 " + v.lowest + " が " + tied + " 台";
     return { gloss: "優先度が並んだ ＝ MACアドレスが小さいほう",
-             body: head + listMac(v, 2) + (tied > 2 ? "（残りはもっと大きい）" : "") };
+             body: { rows: [{ t: head }]
+               .concat(two.map(function (s, i) {
+                 return { c: s.id + "  " + s.mac, m: i === 0 ? "こちらが小さい" : "" };
+               }).map(function (r) { if (!r.m) delete r.m; return r; }))
+               .concat(tied > 2 ? [{ t: "残りはもっと大きい" }] : []) } };
   }
 
   /* ── 出題パターン ─────────────────────────

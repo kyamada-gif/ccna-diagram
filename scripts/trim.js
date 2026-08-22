@@ -25,7 +25,8 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 global.window = global;
 require(path.join(root, "questions.js"));
-require(path.join(root, "q", "synonym.js"));
+/* 言い換え表は「言葉と意味」の分野だけのもの。無いアプリもある */
+try { require(path.join(root, "q", "synonym.js")); } catch (e) {}
 require(path.join(root, "engine.js"));
 require(path.join(root, "gen.js"));
 

@@ -654,12 +654,39 @@
   /* その値が、どの行に書いてあるか。**答え合わせに出すのはこれだけ。**
      確認項目の説明（use）は初めての人向けに長く書いてあるので、
      答え合わせにそのまま出すと、答えるのに要らない話まで並ぶ */
+  /* 見本の設定に使う値。**説明の一言も、ここから作る。**
+     別々に書くと、片方を直したときにもう片方とずれる */
+  var LC = { net: "192.168.30", pid: 1, area: 0 };
+  function ospfLine(last) { return "network " + LC.net + "." + last + " 0.0.0.0 area " + LC.area; }
+  function runLine() { return "router ospf " + LC.pid; }
+
+  /* **説明の1枚と地続きにする。**「設定でこう入れる → show ではこう見える」を
+     上下に並べ、同じ値が形によってどの行に出るかを、目で見せる。
+     値は見本と同じ所（LC・LV）から作る */
+  var LR = { rid: "1.1.1.1", hello: 15, dead: 60 };
+  function whereRows(cfg, cfgWhat, out, outWhat) {
+    return { rows: [
+      { h: "設定で入れるとき" },
+      { c: cfg, m: cfgWhat },
+      { h: "show の出力で見るとき" },
+      { c: out, m: outWhat }] };
+  }
   var WHERE = {
-    run: "設定では router ospf の行。show の出力では Process ID の行",
-    area: "設定では network の行の末尾。show の出力では Internet address の行の末尾",
-    hello: "設定では ip ospf hello-interval の行。show の出力では Timer intervals configured の行の1つめの数字",
-    dead: "設定では ip ospf dead-interval の行。show の出力では Timer intervals configured の行の2つめの数字",
-    rid: "設定では router-id の行。show の出力では Process ID の行の中"
+    run: whereRows(
+      runLine(), "OSPF を動かす",
+      "Process ID " + LC.pid + ", Router ID " + LR.rid, "この行があれば動いている"),
+    area: whereRows(
+      ospfLine("1"), "末尾の area が番号",
+      "Internet address is " + LC.net + ".1/24, Area " + LC.area, "末尾に出る"),
+    hello: whereRows(
+      "ip ospf hello-interval " + LR.hello, "この行で入れる",
+      "Timer intervals configured, Hello " + LR.hello + ", Dead " + LR.dead, "1つめの数字"),
+    dead: whereRows(
+      "ip ospf dead-interval " + LR.dead, "この行で入れる",
+      "Timer intervals configured, Hello " + LR.hello + ", Dead " + LR.dead, "2つめの数字"),
+    rid: whereRows(
+      "router-id " + LR.rid, "この行で入れる",
+      "Process ID " + LC.pid + ", Router ID " + LR.rid, "行の中に出る")
   };
 
   /* 行当ての誤答に使ってはいけない行。
@@ -796,9 +823,10 @@
     })).join("\n");
   }
 
-  function cmdQ(shuffle) {
+  function cmdQ(shuffle, pickKey, markUsed) {
     for (var t = 0; t < 60; t++) {
-      var g = genKeyV(pick(Object.keys(MAKERS)));
+      /* 使っていないパターンから選ぶ（最後の3問で同じものを2度出さない） */
+      var g = genKeyV((pickKey || pick)(Object.keys(MAKERS)));
       if (!g) continue;
       var v = read(g.text), o = g.vals;
       var a = v.A, b = v.B;
@@ -834,6 +862,7 @@
         seen[w] = 1; opts.push(w);
       });
       if (opts.length < 4) continue;
+      if (markUsed) markUsed(g.key);
       return { kind: "whole", ask: h + " に、どの設定を適用しますか。",
                exhibit: g.text, opts: shuffle(opts), right: right, extra: {} };
     }
@@ -845,7 +874,7 @@
      null を返すと、共通の形（engine.js）が使われる */
   function wholeQ(n, ctx) {
     if (n === 0) return null;
-    return cmdQ(ctx.shuffle);
+    return cmdQ(ctx.shuffle, ctx.pickKey, ctx.markUsed);
   }
 
   /* ── 説明の1枚に出す現物 ─────────────────────
@@ -881,11 +910,11 @@
   function learnConf(name, last, ospf) {
     var out = ["【" + name + " の設定】",
                "interface GigabitEthernet0/0/1",
-               " ip address 192.168.30." + last + " 255.255.255.0",
+               " ip address " + LC.net + "." + last + " 255.255.255.0",
                " no shutdown"];
     if (ospf) {
-      out.push("router ospf 1");
-      out.push(" network 192.168.30." + last + " 0.0.0.0 area 0");
+      out.push(runLine());
+      out.push(" " + ospfLine(last));
     }
     return out;
   }
@@ -938,22 +967,39 @@
   /* 添える一言。**上の見本を指して、具体的に書く。**
      初めて見る人は「片側に router ospf の行が無い」と言われても、
      どの行のことか分からない。見本のどこを見ればよいかまで書く */
+  /* ── 説明の1枚に添える一言 ─────────────────────
+   * **両側を見比べるものは、文章にしない。**「R1 は…、R2 は…」と書くと、
+   * 読む人が頭の中で並べ直すことになる。上下に並べて、目で見比べられる形にする。
+   * 値は上の LV・LC から作る（見本と同じ所から作らないと、直したときにずれる）。
+   */
+  /* 見出しに「どこに書いてあるか」まで入れる。**下に文章を足さない。**
+     この分野でいちばん難しいのは、値の意味ではなく「どの行に書いてあるか」 */
+  function twoRows(label, a, b) {
+    return [{ h: label }, { c: "R1  " + a }, { c: "R2  " + b }];
+  }
+  var HELLO_AT = "Hello（Timer intervals の1つめ）";
+  var DEAD_AT = "Dead（同じ行の2つめ）";
   var NOTE = {
-    off: "R1 には router ospf 1 と network …… area 0 の2行がある。R2 にはこの2行が無いので、" +
-         "R2 にも同じ2行を足す。この形は設定でしか見えない。" +
-         "OSPF が動いていない側は、show ip ospf interface に何も出ないため",
-    both: "R1 は Hello " + LV.both.h1 + "・Dead " + LV.both.d1 +
-          "、R2 は Hello " + LV.both.h2 + "・Dead " + LV.both.d2 +
-          "。どちらも違うので両方そろえる。数字は Timer intervals configured の行に4つ並び、" +
-          "1つめが Hello、2つめが Dead",
-    hello: "R1 は Hello " + LV.hello.h1 + "、R2 は Hello " + LV.hello.h2 +
-           "。Dead はどちらも " + LV.hello.d1 + " で同じ。" +
-           "すぐ下の Hello due in は次に送るまでの残り時間なので、別のもの",
-    dead: "R1 は Dead " + LV.dead.d1 + "、R2 は Dead " + LV.dead.d2 +
-          "。Hello はどちらも " + LV.dead.h1 + " で同じ。" +
-          "設定の形で見るときは ip ospf dead-interval の行",
-    rid: "R1 も R2 も Router ID が " + LV.rid.rid1 + " で同じ。" +
-         "Router ID は Process ID の行の中にある。設定の形では router-id の行"
+    off: { rows: [
+        { h: "R1 の設定" },
+        { c: runLine(), m: "OSPF を動かす" },
+        { c: ospfLine("1"), m: "エリア番号を決める" },
+        { h: "R2 の設定" },
+        { t: "この2行が無い。R2 にも同じ2行を足す" }] },
+    both: { rows: twoRows(HELLO_AT, LV.both.h1, LV.both.h2)
+        .concat(twoRows(DEAD_AT, LV.both.d1, LV.both.d2))
+        .concat([{ t: "どちらも違うので、両方そろえる" }]) },
+    hello: { rows: twoRows(HELLO_AT, LV.hello.h1, LV.hello.h2)
+        .concat(twoRows("Dead", LV.hello.d1, LV.hello.d2))
+        .concat([{ c: "Hello due in", m: "次に送るまでの残り（別）" },
+                 { t: "Hello だけ違うので、Hello をそろえる" }]) },
+    dead: { rows: twoRows(DEAD_AT, LV.dead.d1, LV.dead.d2)
+        .concat(twoRows("Hello", LV.dead.h1, LV.dead.h2))
+        .concat([{ c: "ip ospf dead-interval", m: "設定で見るときの行" },
+                 { t: "Dead だけ違うので、Dead をそろえる" }]) },
+    rid: { rows: twoRows("Router ID（Process ID の行の中）", LV.rid.rid1, LV.rid.rid2)
+        .concat([{ c: "router-id", m: "設定で見るときの行" },
+                 { t: "同じ番号なので、片方を消す" }]) }
   };
 
   function brief(block, i) {
@@ -993,23 +1039,33 @@
     return label + " は両側とも " + a;
   }
 
+  /* **両側の値は、上下に並べる。**「Hello は R1 5　R2 15、Dead は …」と
+     1行につなぐと、どれがどちらの値なのかを目で追い直すことになる */
+  function sideRows(label, v, k) {
+    return [{ h: label },
+            { c: v.A.host + "  " + shown(v.A, k) },
+            { c: v.B.host + "  " + shown(v.B, k) }];
+  }
   function bodyHit(key, v) {
     if (key === "off") {
       var on = v.A.on ? v.A : v.B, off = v.A.on ? v.B : v.A;
-      return off.host + " には OSPF の行が無い。" + on.host + " のエリアは " + on.area;
+      return { rows: [{ c: off.host, m: "OSPF の行が無い" },
+                      { c: on.host + " のエリア", m: String(on.area) }] };
     }
     if (key === "both") {
-      return "Hello は " + pair(v, "hello") + "、Dead は " + pair(v, "dead");
+      return { rows: sideRows("Hello", v, "hello").concat(sideRows("Dead", v, "dead")) };
     }
-    /* Hello だけ・Dead だけのときは、**そろっているほうも書く。**
+    /* Hello だけ・Dead だけのときは、**そろっているほうも並べる。**
        「だけ」と言い切れる理由が、そこにあるため */
     if (key === "hello") {
-      return "Hello は " + pair(v, "hello") + "。" + level(v, "dead", "Dead");
+      return { rows: sideRows("Hello（ここが違う）", v, "hello")
+        .concat(sideRows("Dead（そろっている）", v, "dead")) };
     }
     if (key === "dead") {
-      return "Dead は " + pair(v, "dead") + "。" + level(v, "hello", "Hello");
+      return { rows: sideRows("Dead（ここが違う）", v, "dead")
+        .concat(sideRows("Hello（そろっている）", v, "hello")) };
     }
-    return "Router ID は " + pair(v, "rid") + " で、同じ番号";
+    return { rows: sideRows("Router ID（同じ番号）", v, "rid") };
   }
   function bodyNot(key, v) {
     if (key === "off") {

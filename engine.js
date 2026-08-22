@@ -209,10 +209,10 @@
       }
       return null;
     }
-    function makeAny() {
+    function makeAny(chooser) {
       var keys = Object.keys(MAKERS);
       if (!keys.length) return { key: null, text: null };
-      var k = pick(keys);
+      var k = (chooser || pick)(keys);
       return { key: k, text: make(k) };
     }
 
@@ -266,7 +266,8 @@
       if (typeof spec.stepQ === "function") {
         return spec.stepQ(i, n, { blocks: blocks, read: read, shuffle: shuffle,
                                   judge: judge, VERDICTS: VERDICTS,
-                                  make: make, gloss: gloss, pat: PAT });
+                                  make: make, gloss: gloss, pat: PAT,
+                                  figFor: spec.figFor });
       }
       /* **最後の確認項目には「決まらない出力」が無い。**
          そこまで来たら必ず決まるので、次へ進む出力が作れず、2問目が空になっていた。
@@ -339,17 +340,34 @@
                opts: opts, right: right, extra: { step: st, i: i } };
     }
 
+    /* 最後の3問で、**同じパターンを2度出さない。**
+       身に付けたい力は「どのパターンかを見分けること」なので、
+       同じものが2回出ると練習にならない（ルールが4本の分野では
+       4分の3の回で重なっていた）。1問目（n===0）で数え直す */
+    var wholeUsed = [];
+    function pickKey(keys) {
+      var left = keys.filter(function (k) { return wholeUsed.indexOf(k) < 0; });
+      return pick(left.length ? left : keys);
+    }
+    /* **問題が作れたときだけ「使った」に数える。**
+       作れずにやり直した分まで数えると、選べるパターンが早く尽きて、
+       3問目で同じものが出てしまう */
+    function markUsed(k) { if (k && wholeUsed.indexOf(k) < 0) wholeUsed.push(k); }
+
     function wholeQ(n) {
+      if (!n) wholeUsed = [];
       /* **分野が自分で作れるなら、そちらを先に使う。**
          n は何問目か（0・1・2）。null を返してきたら、下の共通の形にする。
          OSPF の隣接関係は、2問目と3問目を「打つコマンドの並び」で出す */
       if (typeof spec.wholeQ === "function") {
         var own = spec.wholeQ(n, { read: read, judge: judge, shuffle: shuffle,
-                                   blocks: blocks, VERDICTS: VERDICTS });
+                                   blocks: blocks, VERDICTS: VERDICTS,
+                                   pickKey: pickKey, markUsed: markUsed });
         if (own) return own;
       }
-      var g = makeAny();
+      var g = makeAny(pickKey);
       if (!g.text) return null;
+      markUsed(g.key);
       var r = RULES.filter(function (x) { return x.key === g.key; })[0];
       var opts, right;
       /* 答えが「その場の選択肢」になる題材（ルートブリッジなど）は、
@@ -695,7 +713,7 @@
       var text = ctx.make(key);
       if (!text) return null;
 
-      var opts = [], right, ask, why, look, hit = true;
+      var opts = [], right, ask, why, look, hit = true, markNow = false;
       /* ── 答え合わせのあとに光らせる言葉 ─────────────
        * **表を手で書かない。**手で書くと、提示物に無い言葉を書いてしまい、
        * どこも光らないうえに、書き間違いにも気づけない。
@@ -722,8 +740,28 @@
         if (String(text).indexOf(w) < 0) return;
         if (mark.indexOf(w) < 0) mark.push(w);
       });
-      if (n === 0) {
-        /* 問1。**決め手は、問題文にあることも、出力の中にあることもある。**
+      if (n === 0 && me.say) {
+        /* ── 問1（本物の問い）──────────────────────
+         * **その分野が本当に聞いていることを、そのまま問う。**
+         * 「どれが決め手ですか」「光っている所を見てどう判断しますか」は、
+         * どちらも画面の説明であって、設問として成り立っていない。
+         * show interface と同じで、決め手の所を光らせたうえで、
+         * **毎回おなじ本物の問いを出す。**変わるのは提示物のほう。
+         * 判断の道すじは、答え合わせで「こう判断する → だから、こうする」と出す */
+        right = me.verdict;
+        opts = [right];
+        ctx.shuffle(rules.filter(function (r) {
+          return r.verdict !== me.verdict;
+        })).forEach(function (r) {
+          if (opts.length < 4 && opts.indexOf(r.verdict) < 0) opts.push(r.verdict);
+        });
+        ask = ask2 || "この要件を満たす設定はどれですか。";
+        look = [];
+        why = null;
+        hit = false;
+        markNow = true;
+      } else if (n === 0) {
+        /* 問1（いままでの形）。**決め手は、問題文にあることも、出力の中にあることもある。**
            だから「問題文の中に」とは言い切らない */
         if (!me.cue) return null;
         right = me.cue;
@@ -759,8 +797,12 @@
         })).forEach(function (r) {
           if (opts.length < 4 && opts.indexOf(r.verdict) < 0) opts.push(r.verdict);
         });
-        ask = (me.cue ? "決め手は「" + me.cue + "」です。" : "") +
+        /* 問2。**決め手を文字で教えない。**提示物の中で光っているので、
+           そこを見れば分かる。文で言うと、見る練習にならない。
+           say を持たない分野は、いままでどおり前置きを付ける */
+        ask = (me.say ? "" : (me.cue ? "決め手は「" + me.cue + "」です。" : "")) +
               (ask2 || "この要件を満たす設定はどれですか。");
+        markNow = !!me.say;
         look = (b.look || []).slice();
         /* 決め手は問いにもう書いてある。**判定ルールの理由をそのまま出さない。**
            答えの一言説明（gloss）だけが、答えの下に出ればよい */
@@ -773,8 +815,10 @@
         opts: ctx.shuffle(uq), right: right,
         /* key も渡す。**答え（verdict）でルールを引かない。**
            答えが同じルールが2本ある分野で、別のルールを引いてしまう */
+        /* 分野が「提示物から図を組み立てる」やり方を持っていれば、図も添える */
+        fig: (typeof ctx.figFor === "function") ? ctx.figFor(text) : null,
         extra: { i: i, step: { look: look, values: [], hit: hit, key: key,
-                               mark: mark.length ? mark : null,
+                               mark: mark.length ? mark : null, markNow: markNow,
                                verdict: me.verdict, cue: me.cue,
                                why: why, next: null, nextVerdict: null,
                                step: i + 1, of: bs.length } }
@@ -835,18 +879,33 @@
     return function (v, st) {
       if (!v) return null;
       if (st) {
-        if (!st.look || !st.look.length) return null;     /* 問1。まだ答えは決まっていない */
+        if (!st.look || !st.look.length) {
+          /* 問1。**判断を選んだあとに、そこから何をするかまで見せる。**
+             覚える札（もし→なら）で先に教えている中身なので、先漏れにはならない。
+             say を持たない分野は、いままでどおり「「◯◯」が決め手」だけ */
+          var m0 = ruleOf(st.key);
+          if (!m0 || !m0.say) return null;
+          /* **答えは見出しにもう出ている。**ここに verdict を並べると2回読ませる。
+             出すのは「なぜそう判断したか」だけ */
+          return { gloss: m0.say, body: "" };
+        }
         var me = ruleOf(st.key);
         if (!me) return null;
         return { gloss: gloss[me.verdict] || "",
                  body: (body && body(v, me)) || "" };
       }
-      /* 提示物ぜんぶを見て答える問題（テストの本の問題・練習の最後の3問） */
+      /* 提示物ぜんぶを見て答える問題（テストの本の問題・練習の最後の3問）。
+         **「どこを見て、だからどうするか」を上下に並べる。**
+         1行の文にすると、決め手と打つ設定が続き字になって目で追いにくい */
       var hit = null, i;
       for (i = 0; i < rules.length; i++) if (rules[i].test(v)) { hit = rules[i]; break; }
       if (!hit) return null;
-      return { gloss: hit.cue ? "決め手は「" + hit.cue + "」" : "",
-               body: (body && body(v, hit)) || gloss[hit.verdict] || "" };
+      var rows = [];
+      if (hit.cue) rows.push({ h: "この問題の決め手" }, { t: hit.cue });
+      rows.push({ h: "だから、こうする" }, { t: hit.verdict });
+      var one = (body && body(v, hit)) || gloss[hit.verdict] || "";
+      if (one) rows.push({ t: one });
+      return { gloss: "", body: { rows: rows } };
     };
   }
 

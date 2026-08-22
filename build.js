@@ -466,7 +466,23 @@ BLOCK_IDS.forEach((id) => {
         const st = q.extra.step;
         const nt = typeof sp.answerNote === "function"
           ? sp.answerNote(G.read(q.exhibit), st) : null;
-        const shown = nt ? String(nt.body || "") : String(st.why || "");
+        /* **箇条書きは、90字の決まりの外。**
+           90字は「文章がだらだら並ぶ」のを防ぐための決まりで、
+           箇条書きは字数が増えても読むのは速くなる。
+           そのかわり、行の数と**こちらが書く言葉**の長さで見る。
+           引用している行（c）は機器が出す文字なので、長さはこちらで決められない */
+        const body = nt ? nt.body : st.why;
+        if (body && typeof body !== "string") {
+          const tag2 = `${sp.name}/${(bs[i].keys || [])[0] || i}`;
+          const rows = body.rows || [];
+          if (rows.length > 6) bad.push(`${tag2}: 答え合わせの箇条書きが ${rows.length} 行（6行まで）`);
+          rows.forEach((w) => {
+            if (w.h && w.h.length > 30) bad.push(`${tag2}: 見出しが ${w.h.length} 字（30字まで）`);
+            if (w.t && w.t.length > 40) bad.push(`${tag2}: 行が ${w.t.length} 字（40字まで）`);
+          });
+          continue;
+        }
+        const shown = String(body || "");
         if (shown.length > LIMIT && over.indexOf(shown) < 0) over.push(shown);
       }
     }
@@ -550,6 +566,116 @@ BLOCK_IDS.forEach((id) => {
   });
 }
 
+/* ── 判断の一文（say）の形 ──────────────────────
+ * 「光っている所を見て、どう判断しますか」の選択肢になる文。
+ * **1つでも持っている分野は、決め手のある全ルールが持っていること。**
+ * 混ざると、問1が分野の中で2つの形になってしまう。
+ * 同じ文が2つあると、正解が2つになる。
+ */
+{
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id];
+    if (!sp || !sp.rules) return;
+    const cues = sp.rules.filter((r) => r.cue);
+    const says = cues.filter((r) => r.say);
+    if (!says.length) return;
+    if (says.length !== cues.length) {
+      cues.filter((r) => !r.say).forEach((r) => {
+        bad.push(`${sp.name}: ${r.key} に判断の一文が無い`);
+      });
+    }
+    const seen = {};
+    says.forEach((r) => {
+      if (seen[r.say]) bad.push(`${sp.name}: 判断の一文が重なっている「${r.say.slice(0, 24)}…」`);
+      seen[r.say] = 1;
+      if (r.say.length > 40) bad.push(`${sp.name}: ${r.key} の判断の一文が ${r.say.length} 字（40字まで）`);
+    });
+    console.log(`  ${sp.name}: 判断の一文 ${says.length} 本`);
+  });
+}
+
+/* ── 最後の3問が、同じパターンで重なっていないか ────────────
+ * **身に付けたい力は「どのパターンかを見分けること」。**
+ * 同じ分岐が2回3回と出ると、そこが練習にならない。
+ * ルールが3本以上ある分野では、3問とも別のパターンから出す。
+ * ルールが2本しかない分野（ルートブリッジ・OSPF の代表ルータ）は、
+ * 3問のうちどれかが必ず重なるので、ここでは見ない。
+ */
+{
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id], G = GENS[id];
+    if (!sp || !G || G.kind !== "rules" || !G.wholeQ) return;
+    if ((sp.rules || []).length < 3) return;
+    if (G.begin) G.begin();
+    let dup = 0, run = 0;
+    for (let r = 0; r < 30; r++) {
+      const ks = [];
+      for (let k = 0; k < 3; k++) {
+        const q = G.wholeQ(k);
+        if (!q) continue;
+        const j = G.judge(G.read(q.exhibit));
+        if (j) ks.push(j.key);
+      }
+      if (ks.length < 2) continue;
+      run++;
+      if (new Set(ks).size < ks.length) dup++;
+    }
+    if (dup) bad.push(`${sp.name}: 最後の3問で同じパターンが重なる（${run} 回中 ${dup} 回）`);
+  });
+}
+
+/* ── 箇条書きの一言の形 ──────────────────────────
+ * **並べて見比べるものが2つ以上ある一言は、{ rows } の形で書く。**
+ * 行の形は4つだけ。ここから外れると画面が黙って空白を出すので、ここで止める。
+ *   { h }      見出し           → 【…】
+ *   { c }      コマンドだけ      → ・…
+ *   { c, m }   コマンドと意味    → ・…　＝ …
+ *   { t }      コマンドでない行  → ・…
+ * **・ と ＝ は画面が付ける。**データに書くと二重になる。
+ */
+{
+  const KEYS = [["h"], ["c"], ["c", "m"], ["t"]];
+  let cnt = 0;
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id], G = GENS[id];
+    if (!sp || typeof sp.brief !== "function" || !G || !G.blocks) return;
+    if (G.begin) G.begin();
+    G.blocks().forEach((b, i) => {
+      let br = null;
+      try { br = sp.brief(b, i); } catch (e) { br = null; }
+      (br || []).forEach((r) => {
+        const n = r.note;
+        if (!n || typeof n === "string") return;
+        cnt++;
+        const tag = `${sp.name}/${(b.keys || [])[0] || i}`;
+        if (!Array.isArray(n.rows) || !n.rows.length) {
+          bad.push(`${tag}: 一言に rows が無い`); return;
+        }
+        if (n.rows.length > 8) bad.push(`${tag}: 一言の行が ${n.rows.length} 行（8行まで）`);
+        n.rows.forEach((w, k) => {
+          const ks = Object.keys(w).sort();
+          const ok = KEYS.some((set) => set.slice().sort().join() === ks.join());
+          if (!ok) bad.push(`${tag}: ${k + 1} 行目のキーが ${ks.join("+") || "無し"}`);
+          ks.forEach((key) => {
+            const v = w[key];
+            if (typeof v !== "string" || !v.trim()) {
+              bad.push(`${tag}: ${k + 1} 行目の ${key} が空`); return;
+            }
+            if (/^[・＝]/.test(v.trim())) {
+              bad.push(`${tag}: ${k + 1} 行目に ・ や ＝ を書いている（画面が付ける）`);
+            }
+          });
+          if (w.m && w.m.length > 20) bad.push(`${tag}: ${k + 1} 行目の意味が ${w.m.length} 字（20字まで）`);
+        });
+        /* **下に文章を足さない。**文章にしないための形なので、
+           最後に一文を付けると元に戻ってしまう（2026-08-22 オーナー） */
+        if (n.p !== undefined) bad.push(`${tag}: 一言の下に文章を足している`);
+      });
+    });
+  });
+  console.log(`  箇条書きの一言 ${cnt} 個`);
+}
+
 /* ── 光らせる言葉が、提示物に本当にあるか ──────────────
  * 決め手型の分野では、答え合わせのあとに「決め手になった言葉」を提示物の中で光らせる。
  * **書いた言葉が提示物に無ければ、どこも光らない。**しかも黙って何も起きないので、
@@ -631,10 +757,54 @@ BLOCK_IDS.forEach((id) => {
   });
 }
 
+/* ── 覚える画面の論点の見張り ─────────────────────
+ * 札2「そのほか」の3分野は、練習が「過去問をそのまま覚える」画面になった。
+ * その画面は points/<分野>.js の「決め手 → 答え」を出し、本文に下線を引く。
+ *
+ * **下線は、本文に一字一句ある言葉にしか引けない。**
+ * 書き間違えると、画面では静かに下線が消えるだけで気づけないので、ここで止める。
+ */
+{
+  ["wlangui", "nolink", "misc"].forEach((id) => {
+    const f = path.join(__dirname, "points", id + ".js");
+    if (fs.existsSync(f)) require(f);
+  });
+  const P = global.POINTS || {};
+  BLOCK_IDS.forEach((id) => {
+    const sp = SPECS[id];
+    if (!sp || sp.card !== "misc") return;
+    let ok = 0;
+    (BANKS[id] || []).forEach((q) => {
+      const p = P[q.qid];
+      if (!p) { bad.push(`${sp.name}: ${q.qid} の論点（points/${id}.js）が無い`); return; }
+      const src = String(q.text || "") + "\n" +
+        (typeof q.exhibit === "string" ? q.exhibit : "") + "\n" +
+        (q.fig ? JSON.stringify(q.fig) : "");
+      const ans = [].concat(q.answer).join("\n");
+      if (!(p.q || []).length || !(p.a || []).length) {
+        bad.push(`${sp.name}: ${q.qid} の論点が空`); return;
+      }
+      (p.q || []).forEach((w) => {
+        if (src.indexOf(w) < 0) bad.push(`${sp.name}: ${q.qid} の決め手「${w}」が問題文にも提示物にも無い`);
+      });
+      (p.a || []).forEach((w) => {
+        if (ans.indexOf(w) < 0) bad.push(`${sp.name}: ${q.qid} の答えの言葉「${w}」が正解の選択肢に無い`);
+      });
+      ok++;
+    });
+    console.log(`  ${sp.name}: 覚える論点 ${ok} / ${(BANKS[id] || []).length} 問`);
+  });
+}
+
 /* ── 全問カバーの見張り ───────────────────────
  * **束B の335問が、どれかのブロックに入っているか。**
  * 入っていない問題は、out/full/not_used.csv に理由つきで載っていなければならない。
  * **黙って落ちた問題を、ここで見つける。**
+ *
+ * 束B は3つのアプリに分かれた（showread / wordmatch / configpick）。
+ * 数えるときは、よそのアプリの q/*.js も読む。
+ * **1つのアプリだけで数えると、よそへ移した問題が「消えた」ことになる。**
+ * よそのアプリは require しない（同じ global.BANKS に混ざるため）。文字として読む。
  */
 {
   const csvPath = path.join(__dirname, "..", "out", "full", "bucket_review.csv");
@@ -659,12 +829,26 @@ BLOCK_IDS.forEach((id) => {
     Object.keys(BANKS).forEach((id) => (BANKS[id] || []).forEach((q) => {
       (q.from || [String(q.qid).replace(/#\d+$/, "")]).forEach((f) => placed.add(f));
     }));
+    /* よそのアプリに移したブロックの問題。q/*.js を文字として読み、qid と from を拾う */
+    const elsewhere = new Set();
+    ["wordmatch", "configpick"].forEach((app) => {
+      const dir = path.join(__dirname, "..", app, "q");
+      if (!fs.existsSync(dir)) return;
+      fs.readdirSync(dir).filter((f) => f.endsWith(".js")).forEach((f) => {
+        const src = fs.readFileSync(path.join(dir, f), "utf8");
+        (src.match(/"qid"\s*:\s*"[^"]+"/g) || []).forEach((m) =>
+          elsewhere.add(m.split('"')[3].replace(/#\d+$/, "")));
+        (src.match(/"from"\s*:\s*\[[^\]]*\]/g) || []).forEach((m) =>
+          (m.match(/"[^"]+"/g) || []).slice(1).forEach((q) => elsewhere.add(q.slice(1, -1))));
+      });
+    });
     const excused = new Set(fs.readFileSync(notUsed, "utf8").split("\n")
       .slice(1).filter(Boolean).map((l) => cell(l)[0]));
-    const lost = all.filter((q) => !placed.has(q) && !excused.has(q));
+    const lost = all.filter((q) => !placed.has(q) && !elsewhere.has(q) && !excused.has(q));
     const covered = all.filter((q) => placed.has(q)).length;
-    console.log(`束B ${all.length} 問中 ${covered} 問がブロックに入っている` +
-      `（出さないと決めた ${excused.size} 問をのぞく）`);
+    const moved = all.filter((q) => !placed.has(q) && elsewhere.has(q)).length;
+    console.log(`束B ${all.length} 問中 ${covered} 問がこのアプリのブロックに入っている` +
+      `（よそのアプリ ${moved} 問、出さないと決めた ${excused.size} 問をのぞく）`);
     lost.forEach((q) => bad.push(`${q} がどのブロックにも入らず、理由も書かれていない`));
   }
 }

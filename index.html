@@ -117,6 +117,13 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .fg-id{fill:var(--ink);font-size:13px;font-weight:700;text-anchor:middle;
   font-family:-apple-system,"Hiragino Sans",sans-serif}
 .fg-v{fill:var(--blue-t);font-size:11px;text-anchor:middle;font-family:ui-monospace,Menlo,monospace}
+.fg-p{fill:var(--ink3);font-size:10px;font-family:ui-monospace,Menlo,monospace}
+.fg-r{text-anchor:end}
+.fg-lb{fill:var(--ink2);font-size:11px;text-anchor:middle;
+  font-family:-apple-system,"Hiragino Sans",sans-serif}
+/* 見る所の線と札は、太く光らせる */
+.fg-on-l{stroke:var(--blue);stroke-width:3}
+.fg-on-t{fill:var(--blue);font-weight:700}
 .fg-host{fill:var(--ink2);font-size:11px;text-anchor:middle;
   font-family:-apple-system,"Hiragino Sans",sans-serif}
 .badge{font-size:var(--f1);color:var(--green-t);border:1px solid var(--green-s);
@@ -241,6 +248,21 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .rule-then.sm{font-size:var(--f5)}
 .rule-then.xs{font-size:var(--f4);line-height:1.45}
 .rule-n{font-size:var(--f2);color:var(--ink2)}
+/* 一言が箇条書きのとき。**中央そろえにしない。**
+   親の .rule は中央そろえなので、そのままだと箇条書きが真ん中に浮いて、
+   行の頭がそろわず読みにくい */
+.rule-nb{align-self:stretch;text-align:left;font-size:var(--f2);color:var(--ink2);
+  background:var(--sunk);border:1px solid var(--line);border-radius:8px;
+  padding:var(--s2) var(--s3);line-height:1.8}
+.rule-nh{font-weight:700;color:var(--ink);margin-top:var(--s2)}
+.rule-nh:first-child{margin-top:0}
+/* **折り返した続きは、行の頭より内側に下げる。**
+   左端に戻ると、続きが別の箇条書きに見えてしまう（ぶら下げ） */
+.rule-nr{padding-left:1.5em;text-indent:-1.5em;overflow-wrap:anywhere}
+.rule-nd{color:var(--ink3)}
+.rule-nc{font-family:var(--mono);color:var(--ink)}
+.rule-nc+.rule-nm{margin-left:var(--s2)}
+.rule-nm{color:var(--ink2)}
 
 /* 行の中の、決め手の言葉だけを光らせる。行ごと光らせると、
    どこを見ればいいのかが伝わらない */
@@ -269,6 +291,42 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 .opt-ok .opt-k{color:var(--green-t)}
 .opt-ng{background:var(--red-bg);border-color:var(--red);color:var(--red-t);opacity:.75}
 .opt-ng .opt-k{color:var(--red-t)}
+
+/* ── 覚える（過去問をそのまま覚える）──────────────
+ * 札2「そのほか」の分野の練習。1問を1枚の札にして、上から順に並べる。
+ * 提示物 → 問題文 → 選択肢（正解に印）→ 決め手の1行 → 覚え方 → 本の解説。
+ */
+.lc-top{font-size:var(--f2);color:var(--ink2);margin:var(--s2) 0 var(--s4);
+  line-height:1.6}
+.lc{background:var(--bg1);border:1px solid var(--line);border-radius:12px;
+  padding:var(--s4);margin-bottom:var(--s4)}
+.lc-h{display:flex;align-items:baseline;justify-content:space-between;
+  gap:var(--s3);margin-bottom:var(--s3)}
+.lc-n{font-family:var(--mono);font-size:var(--f2);color:var(--blue-t);font-weight:700}
+.lc-id{font-family:var(--mono);font-size:var(--f1);color:var(--ink3)}
+.lc-q{font-size:var(--f3);font-weight:600;line-height:1.9;white-space:pre-wrap;
+  margin:var(--s3) 0}
+.lc .con,.lc .scan,.lc .figwrap{margin-top:0}
+.lc-b{font-size:var(--f2);color:var(--ink2);margin-top:var(--s3);line-height:1.7}
+
+/* 決め手の1行。青い言葉（問題文の側）→ 黄色い言葉（答えの側） */
+.pt{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s2);
+  margin-top:var(--s3);padding:var(--s2) var(--s3);
+  background:var(--sunk);border:1px solid var(--line);border-radius:10px;
+  font-size:var(--f2);line-height:1.7}
+.pt-k{color:var(--ink3);font-size:var(--f1);flex:0 0 auto}
+.pt-q{color:var(--blue-t);font-weight:700}
+.pt-arw{color:var(--ink3);font-weight:700}
+.pt-a{color:var(--gold);font-weight:700}
+.pt-tip{margin-top:var(--s2);padding:var(--s2) var(--s3);
+  background:var(--gold-bg);border:1px solid var(--gold-line);border-radius:10px;
+  font-size:var(--f2);color:var(--gold);line-height:1.7}
+
+/* 下線。問題文の側は青、答えの側は黄色 */
+.uq{font-weight:700;color:var(--blue-t);
+  border-bottom:2px solid var(--blue);padding-bottom:1px}
+.ua{font-weight:700;color:var(--gold);
+  border-bottom:2px solid var(--gold-line);padding-bottom:1px}
 
 /* 左と右を結ぶ問題。上に説明の札、下に入れ先 */
 .mt{display:flex;flex-direction:column;gap:var(--s4)}
@@ -341,53 +399,37 @@ button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer
 <body>
 <div id="root"></div>
 <!-- 共通の仕掛け（判定・道すじ・出力作り）。題材の中身は入っていない -->
-<script src="./store.js?v=279870" charset="utf-8"></script>
-<script src="./fig.js?v=279870" charset="utf-8"></script>
-<script src="./engine.js?v=279870" charset="utf-8"></script>
+<script src="./store.js?v=212244" charset="utf-8"></script>
+<script src="./fig.js?v=212244" charset="utf-8"></script>
+<script src="./engine.js?v=212244" charset="utf-8"></script>
 <!-- ブロックごとの中身。ブロックを増やしたら、ここに1行足す -->
-<script src="./types/rootbridge.js?v=279870" charset="utf-8"></script>
-<script src="./types/ospf.js?v=279870" charset="utf-8"></script>
-<script src="./types/ospfdr.js?v=279870" charset="utf-8"></script>
-<script src="./types/json.js?v=279870" charset="utf-8"></script>
-<script src="./types/showint.js?v=279870" charset="utf-8"></script>
-<script src="./types/etherchannel.js?v=279870" charset="utf-8"></script>
-<script src="./types/trunk.js?v=279870" charset="utf-8"></script>
-<script src="./types/access.js?v=279870" charset="utf-8"></script>
-<script src="./types/ipsvc.js?v=279870" charset="utf-8"></script>
-<script src="./types/portsec.js?v=279870" charset="utf-8"></script>
-<script src="./types/wlangui.js?v=279870" charset="utf-8"></script>
-<script src="./types/nolink.js?v=279870" charset="utf-8"></script>
-<script src="./types/misc.js?v=279870" charset="utf-8"></script>
+<script src="./types/rootbridge.js?v=212244" charset="utf-8"></script>
+<script src="./types/ospf.js?v=212244" charset="utf-8"></script>
+<script src="./types/ospfdr.js?v=212244" charset="utf-8"></script>
+<script src="./types/json.js?v=212244" charset="utf-8"></script>
+<script src="./types/showint.js?v=212244" charset="utf-8"></script>
+<script src="./types/wlangui.js?v=212244" charset="utf-8"></script>
+<script src="./types/nolink.js?v=212244" charset="utf-8"></script>
+<script src="./types/misc.js?v=212244" charset="utf-8"></script>
 <!-- 過去問。差し替えるのはこのファイルだけ -->
-<script src="./q/showint.js?v=196044" charset="utf-8"></script>
-<script src="./q/parts.js?v=196044" charset="utf-8"></script>
-<script src="./q/autoword.js?v=196044" charset="utf-8"></script>
-<script src="./q/ipv6word.js?v=196044" charset="utf-8"></script>
-<script src="./q/cable.js?v=196044" charset="utf-8"></script>
-<script src="./q/aaa.js?v=196044" charset="utf-8"></script>
-<script src="./q/guardword.js?v=196044" charset="utf-8"></script>
-<script src="./q/dhcpword.js?v=196044" charset="utf-8"></script>
-<script src="./q/etherchannel.js?v=196044" charset="utf-8"></script>
-<script src="./q/trunk.js?v=196044" charset="utf-8"></script>
-<script src="./q/access.js?v=196044" charset="utf-8"></script>
-<script src="./q/ipsvc.js?v=196044" charset="utf-8"></script>
-<script src="./q/portsec.js?v=196044" charset="utf-8"></script>
-<script src="./q/wlangui.js?v=196044" charset="utf-8"></script>
-<script src="./q/nolink.js?v=196044" charset="utf-8"></script>
-<script src="./q/misc.js?v=196044" charset="utf-8"></script>
-<script src="./q/ospf.js?v=196044" charset="utf-8"></script>
-<script src="./q/ospfdr.js?v=196044" charset="utf-8"></script>
-<script src="./q/json.js?v=196044" charset="utf-8"></script>
-<script src="./q/rootbridge.js?v=196044" charset="utf-8"></script>
+<script src="./q/showint.js?v=94747" charset="utf-8"></script>
+<script src="./q/wlangui.js?v=94747" charset="utf-8"></script>
+<script src="./q/nolink.js?v=94747" charset="utf-8"></script>
+<script src="./q/misc.js?v=94747" charset="utf-8"></script>
+<script src="./q/ospf.js?v=94747" charset="utf-8"></script>
+<script src="./q/ospfdr.js?v=94747" charset="utf-8"></script>
+<script src="./q/json.js?v=94747" charset="utf-8"></script>
+<script src="./q/rootbridge.js?v=94747" charset="utf-8"></script>
+<!-- 過去問1問ずつの論点（決め手 → 答え）。札2「そのほか」の3分野ぶん -->
+<script src="./points/wlangui.js?v=1" charset="utf-8"></script>
+<script src="./points/nolink.js?v=1" charset="utf-8"></script>
+<script src="./points/misc.js?v=1" charset="utf-8"></script>
 <!-- 紙面から切り出した提示物。qid で引く -->
 <script src="./img/index.js?v=1" charset="utf-8"></script>
-<!-- 言い換え表。練習で「同じものを指す言い方」を1つにまとめるのに使う -->
-<script src="./q/synonym.js?v=196044" charset="utf-8"></script>
-<script src="./questions.js?v=196044" charset="utf-8"></script>
-<!-- 上のものを組み立てる。画面側では判定しない。
-     **questions.js より後に読むこと。**対応づけのエンジンは過去問の対から組む -->
-<script src="./gen.js?v=279870" charset="utf-8"></script>
+<script src="./questions.js?v=94747" charset="utf-8"></script>
+<!-- 上のものを組み立てる。画面側では判定しない。**questions.js より後に読むこと** -->
+<script src="./gen.js?v=212244" charset="utf-8"></script>
 <!-- 画面（app.jsx から build.js で生成） -->
-<script src="./app.js?v=55062" charset="utf-8"></script>
+<script src="./app.js?v=62169" charset="utf-8"></script>
 </body>
 </html>

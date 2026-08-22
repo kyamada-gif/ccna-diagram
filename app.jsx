@@ -24,7 +24,8 @@ const toTop = (y) => { try { window.scrollTo(0, y || 0); } catch (err) {} };
 const LETTERS = "ABCDEFGH";
 
 /* ── 札とブロック ────────────────────────────
- * 束B 335問を、問題の型で4枚に分け、その中を題材ごとのブロックに割る。
+ * 束B のうち、このアプリで出す分を問題の型で2枚に分け、その中を題材ごとのブロックに割る。
+ * 「言葉と意味の組み合わせ」は wordmatch/、「足りない設定を選ぶ」は configpick/ に移した。
  * n は、そのブロックに入る過去問の数（できていないブロックは見込み）。
  * できたブロックは questions.js の BANKS に入るので、そちらの数を使う。
  */
@@ -38,32 +39,12 @@ const CARDS = [
       { id: "ospf", name: "OSPF の隣接関係", n: 7 },
       { id: "ospfdr", name: "OSPF の代表ルータ", n: 2 }
     ] },
-  { id: "words", name: "言葉と意味の組み合わせ",
-    note: "説明と用語の対応を覚える",
-    blocks: [
-      { id: "parts", name: "ネットワークの部品と役割", n: 22 },
-      { id: "autoword", name: "自動化と API の言葉", n: 21 },
-      { id: "ipv6word", name: "IPv6 のアドレスの種類", n: 19 },
-      { id: "cable", name: "ケーブルの種類", n: 18 },
-      { id: "aaa", name: "AAA（認証・認可・記録）", n: 15 },
-      { id: "guardword", name: "守りと QoS ほか", n: 16 },
-      { id: "dhcpword", name: "DHCP と DNS・NTP・SNMP", n: 10 }
-    ] },
-  { id: "config", name: "足りない設定を選ぶ",
-    note: "要件と現在の設定を読み、必要なコマンドを選ぶ",
-    blocks: [
-      { id: "etherchannel", name: "EtherChannel", n: 16 },
-      { id: "trunk", name: "トランクと VLAN", n: 17 },
-      { id: "access", name: "機器への入り方", n: 10 },
-      { id: "ipsvc", name: "DHCP・NAT・NTP の設定", n: 8 },
-      { id: "portsec", name: "ポートの守り", n: 4 }
-    ] },
-  { id: "misc", name: "そのほか",
-    note: "決まった確認項目が立たない、一点ものの問題",
+  { id: "misc", name: "図表付きの問題を覚える",
+    note: "本に載っている問題を、図や出力ごとそのまま覚えてから解く",
     blocks: [
       { id: "wlangui", name: "無線の画面を読む", n: 13 },
-      { id: "nolink", name: "つながらない原因をさがす", n: 5 },
-      { id: "misc", name: "そのほか", n: 6 }
+      { id: "nolink", name: "繋がらない原因を探す", n: 5 },
+      { id: "misc", name: "その他", n: 11 }
     ] }
 ];
 
@@ -78,7 +59,14 @@ const blockOf = (id) => {
   for (const c of CARDS) for (const b of c.blocks) if (b.id === id) return { card: c, block: b };
   return null;
 };
-/* 番号。トップの札が 1・2・3・4、その中の分野が 1.1・1.2 … */
+/* 番号。トップの札が 1・2、その中の分野が 1.1・1.2 … */
+/* 練習が「過去問を覚える」になる分野。**札2「そのほか」の3分野。**
+   規則で解ける題材ではないので、本の問題をそのまま覚えてテストに進む */
+const isLearnCard = (id) => {
+  const b = blockOf(id);
+  return !!b && b.card.id === "misc";
+};
+
 const cardNo = (cid) => CARDS.findIndex((c) => c.id === cid) + 1;
 const blockNo = (cid, bid) => {
   const c = CARDS.filter((x) => x.id === cid)[0];
@@ -87,7 +75,7 @@ const blockNo = (cid, bid) => {
 /* ── 名前の付け方（画面に出る言葉の決まり）──────────────
  * ここに全部まとめる。**画面のあちこちで別々に組み立てない。**
  *
- *   札      「1 出力を読んで当てる」          番号は 1〜4。ホームの小見出しにだけ出る
+ *   札      「1 出力を読んで当てる」          番号は 1〜2。ホームの小見出しにだけ出る
  *   分野    「1.1 show interface の障害」     番号は 札.分野
  *   やり方  「練習」「テスト」                **テストは分野に1本なので、回の番号は無い**
  */
@@ -100,7 +88,7 @@ const blockNo = (cid, bid) => {
  *   🏅      … 届いた
  *
  * **数えるものは分野のバッジ1種類だけ。**
- * 分野は21ある。ホームの上に「n / 21 分野」と出す。
+ * 分野は8ある。ホームの上に「n / 8 分野」と出す。
  */
 function markOf(r, of) {
   if (!r || r.best === null || r.best === undefined) return { kind: "yet", text: "まだ" };
@@ -252,7 +240,7 @@ function MacList({ sw }) {
  */
 function item(o) {
   return { kind: o.kind, ask: o.ask || null,
-           exhibit: o.exhibit || null, image: o.image || null,
+           exhibit: o.exhibit || null, image: o.image || null, fig: o.fig || null,
            opts: o.opts || null,
            right: o.right ? (Array.isArray(o.right) ? o.right : [o.right]) : null,
            extra: o.extra || {}, note: o.note || null };
@@ -366,7 +354,7 @@ function makePractice(G, id) {
       const q = G.stepQ(i, n);
       if (!q) continue;
       out.push(item({ kind: q.kind, ask: q.ask, exhibit: asExhibit(q.exhibit),
-        opts: q.opts, right: q.right,
+        fig: q.fig || null, opts: q.opts, right: q.right,
         extra: Object.assign({}, q.extra, { i: q.extra.i, of: bs.length }) }));
     }
   });
@@ -376,7 +364,7 @@ function makePractice(G, id) {
     const q = G.wholeQ(k);
     if (!q) continue;
     out.push(item({ kind: q.kind, ask: q.ask, exhibit: asExhibit(q.exhibit),
-      opts: q.opts, right: q.right,
+      fig: q.fig || null, opts: q.opts, right: q.right,
       extra: Object.assign({}, q.extra, { i: bs.length, of: bs.length }) }));
   }
   return out;
@@ -478,6 +466,12 @@ function shuffleAny(a) {
   return x;
 }
 
+/* 覚えた過去問を、答えを隠して解く。**札2「図表付きの問題を覚える」の練習。**
+   出るのはテストと同じ本の問題。並びは毎回変える。得点は記録するが、バッジは付かない */
+function makeCram(id) {
+  return shuffleAny((bank(id) || []).slice()).map((q) => asPast(q));
+}
+
 function makeTest(id, ci) {
   return shuffleAny(testChunks(id)[ci]).map((q) => asPast(q));
 }
@@ -529,12 +523,49 @@ function Steps({ t, answer, book }) {
   );
 }
 
+/* ── 説明の1枚に添える一言 ────────────────────────
+ * **並べて見比べるものが2つ以上あるときは、文章にしない。**
+ * 「R1 には…、R2 には…」と書くと、読む人が頭の中で並べ直すことになる。
+ * その形の一言は、文字列ではなく { rows: […] } で書く。
+ *
+ *   { h: "R1 の設定" }                      → 【R1 の設定】
+ *   { c: "router ospf 1", m: "OSPF を動かす" } → ・router ospf 1　＝ OSPF を動かす
+ *   { c: "…" }                              → ・…（コマンドだけ）
+ *   { t: "この2行が無い" }                    → ・この2行が無い（コマンドでない行）
+ *
+ * **下に文章を足さない。**文章にしないための形なので、
+ * 最後に一文を付けると元に戻ってしまう。要ることは行か見出しに入れる。
+ *
+ * **・ と ＝ は画面が付ける。**データに書くと二重になる（build.js が見る）。
+ * 1つの事実だけの一言は、いままでどおり文字列のままでよい。
+ */
+function RuleNote({ n }) {
+  if (typeof n === "string") return <span className="rule-n">{n}</span>;
+  return (
+    <div className="rule-nb">
+      {(n.rows || []).map((w, i) => (
+        w.h !== undefined
+          ? <div className="rule-nh" key={i}>【{w.h}】</div>
+          : <div className="rule-nr" key={i}>
+              <span className="rule-nd">・</span>
+              {w.c !== undefined && <span className="rule-nc">{w.c}</span>}
+              {w.t !== undefined && <span>{w.t}</span>}
+              {w.m !== undefined && <span className="rule-nm">　＝ {w.m}</span>}
+            </div>
+      ))}
+    </div>
+  );
+}
+
 function Note({ title, body, gloss, book }) {
   return (
     <div className="note">
       <div className="note-t">{title}</div>
       {gloss && <div className="gloss">{gloss}</div>}
-      {body && <div className="note-b">{body}</div>}
+      {/* 本文も箇条書きを受ける。**説明の1枚と同じ形**にそろえるため */}
+      {body && (typeof body === "string"
+        ? <div className="note-b">{body}</div>
+        : <RuleNote n={body} />)}
       {book && <div className="note-b">本の解説：{trimBook(book)}</div>}
     </div>
   );
@@ -546,9 +577,9 @@ function Note({ title, body, gloss, book }) {
  */
 /* ── ホーム ───────────────────────────────
  * **この1枚に全部ある。**分野を選ぶための画面は作らない。
- * 21の分野が縦に並び、行を押すとその場で開いて
+ * 8つの分野が縦に並び、行を押すとその場で開いて
  * 「練習をする」「テストをする」が出る。開くのは1行だけ。
- * 4つの札は、押せない小見出しとして行のかたまりを区切るだけ。
+ * 2つの札は、押せない小見出しとして行のかたまりを区切るだけ。
  */
 function Home({ prog, go, open, setOpen }) {
   const allBlocks = CARDS.reduce((a, c) => a.concat(c.blocks), []);
@@ -601,7 +632,10 @@ function Home({ prog, go, open, setOpen }) {
                     {ready ? (
                       /* **説明は書かない。**押せば分かることを、押す前に読ませない */
                       <div className="row-go">
-                        <button className="go next" disabled={bs.length === 0}
+                        {/* 札2「そのほか」は過去問を覚える画面なので、
+                            判定エンジンの有る無しに関わらず開ける */}
+                        <button className="go next"
+                          disabled={!isLearnCard(b.id) && bs.length === 0}
                           onClick={() => go(b.id, "practice")}>練習をする</button>
                         <button className="go ghost"
                           onClick={() => go(b.id, "test:0")}>テストを受ける</button>
@@ -640,6 +674,109 @@ function Home({ prog, go, open, setOpen }) {
           window.location.reload();
         }
       }}>記録を消す</button>
+    </div>
+  );
+}
+
+/* ── 論点（この問題の決め手と、答えの言葉）──────────────
+ * points/<分野>.js に、過去問1問ずつの「決め手 → 答え」を書いてある。
+ * **問題文（または提示物）と、正解の選択肢に、一字一句ある言葉だけ。**
+ * 無ければ下線も決め手の行も出ない（画面は空くだけで、こわれない）。
+ */
+const pointOf = (qid) =>
+  (typeof POINTS !== "undefined" && POINTS[String(qid).replace(/#\d+$/, "")]) || null;
+
+const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/* その言葉だけに下線を引く。**本文は変えない。**含まれない言葉は何もしない */
+function Underline({ text, keys, cls }) {
+  const t = String(text == null ? "" : text);
+  const ws = (keys || []).filter((w) => w && t.indexOf(w) >= 0);
+  if (!ws.length) return <>{t}</>;
+  const re = new RegExp("(" + ws.map(escRe).join("|") + ")");
+  return <>{t.split(re).map((s, i) =>
+    (ws.indexOf(s) >= 0 ? <b key={i} className={cls}>{s}</b> : s))}</>;
+}
+
+/* ── 覚える（過去問をそのまま覚える）────────────────
+ * 札2「そのほか」の分野は、規則を組み立てて解くのではなく、
+ * **本の問題を1問ずつ覚える。**練習で覚えて、テストで同じ問題を解く。
+ *
+ *   提示物（図・出力。無い問題もある）
+ *   問題文        … 決め手の言葉に青い下線
+ *   選択肢        … 正解を緑にし、答えの言葉に黄色い下線
+ *   決め手の1行   … 「決め手 ◯◯ → ◯◯」
+ *   覚え方        … 取り違えやすい所だけ（無くてよい）
+ *   本の解説
+ */
+function Learn({ bid, back, goPractice }) {
+  const qs = (bank(bid) || []).slice().sort(function (a, b) {
+    return a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0;
+  });
+  const b = blockOf(bid);
+  return (
+    <div className="wrap">
+      <div className="head">
+        <button className="back" onClick={back}>← もどる</button>
+        <span className="head-t">覚える</span>
+        <span className="head-n">{qs.length} 問</span>
+      </div>
+      <div className="lc-top">{b ? b.block.name : ""}の過去問を、1問ずつ覚えます。
+        覚えたら、同じ問題を答えを隠して解きます。</div>
+
+      {qs.map((q, i) => {
+        const it = asPast(q);
+        const p = pointOf(q.qid);
+        const rights = [].concat(it.right);
+        return (
+          <div className="lc" key={q.qid}>
+            <div className="lc-h">
+              <span className="lc-n">{i + 1} / {qs.length}</span>
+              <span className="lc-id">{q.qid}</span>
+            </div>
+            {it.image && <Scan image={it.image} alt={q.qid} />}
+            {!it.image && it.fig && <Figure fig={it.fig} />}
+            {!it.image && it.exhibit && it.exhibit.kind === "topology"
+              ? <Figure fig={it.exhibit.fig} />
+              : it.exhibit && it.exhibit.kind !== "topology"
+                ? <Console text={it.exhibit.text} hits={[]} marks={p ? p.q : null} />
+                : null}
+            {it.extra.maclist && <MacList sw={it.extra.sw} />}
+            <div className="lc-q">
+              <Underline text={it.ask} keys={p ? p.q : null} cls="uq" />
+            </div>
+            <div className="opts">
+              {it.opts.map((o, k) => {
+                const right = rights.indexOf(o) >= 0;
+                return (
+                  <div className={"opt " + (right ? "opt-ok" : "opt-off")} key={k}>
+                    <span className="opt-k">{LETTERS[k] || ""}</span>
+                    <span className="opt-t">
+                      {right
+                        ? <Underline text={String(o).replace(/\s+$/, "")}
+                            keys={p ? p.a : null} cls="ua" />
+                        : String(o).replace(/\s+$/, "")}
+                    </span>
+                    {right && <span className="opt-m">✓</span>}
+                  </div>
+                );
+              })}
+            </div>
+            {p && (
+              <div className="pt">
+                <span className="pt-k">決め手</span>
+                <span className="pt-q">{(p.q || []).join(" ・ ")}</span>
+                <span className="pt-arw">→</span>
+                <span className="pt-a">{(p.a || []).join(" ・ ")}</span>
+              </div>
+            )}
+            {p && p.tip && <div className="pt-tip">{p.tip}</div>}
+            {q.explanation && <div className="lc-b">本の解説：{trimBook(q.explanation)}</div>}
+          </div>
+        );
+      })}
+
+      <button className="go dock" onClick={goPractice}>この分野の練習をする</button>
     </div>
   );
 }
@@ -690,7 +827,10 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   const G = engine(bid);
   const ci = mode.indexOf("test:") === 0 ? parseInt(mode.slice(5), 10) : -1;
   const isTest = ci >= 0;
-  const [plan, setPlan] = useState(() => (isTest ? makeTest(bid, ci) : makePractice(G, bid)));
+  /* 覚えた過去問を解く回。作った問題ではなく、本の問題がそのまま出る */
+  const isCram = mode === "cram";
+  const [plan, setPlan] = useState(() =>
+    (isTest ? makeTest(bid, ci) : isCram ? makeCram(bid) : makePractice(G, bid)));
   const [at, setAt] = useState(0);
   const [picked, setPicked] = useState(null);   // 決まった時に押したもの（間違いのときだけ入る）
   const [got, setGot] = useState([]);           // 当たった選択肢（答えが2つ以上のとき積む）
@@ -712,7 +852,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
     rec.current = STORE.start({
       version: dataVersion(), block: bid, mode: isTest ? "test" : "practice",
       /* 出題範囲。作った問題は範囲という考えが無いので "generated" */
-      set: isTest ? STORE.setKey(testChunks(bid)[ci])
+      set: (isTest || isCram) ? STORE.setKey(isTest ? testChunks(bid)[ci] : (bank(bid) || []))
         : (G && G.kind === "rules" ? "generated" : STORE.setKey(bank(bid) || [])),
       of: qn, passLine: passLine(qn)
     });
@@ -1013,6 +1153,10 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
           <div className="sec">
             {!brief && <span className="sec-l">どこに書いてあるか</span>}
             {it.exhibit.image && <Scan image={it.exhibit.image} alt={lb.name} />}
+            {/* 見本にも図を添える。**どこを見るかは、図のほうが早い** */}
+            {it.exhibit.text && G.spec && typeof G.spec.figFor === "function"
+              && G.spec.figFor(it.exhibit.text)
+              && <Figure fig={G.spec.figFor(it.exhibit.text)} />}
             {/* **見本は、問題と同じ見え方にする。**
                 図で出る分野（ルートブリッジ・OSPF の代表ルータ）の見本を
                 文字の表で出していたので、説明と問題で目の置き所が変わっていた。
@@ -1063,7 +1207,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
               {(Array.isArray(r.then) ? r.then : [r.then]).map((x, k) => (
                 <span className={"rule-then" + sizeOf(String(x))} key={k}>{x}</span>
               ))}
-              {r.note && <span className="rule-n">{r.note}</span>}
+              {r.note && <RuleNote n={r.note} />}
             </div>
           ))}
         </div>
@@ -1142,7 +1286,11 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   /* 決め手型の分野では、**答えたあとに、決め手になった言葉を提示物の中で光らせる。**
      答える前は光らせない（答えが見えてしまう）。
      光らせる言葉は判定側が渡してくる（提示物から実際に読み取れた文字なので、必ずある） */
-  const cueMark = (done && it.kind === "step" && it.extra.step && it.extra.step.mark)
+  /* **markNow の問題は、答える前から光らせる。**
+     「光っている所を見て、どう判断しますか」という問いなので、
+     答えたあとに光らせたのでは、問いが成り立たない */
+  const cueMark = (it.kind === "step" && it.extra.step && it.extra.step.mark
+    && (done || it.extra.step.markNow))
     ? [].concat(it.extra.step.mark) : [];
   const hitWords = lineAns.length ? lineAns
     : cueMark.length ? []
@@ -1156,6 +1304,9 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
           紙面の画像があればまず画像。文字の提示物（show出力・設定・JSON）は
           その下に続けて出す。図の書き起こしは、画像があるほうに譲ってある（asPast） */}
       {it.image && <Scan image={it.image} alt={it.note ? it.note.qid : ""} />}
+      {/* **図と文字は、両方出せる。**2台のあいだに線が何本もある形は、
+          文字で並べてもどれが何本目か分からないので、上に図を描く */}
+      {!it.image && it.fig && <Figure fig={it.fig} />}
       {!it.image && it.exhibit && it.exhibit.kind === "topology"
         ? <Figure fig={it.exhibit.fig} />
         : it.exhibit && it.exhibit.kind !== "topology"
@@ -1348,6 +1499,14 @@ export default function App() {
   if (mode === null) {
     return <Home prog={prog} open={open} setOpen={setOpen}
       go={(id, m) => { homeY.current = nowY(); setBid(id); setMode(m); }} />;
+  }
+  /* 札2「そのほか」の分野は、練習が「過去問を覚える」画面になる。
+     ほかの分野は、いままでどおり作った問題を解く（Drill） */
+  if (mode === "practice" && isLearnCard(bid)) {
+    return <Learn key={bid + "/learn"} bid={bid}
+      back={() => { setOpen(bid); setMode(null); }}
+      /* 覚えたら、同じ問題を答えを隠して解く */
+      goPractice={() => setMode("cram")} />;
   }
   /* key に分野とやり方を入れて、別のものへ移ったときに作り直す。
      こうしないと、前の問題と点数がそのまま残る */

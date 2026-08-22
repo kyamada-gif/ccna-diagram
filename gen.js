@@ -14,13 +14,11 @@
 
   /* 規則で答えを出すブロック。中身は types/<id>.js に書く */
   var RULE_IDS = ["showint", "rootbridge", "json", "ospf", "ospfdr",
-                  "etherchannel", "trunk", "access", "ipsvc", "portsec", "wlangui", "nolink", "misc"];
+                  "wlangui", "nolink", "misc"];
 
-  /* 言葉と説明を結んで覚えるブロック。
-     **中身を書くファイルは要らない。**過去問の対（q/<id>.js の pairs）から
-     engine.js の makeMatchEngine がそのまま組み立てる */
-  var MATCH_IDS = ["parts", "autoword", "ipv6word", "cable",
-                   "aaa", "guardword", "dhcpword"];
+  /* 言葉と説明を結んで覚えるブロックは、別のアプリ（wordmatch/）へ移した。
+     ここには無い。engine.js の makeMatchEngine もこのアプリでは使わない */
+  var MATCH_IDS = [];
 
   var BLOCK_IDS = RULE_IDS.concat(MATCH_IDS);
 
@@ -30,7 +28,6 @@
     /* 対応づけのエンジンは過去問の対から組むので、先に問題を読み込む
        （ブラウザは index.html で questions.js を先に読んでいる） */
     if (!global.BANKS) require("./questions.js");
-    if (!global.SYNONYM) { try { require("./q/synonym.js"); } catch (e) {} }
   }
 
   var SPECS = global.SPECS || {};

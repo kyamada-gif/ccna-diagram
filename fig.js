@@ -111,8 +111,102 @@
            'preserveAspectRatio="xMidYMid meet" role="img">' + out.join("") + '</svg>';
   }
 
+  /* ── 2台を何本かの線でつないだ図（shape: "pair"）─────────────
+   * EtherChannel のように、**同じ2台のあいだに線が何本もある**ときの形。
+   * 文字で「SW1 Fa0/1 ── Fa0/1 SW2」と並べても、どれが何本目か分からない。
+   *   { shape:"pair", left:"SW1", right:"SW2",
+   *     links:[{a:"Fa0/1", b:"Fa0/1", label:"1本目"},
+   *            {a:"Fa0/2", b:"Fa0/2", label:"2本目", mark:true}],
+   *     mark:["SW1"] }
+   * mark を付けた線と箱は、太く光らせる（どこを見るかを目で示す）。
+   */
+  function pair(fig) {
+    var BW2 = 96, BH = 40, GAP = 190, PAD2 = 10, ROW = 54;
+    var links = fig.links || [];
+    var H = PAD2 * 2 + Math.max(BH, links.length * ROW);
+    var W2 = PAD2 * 2 + BW2 * 2 + GAP;
+    var lx = PAD2, rx = PAD2 + BW2 + GAP;
+    var out = [];
+    links.forEach(function (l, i) {
+      var y = PAD2 + ROW / 2 + i * ROW;
+      var on = l.mark ? " fg-on-l" : "";
+      out.push('<line x1="' + (lx + BW2) + '" y1="' + y + '" x2="' + rx +
+               '" y2="' + y + '" class="fg-l' + on + '" />');
+      out.push('<text x="' + (lx + BW2 + 6) + '" y="' + (y - 6) +
+               '" class="fg-p">' + esc(l.a) + '</text>');
+      out.push('<text x="' + (rx - 6) + '" y="' + (y - 6) +
+               '" class="fg-p fg-r">' + esc(l.b) + '</text>');
+      if (l.label) {
+        out.push('<text x="' + ((lx + BW2 + rx) / 2) + '" y="' + (y + 15) +
+                 '" class="fg-lb' + (l.mark ? " fg-on-t" : "") + '">' + esc(l.label) + '</text>');
+      }
+    });
+    [[lx, fig.left], [rx, fig.right]].forEach(function (b) {
+      var y0 = (H - BH) / 2;
+      var on = (fig.mark || []).indexOf(b[1]) >= 0 ? " fg-on" : "";
+      out.push('<rect x="' + b[0] + '" y="' + y0 + '" width="' + BW2 + '" height="' + BH +
+               '" rx="8" class="fg-box' + on + '" />');
+      out.push('<text x="' + (b[0] + BW2 / 2) + '" y="' + (y0 + BH / 2 + 5) +
+               '" class="fg-id">' + esc(b[1]) + '</text>');
+    });
+    return '<svg viewBox="0 0 ' + W2 + ' ' + H + '" class="fg" ' +
+           'preserveAspectRatio="xMidYMid meet" role="img">' + out.join("") + '</svg>';
+  }
+
+  /* ── 横一列につないだ図（shape: "chain"）───────────────
+   * 「インターネット ── ルータ ── スイッチ ── 端末」のように、
+   * **並びに意味がある**ときの形。末尾にぶら下がる機器（leaves）を縦に並べる。
+   *   { shape:"chain",
+   *     nodes:[{id:"インターネット"},{id:"ルータ A", note:"192.168.1.254/24"},{id:"スイッチ"}],
+   *     leaves:["HostA","HostB","HostC"], mark:["ルータ A","HostC"] }
+   */
+  function chain(fig) {
+    var BW3 = 104, BH3 = 38, GAPX3 = 46, PAD3 = 10, LEAFY = 34;
+    var nodes = fig.nodes || [], leaves = fig.leaves || [];
+    var LW = 92;
+    var W3 = PAD3 * 2 + nodes.length * BW3 + (nodes.length - 1) * GAPX3 +
+             (leaves.length ? GAPX3 + LW : 0);
+    var H3 = PAD3 * 2 + Math.max(BH3 + 16, leaves.length * LEAFY);
+    var cy = H3 / 2, out = [];
+    var xs = nodes.map(function (_, i) { return PAD3 + i * (BW3 + GAPX3); });
+    /* 機器のあいだの線 */
+    xs.forEach(function (x, i) {
+      if (i === 0) return;
+      out.push('<line x1="' + (xs[i - 1] + BW3) + '" y1="' + cy + '" x2="' + x +
+               '" y2="' + cy + '" class="fg-l" />');
+    });
+    /* ぶら下がる機器 */
+    var lx3 = xs.length ? xs[xs.length - 1] + BW3 + GAPX3 : PAD3;
+    leaves.forEach(function (nm, i) {
+      var y = PAD3 + LEAFY / 2 + i * LEAFY;
+      var on = (fig.mark || []).indexOf(nm) >= 0;
+      out.push('<line x1="' + (xs[xs.length - 1] + BW3) + '" y1="' + cy + '" x2="' + lx3 +
+               '" y2="' + y + '" class="fg-l' + (on ? " fg-on-l" : "") + '" />');
+      out.push('<rect x="' + lx3 + '" y="' + (y - 12) + '" width="' + LW +
+               '" height="24" rx="6" class="fg-box' + (on ? " fg-on" : "") + '" />');
+      out.push('<text x="' + (lx3 + LW / 2) + '" y="' + (y + 5) +
+               '" class="fg-id">' + esc(nm) + '</text>');
+    });
+    /* 機器の箱 */
+    nodes.forEach(function (nd, i) {
+      var on = (fig.mark || []).indexOf(nd.id) >= 0;
+      out.push('<rect x="' + xs[i] + '" y="' + (cy - BH3 / 2) + '" width="' + BW3 +
+               '" height="' + BH3 + '" rx="8" class="fg-box' + (on ? " fg-on" : "") + '" />');
+      out.push('<text x="' + (xs[i] + BW3 / 2) + '" y="' + (cy + 4) +
+               '" class="fg-id">' + esc(nd.id) + '</text>');
+      if (nd.note) {
+        out.push('<text x="' + (xs[i] + BW3 / 2) + '" y="' + (cy + BH3 / 2 + 13) +
+                 '" class="fg-lb' + (on ? " fg-on-t" : "") + '">' + esc(nd.note) + '</text>');
+      }
+    });
+    return '<svg viewBox="0 0 ' + W3 + ' ' + H3 + '" class="fg" ' +
+           'preserveAspectRatio="xMidYMid meet" role="img">' + out.join("") + '</svg>';
+  }
+
   function svg(fig) {
     if (!fig) return "";
+    if (fig.shape === "chain") return chain(fig);
+    if (fig.shape === "pair") return pair(fig);
     if (fig.shape === "star") return star(fig);
     if (!fig.sw || !fig.sw.length) return "";
     var L = layout(fig);

@@ -103,6 +103,7 @@
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
     { key: "qos", cue: "ホップごとの QoS 動作", cond: "QoS の図から動作を読み取る",
+      say: "図の右側で、パケットがどう扱われているかを見る話",
       verdict: "キューイング（順番待ち）",
       why: "図の右側が1列に並んでいたらキューイング。破棄されているならポリシング、流量をならしているならシェーピング",
       look: ["図の右側のパケットの並び（QoS）"],
@@ -111,6 +112,7 @@
       test: function (v) { return !!v.qos; } },
 
     { key: "dr", cue: "中心点（代表ルータ）にする", cond: "OSPF の代表ルータにしたい",
+      say: "この機器を、必ず代表にしたい",
       verdict: "ip ospf priority を、最も大きい 255 にする",
       why: "優先度の値が最も大きいルータが代表になる。設定できる最大値は 255。0 にすると代表ルータには選ばれない",
       look: ["OSPF の優先度"],
@@ -119,6 +121,7 @@
       test: function (v) { return !!v.dr; } },
 
     { key: "eui", cue: "自動アドレス割り当て", cond: "IPv6 のアドレスを自動で生成したい",
+      say: "アドレスの後半を、機器に作らせたい",
       verdict: "ipv6 address （前半）::/64 eui-64 と設定する",
       why: "後半 64 ビットは、機器が自分の MAC アドレスから生成する。そのため前半だけ指定すればよい",
       look: ["IPv6 の自動アドレス"],
@@ -127,6 +130,7 @@
       test: function (v) { return !!v.eui; } },
 
     { key: "coll", cue: "excessive collisions のログ",
+      say: "衝突が多すぎることを知らせるログが出ている",
       cond: "ログの本文に excessive collisions と書かれている",
       verdict: "送信に16回失敗すると、そのフレームは破棄される",
       why: "衝突するたびに送り直すが、16回続けて失敗した時点で、そのフレームは破棄される",
@@ -137,6 +141,7 @@
 
     /* いちばん下は受け皿。ここまでで決まらなければ、これになる */
     { key: "arp", cue: "ARP を受け取ったとき", cond: "そのほか（ARP を受け取ったスイッチの動き）",
+      say: "宛先をまだ覚えていないスイッチが、どう動くかの話",
       verdict: "受信したポート以外の、すべてのポートへ転送する",
       why: "宛先の MAC アドレスをまだ学習していないので、受信したポート以外のすべてのポートへ転送して探す",
       look: ["ARP を受け取ったスイッチの動き"],
@@ -199,7 +204,7 @@
     pattern: E.cuePattern, patterns: ["arp", "coll", "dr", "eui", "qos"],
     kind: "rules",
     card: "misc",
-    name: "そのほか",
+    name: "その他",
     note: "ほかに入らない一点ものを、1つずつ覚える",
     obj: "6.7",
     ask: "この出力なら、答えはどれですか。",
@@ -208,7 +213,12 @@
     read: read, excerpt: excerpt,
     brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
     sample: sample, stepQ: E.cueStepQ(RULES, "答えはどれですか。"),
-    expect: { spots: 5, rules: 5, questions: 6 },
+    /* 規則では答えが出せない問題。**テストには出す。答えは本のとおり。**
+       どれも目標1.4 で、本の答えが出力と合わない（または図の問題）。
+       2026-08-22 にオーナーの指示で「そのほか」へ戻した。
+       showread/README.md「分かっている食い違い（本のほう）」に、1問ずつの理由がある */
+    bookOnly: ["B1-P12-076", "B1-P14-050", "B1-P14-072", "B2-0084-02", "B2-0251-02"],
+    expect: { spots: 5, rules: 5, questions: 11 },
     dropped: []
   };
 

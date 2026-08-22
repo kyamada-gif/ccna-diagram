@@ -279,7 +279,10 @@
   /* 添える一言。**取り違えやすい所だけ。**説明を足さない */
   var NOTE = {
     linkdown: "下に並ぶエラーの数は、切れる前の記録",
-    queue: "同じ行の Total output drops は別のもの",
+    queue: { rows: [
+      { c: "Input queue / Output queue", m: "順番待ちの数" },
+      { c: "Total output drops", m: "捨てた数（別のもの）" },
+      { t: "同じ行に並んでいるので、取り違えやすい" }] },
     oversub: "Input queue と同じ行に並んでいる",
     throughput: "255/255 が満杯。1/255 はほとんど流れていない",
     dup_full: "全二重では衝突は起きない",
@@ -346,9 +349,12 @@
       });
       if (!mine.length) return null;
       var fired = mine.filter(function (r) { return r.test(v); })[0];
-      var nums = (fired || mine[0]).steps(v).map(function (x) {
-        return x[0] + " は " + x[1];
-      }).join("、");
+      /* **値が2つ以上あるときは、文にせず上下に並べる。**
+         「duplex は Full、collisions は 233」と1行に並べると、
+         どれがどの値なのかを目で追い直すことになる */
+      var nums = { rows: (fired || mine[0]).steps(v).map(function (x) {
+        return { c: String(x[0]), m: String(x[1]) };
+      }) };
       if (st.hit && fired && IF[fired.key]) {
         return { gloss: IF[fired.key] + " ＝ " + fired.verdict,
                  body: NONUM[fired.key] ? "" : nums };
@@ -366,7 +372,9 @@
     if (!hit || !IF[hit.key]) return null;
     var body = "";
     if (!NONUM[hit.key]) {
-      body = hit.steps(v).map(function (x) { return x[0] + " は " + x[1]; }).join("、");
+      body = { rows: hit.steps(v).map(function (x) {
+        return { c: String(x[0]), m: String(x[1]) };
+      }) };
     }
     return { gloss: IF[hit.key] + " ＝ " + hit.verdict, body: body };
   }

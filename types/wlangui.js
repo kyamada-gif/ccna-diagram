@@ -109,6 +109,7 @@
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
     { key: "clients", cue: "接続できる台数を制限する", cond: "接続できる台数を制限したい",
+      say: "この SSID につなげる台数を決めたい",
       verdict: "Maximum Allowed Clients に、許可する台数を指定する",
       why: "接続台数の上限は Advanced タブの Maximum Allowed Clients。Maximum Allowed Clients Per AP Radio はアクセスポイント1台あたりの上限で、別の設定",
       look: ["Advanced の行"],
@@ -117,6 +118,7 @@
       test: function (v) { return !!v.clients; } },
 
     { key: "weblogin", cue: "DHCP と DNS だけ許可する", cond: "認証前に DHCP と DNS だけ通したい",
+      say: "認証が済むまでは、最低限の通信だけ通したい",
       verdict: "Layer 3 の Web ポリシーと認証を有効にする",
       why: "先にブラウザ上で認証させたいときの設定。認証が済むまでは、IP アドレスの取得（DHCP）と名前解決（DNS）だけを通す",
       look: ["Layer 3 の守り"],
@@ -125,6 +127,7 @@
       test: function (v) { return !!v.weblogin; } },
 
     { key: "macf", cue: "特定のクライアントのみ参加させる", cond: "特定の機器だけ接続させたい",
+      say: "決めた機器だけを参加させたい",
       verdict: "WPA2 Policy を有効にし、MAC フィルタリングも有効にする",
       why: "事前共有キーだけでは、キーを知っている機器はすべて接続できてしまう。接続できる機器を MAC アドレスで限定するのが MAC フィルタリング",
       look: ["Layer 2 の守り"],
@@ -133,6 +136,7 @@
       test: function (v) { return !!v.macf; } },
 
     { key: "download", cue: "ソフトウェアをインストールする", cond: "ソフトウェアを転送したい",
+      say: "機器にソフトウェアを入れたい",
       verdict: "File Type を Code、Transfer Mode を SFTP にして、サーバの IP アドレスを指定する",
       why: "ポート 22 を使うのは SFTP。転送するのがソフトウェア本体なので、File Type は Code を選ぶ",
       look: ["どのタブか"],
@@ -141,6 +145,7 @@
       test: function (v) { return !!v.download; } },
 
     { key: "p2p", cue: "クライアント同士の通信を止める", cond: "端末どうしの通信を遮断したい",
+      say: "同じ SSID の端末どうしを通信させたくない",
       verdict: "P2P Blocking Action を Drop にする",
       why: "同じ SSID に接続した端末どうしの通信を破棄する。Wi-Fi Direct Clients Policy は名前が似ているだけの別の設定",
       look: ["Advanced の行"],
@@ -149,6 +154,7 @@
       test: function (v) { return !!v.p2p; } },
 
     { key: "band", cue: "デュアルバンドのクライアント", cond: "2つの周波数帯を使い分けたい",
+      say: "両方の周波数に対応する端末を、空いている側へ寄せたい",
       verdict: "Client Band Select と AAA Override を有効にする",
       why: "両方の周波数帯に対応する端末を、空いている側へ誘導する。接続ごとに設定を変えるには AAA Override も必要",
       look: ["Advanced の行"],
@@ -157,6 +163,7 @@
       test: function (v) { return !!v.band; } },
 
     { key: "subnet", cue: "別のサブネットに接続させる", cond: "別のサブネットに所属させたい",
+      say: "つないだ人を、別のサブネットに所属させたい",
       verdict: "Status を有効にして、Interface/Interface Group で所属させる先を選ぶ",
       why: "どのサブネットに所属させるかは General タブで設定する。セキュリティは Security タブなので、ここでは扱わない",
       look: ["どのタブか"],
@@ -165,6 +172,7 @@
       test: function (v) { return !!v.subnet; } },
 
     { key: "aes", cue: "暗号化の種類を選ぶ", cond: "暗号化方式を選びたい",
+      say: "WPA2 で使う暗号の種類を選ぶ話",
       verdict: "AES（CCMP128）を選び、認証方式は PSK にする",
       why: "WPA2 で事前共有キーを使うときの、決まった組み合わせ。CCMP256 や GCMP は WPA3 で使うもの",
       look: ["Layer 2 の守り"],
@@ -173,6 +181,7 @@
       test: function (v) { return !!v.aes; } },
 
     { key: "psk", cue: "RADIUS サーバの代わりに事前共有キー", cond: "そのほか（事前共有キーで接続させる）",
+      say: "認証サーバを使わず、事前共有キーで入れたい",
       verdict: "WPA2 Policy を有効にし、PSK を有効にする",
       why: "「認証サーバの代わりに事前共有キーを使う」なら PSK。802.1X は認証サーバを使う方式なので、ここでは選ばない",
       look: ["Layer 2 の守り"],
@@ -309,14 +318,19 @@
    * **取り違えやすい所だけ。**判定ルールの理由（why）をもう一度書かない。
    */
   var NOTE = {
-    clients: "名前の似た Maximum Allowed Clients Per AP Radio は、" +
-             "アクセスポイント1台あたりの上限で、別の設定",
+    clients: { rows: [
+      { c: "Maximum Allowed Clients", m: "この SSID の上限" },
+      { c: "… Per AP Radio", m: "AP 1台あたりの上限（別）" }] },
     weblogin: "認証が済むまで通すのは、IP アドレスの取得（DHCP）と名前解決（DNS）だけ",
     macf: "事前共有キーだけでは、キーを知っている機器がすべてつながってしまう",
     download: "ポート 22 を使うのは SFTP。入れるのがソフトウェア本体なので、File Type は Code",
-    p2p: "名前の似た Wi-Fi Direct Clients Policy は、別の設定",
+    p2p: { rows: [
+      { c: "P2P Blocking Action", m: "端末どうしの通信を止める" },
+      { c: "Wi-Fi Direct Clients Policy", m: "名前が似た別の設定" }] },
     band: "接続ごとに設定を変えることになるので、AAA Override も一緒に有効にする",
-    subnet: "所属させる先を選ぶのは General タブ。Security タブではない",
+    subnet: { rows: [
+      { c: "General タブ", m: "所属させる先を選ぶ" },
+      { c: "Security タブ", m: "ここではない" }] },
     aes: "CCMP256 や GCMP は WPA3 で使うもの。WPA2 で選ぶのは AES（CCMP128）",
     psk: "802.1X は認証サーバを使う方式なので、ここでは選ばない"
   };

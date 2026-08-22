@@ -7,7 +7,7 @@
  *   ③ ケーブルの種類が違う                            1問
  *   ④ 光の部品（トランシーバ）が距離に合っていない      1問
  *
- * **同じ網の中とは話せるが、外と話せない → 出口が違う。**
+ * **同じネットワークの中とは話せるが、外と話せない → 出口が違う。**
  * これがいちばん多い形なので、練習ではここを作って出す。
  */
 (function (global) {
@@ -92,6 +92,7 @@
   /* ── 判定ルール ─────────────────────────── */
   var RULES = [
     { key: "optic", cue: "トランシーバーと距離", cond: "トランシーバーと伝送距離について問われている",
+      say: "距離に対して、トランシーバーの種類が合っていない",
       verdict: "トランシーバーの種類が、必要な距離に合っていない",
       why: "-SR は最大 300m、-LR は最大 10km。距離に合わないトランシーバーを使うと、光が届かない",
       look: ["トランシーバーと距離"],
@@ -100,6 +101,7 @@
       test: function (v) { return !!v.optic; } },
 
     { key: "cable", cue: "notconnect のまま", cond: "ケーブルの種類について問われている",
+      say: "口は有効なのに notconnect なので、線そのものが合っていない",
       verdict: "ケーブルの種類が合っていない",
       why: "インターフェースは有効なのに notconnect のままなので、ケーブルの種類（ストレートとクロス）が合っていない",
       look: ["ケーブルの種類"],
@@ -108,6 +110,7 @@
       test: function (v) { return !!v.cable; } },
 
     { key: "first", cue: "最初に確認するステップ", cond: "最初に何を確認するかを問われている",
+      say: "外とだけ通信できないので、まずどこまで届くかを確かめる",
       verdict: "デフォルトゲートウェイまで到達できるかを、最初に確認する",
       why: "同じネットワーク内とは通信できて外とだけ通信できないなら、まずデフォルトゲートウェイまで到達できるかを確認する。そこで届いていなければ、その先を調べる必要がない",
       look: ["どこまで話せるか（問題文）"],
@@ -116,6 +119,7 @@
       test: function (v) { return !!v.first; } },
 
     { key: "gw", cue: "外部と通信できない", cond: "そのほか（外のネットワークと通信できない）",
+      say: "同じネットワーク内は通じるので、外への出口の設定が違う",
       verdict: "デフォルトゲートウェイの設定が違う",
       why: "同じネットワーク内とは通信できるのに外と通信できないのは、デフォルトゲートウェイの IP アドレスが違うため。図に書かれているルータの IP アドレスと見比べる",
       look: ["デフォルトゲートウェイ", "IP アドレスとサブネットマスク"],
@@ -154,9 +158,10 @@
 
   function pc(v) {
     return [
-      "【ネットワーク図】",
-      "ルータ A の口   " + v.rt + "/24 ── スイッチ ── HostA・HostB・HostC",
-      "ルータ A のもう一方の口 ── インターネット",
+      /* **つなぎ方は文字で書かない。**画面が図として描く（下の figFor）。
+         ただし**ルータの口の値は残す。**見比べる相手なので、
+         これが無いと端末側の設定が正しいかどうか判断できない */
+      "ルータ A の口   " + v.rt + "/24",
       "",
       "【HostC の画面：IPv4 の設定】",
       "  ● 次の IP アドレスを使う",
@@ -182,7 +187,7 @@
     },
     first: function (b) {
       b.gwshow = b.rt;
-      b.need = "同じ網の機器とは話せますが、別の網の機器とは話せません。" +
+      b.need = "同じネットワークの機器とは話せますが、別のネットワークの機器とは話せません。" +
                "最初に確認するステップは何ですか。";
       return b;
     },
@@ -215,6 +220,24 @@
     gw: "パソコンの Default gateway の値を、図に書かれているルータの IP アドレスと見比べる"
   };
 
+  /* 提示物から、画面に描く図を組み立てる。
+     **並びに意味がある形**（インターネット ── ルータ ── スイッチ ── 端末）。
+     見るのはルータの IP アドレスと、画面が出ている端末（HostC）なので、そこを光らせる */
+  function figFor(text) {
+    var t = String(text || "");
+    var m = t.match(/Default gateway:\s*([\d.]+)/);
+    var ip = t.match(/IP address:\s*([\d.]+)/);
+    if (!m && !ip) return null;
+    var rt = (t.match(/ルータ A の口\s+([\d.]+)\/24/) || [])[1] || null;
+    if (!rt) return null;
+    return { shape: "chain",
+             nodes: [{ id: "インターネット" },
+                     { id: "ルータ A", note: rt ? rt + "/24" : null },
+                     { id: "スイッチ" }],
+             leaves: ["HostA", "HostB", "HostC"],
+             mark: ["ルータ A", "HostC"] };
+  }
+
   var spec = {
     id: "nolink",
     /* 出題パターン＝どのルールで答えにたどり着くか。
@@ -222,13 +245,14 @@
     pattern: E.cuePattern, patterns: ["cable", "first", "gw", "optic"],
     kind: "rules",
     card: "misc",
-    name: "つながらない原因をさがす",
+    name: "繋がらない原因を探す",
     note: "設定や配線を見て、つながらない原因を1つ名ざしする",
     obj: "1.10",
     ask: "つながらない原因は、どれですか。",
     wantsQuestion: true,
     spots: SPOTS, pat: PAT, rules: RULES, gloss: GLOSS, same: SAME,
     read: read, excerpt: excerpt,
+    figFor: figFor,
     build: build, baseVals: baseVals, makers: MAKERS, sample: sample, /* 決め手が出力の中にあるルール。ここだけ見本の現物を出す */
     learnOut: ["gw"],
     brief: E.cueBrief(RULES, NOTE), answerNote: E.cueAnswerNote(RULES, GLOSS),
