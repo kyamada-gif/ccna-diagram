@@ -914,7 +914,7 @@ function Learn({
   }, /*#__PURE__*/React.createElement("button", {
     className: "back",
     onClick: back
-  }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
+  }, "\u2190 \u30C8\u30C3\u30D7\u753B\u9762\u306B\u623B\u308B"), /*#__PURE__*/React.createElement("span", {
     className: "head-t"
   }, "\u899A\u3048\u308B"), /*#__PURE__*/React.createElement("span", {
     className: "head-n"
@@ -980,9 +980,11 @@ function Learn({
       className: "pt-arw"
     }, "\u2192"), /*#__PURE__*/React.createElement("span", {
       className: "pt-a"
-    }, (p.a || []).join(" ・ "))), p && p.tip && /*#__PURE__*/React.createElement("div", {
+    }, (p.a || []).join(" ・ "))), p && p.why && /*#__PURE__*/React.createElement("div", {
+      className: "lc-b"
+    }, p.why), p && p.tip && /*#__PURE__*/React.createElement("div", {
       className: "pt-tip"
-    }, p.tip), q.explanation && /*#__PURE__*/React.createElement("div", {
+    }, p.tip), q.explanation && trimBook(q.explanation).length >= 20 && /*#__PURE__*/React.createElement("div", {
       className: "lc-b"
     }, "\u60F3\u5B9A\u554F\u984C\u306E\u89E3\u8AAC\uFF1A", trimBook(q.explanation)));
   }), /*#__PURE__*/React.createElement("button", {
@@ -1057,6 +1059,8 @@ function Drill({
   const isTest = ci >= 0;
   /* 覚えた過去問を解く回。作った問題ではなく、本の問題がそのまま出る */
   const isCram = mode === "cram";
+  /* 札2「図表付きの問題を覚える」の分野かどうか。答え合わせの出し方が変わる */
+  const isLearn = isLearnCard(bid);
   const [plan, setPlan] = useState(() => isTest ? makeTest(bid, ci) : isCram ? makeCram(bid) : makePractice(G, bid));
   const [at, setAt] = useState(0);
   const [picked, setPicked] = useState(null); // 決まった時に押したもの（間違いのときだけ入る）
@@ -1272,7 +1276,7 @@ function Drill({
     }, /*#__PURE__*/React.createElement("button", {
       className: "back",
       onClick: back
-    }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
+    }, "\u2190 \u30C8\u30C3\u30D7\u753B\u9762\u306B\u623B\u308B"), /*#__PURE__*/React.createElement("span", {
       className: "head-t"
     }, block.name)), /*#__PURE__*/React.createElement("div", {
       className: "sec"
@@ -1281,7 +1285,7 @@ function Drill({
     }, "\u3053\u306E\u5206\u91CE\u306E\u7DF4\u7FD2\u306F\u3001\u307E\u3060\u7528\u610F\u3067\u304D\u3066\u3044\u307E\u305B\u3093\u3002")), /*#__PURE__*/React.createElement("button", {
       className: "go",
       onClick: back
-    }, "\u3082\u3069\u308B"));
+    }, "\u30C8\u30C3\u30D7\u753B\u9762\u306B\u623B\u308B"));
   }
   if (end) {
     const need = rec.current.passLine;
@@ -1424,7 +1428,7 @@ function Drill({
     }, /*#__PURE__*/React.createElement("button", {
       className: "back",
       onClick: back
-    }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
+    }, "\u2190 \u30C8\u30C3\u30D7\u753B\u9762\u306B\u623B\u308B"), /*#__PURE__*/React.createElement("span", {
       className: "head-t"
     }, G.kind === "match" ? "覚える用語　" : "確認項目　", li + 1, " / ", lof), /*#__PURE__*/React.createElement("span", {
       className: "head-n"
@@ -1613,6 +1617,10 @@ function Drill({
   /* 提示物ぜんぶを見て答える問題（テストの本の問題・練習の最後の3問）の答え合わせ。
      **いま見ている確認項目は無い**ので、st は渡さない */
   const fullNote = done && !bookOnly && it.kind !== "step" && it.kind !== "match" && G && G.spec && typeof G.spec.answerNote === "function" && exv ? G.spec.answerNote(G.read(jv)) : null;
+
+  /* 札2「図表付きの問題を覚える」の答え合わせ。
+     **覚える画面と同じものを出す。**別の言い方の説明が2つあると、どちらを覚えるのか分からなくなる */
+  const learnPoint = isLearn && done && it.kind === "past" && it.note ? pointOf(it.note.qid) : null;
   let note = null;
   if (done) {
     if (it.kind === "step") {
@@ -1628,6 +1636,29 @@ function Drill({
         body: sn ? sn.body : st.why,
         gloss: sn ? sn.gloss : st.hit ? G.gloss(st.verdict) : ""
       });
+    } else if (learnPoint) {
+      const bk = it.note && it.note.explanation ? trimBook(it.note.explanation) : "";
+      note = /*#__PURE__*/React.createElement("div", {
+        className: "note"
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "note-t"
+      }, rights.join(" ／ ")), /*#__PURE__*/React.createElement("div", {
+        className: "pt"
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "pt-k"
+      }, "\u6C7A\u3081\u624B"), /*#__PURE__*/React.createElement("span", {
+        className: "pt-q"
+      }, (learnPoint.q || []).join(" ・ ")), /*#__PURE__*/React.createElement("span", {
+        className: "pt-arw"
+      }, "\u2192"), /*#__PURE__*/React.createElement("span", {
+        className: "pt-a"
+      }, (learnPoint.a || []).join(" ・ "))), learnPoint.why && /*#__PURE__*/React.createElement("div", {
+        className: "note-b"
+      }, learnPoint.why), learnPoint.tip && /*#__PURE__*/React.createElement("div", {
+        className: "pt-tip"
+      }, learnPoint.tip), bk.length >= 20 && /*#__PURE__*/React.createElement("div", {
+        className: "note-b"
+      }, "\u60F3\u5B9A\u554F\u984C\u306E\u89E3\u8AAC\uFF1A", bk));
     } else {
       note = it.kind === "match" ?
       /*#__PURE__*/
@@ -1670,7 +1701,7 @@ function Drill({
   }, /*#__PURE__*/React.createElement("button", {
     className: "back",
     onClick: back
-  }, "\u2190 \u3082\u3069\u308B"), /*#__PURE__*/React.createElement("span", {
+  }, "\u2190 \u30C8\u30C3\u30D7\u753B\u9762\u306B\u623B\u308B"), /*#__PURE__*/React.createElement("span", {
     className: "head-t"
   }, head), /*#__PURE__*/React.createElement("span", {
     className: "head-n"

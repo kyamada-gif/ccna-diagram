@@ -710,7 +710,7 @@ function Learn({ bid, back, goPractice }) {
   return (
     <div className="wrap">
       <div className="head">
-        <button className="back" onClick={back}>← もどる</button>
+        <button className="back" onClick={back}>← トップ画面に戻る</button>
         <span className="head-t">覚える</span>
         <span className="head-n">{qs.length} 問</span>
       </div>
@@ -763,8 +763,12 @@ function Learn({ bid, back, goPractice }) {
                 <span className="pt-a">{(p.a || []).join(" ・ ")}</span>
               </div>
             )}
+            {p && p.why && <div className="lc-b">{p.why}</div>}
             {p && p.tip && <div className="pt-tip">{p.tip}</div>}
-            {q.explanation && <div className="lc-b">想定問題の解説：{trimBook(q.explanation)}</div>}
+            {/* 想定問題の解説は、中身のあるものだけ添える。
+                「Half、Full」のような一言だけの解説は、書いていないのと同じなので出さない */}
+            {q.explanation && trimBook(q.explanation).length >= 20 &&
+              <div className="lc-b">想定問題の解説：{trimBook(q.explanation)}</div>}
           </div>
         );
       })}
@@ -822,6 +826,8 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   const isTest = ci >= 0;
   /* 覚えた過去問を解く回。作った問題ではなく、本の問題がそのまま出る */
   const isCram = mode === "cram";
+  /* 札2「図表付きの問題を覚える」の分野かどうか。答え合わせの出し方が変わる */
+  const isLearn = isLearnCard(bid);
   const [plan, setPlan] = useState(() =>
     (isTest ? makeTest(bid, ci) : isCram ? makeCram(bid) : makePractice(G, bid)));
   const [at, setAt] = useState(0);
@@ -994,13 +1000,13 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
     return (
       <div className="wrap">
         <div className="head">
-          <button className="back" onClick={back}>← もどる</button>
+          <button className="back" onClick={back}>← トップ画面に戻る</button>
           <span className="head-t">{block.name}</span>
         </div>
         <div className="sec">
           <div className="brief-b">この分野の練習は、まだ用意できていません。</div>
         </div>
-        <button className="go" onClick={back}>もどる</button>
+        <button className="go" onClick={back}>トップ画面に戻る</button>
       </div>
     );
   }
@@ -1124,7 +1130,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
     return (
       <div className="wrap">
         <div className="head">
-          <button className="back" onClick={back}>← もどる</button>
+          <button className="back" onClick={back}>← トップ画面に戻る</button>
           <span className="head-t">
             {G.kind === "match" ? "覚える用語　" : "確認項目　"}{li + 1} / {lof}</span>
           <span className="head-n">{at + 1} / {plan.length}</span>
@@ -1337,6 +1343,11 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
     && G && G.spec && typeof G.spec.answerNote === "function" && exv)
     ? G.spec.answerNote(G.read(jv)) : null;
 
+  /* 札2「図表付きの問題を覚える」の答え合わせ。
+     **覚える画面と同じものを出す。**別の言い方の説明が2つあると、どちらを覚えるのか分からなくなる */
+  const learnPoint = (isLearn && done && it.kind === "past" && it.note)
+    ? pointOf(it.note.qid) : null;
+
   let note = null;
   if (done) {
     if (it.kind === "step") {
@@ -1351,6 +1362,22 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
       note = <Note title={it.right[0]}
         body={sn ? sn.body : st.why}
         gloss={sn ? sn.gloss : (st.hit ? G.gloss(st.verdict) : "")} />;
+    } else if (learnPoint) {
+      const bk = it.note && it.note.explanation ? trimBook(it.note.explanation) : "";
+      note = (
+        <div className="note">
+          <div className="note-t">{rights.join(" ／ ")}</div>
+          <div className="pt">
+            <span className="pt-k">決め手</span>
+            <span className="pt-q">{(learnPoint.q || []).join(" ・ ")}</span>
+            <span className="pt-arw">→</span>
+            <span className="pt-a">{(learnPoint.a || []).join(" ・ ")}</span>
+          </div>
+          {learnPoint.why && <div className="note-b">{learnPoint.why}</div>}
+          {learnPoint.tip && <div className="pt-tip">{learnPoint.tip}</div>}
+          {bk.length >= 20 && <div className="note-b">想定問題の解説：{bk}</div>}
+        </div>
+      );
     } else {
       note = it.kind === "match" ? (
         /* 結ぶ問題の答えは、1本の長い行にしない。**組ごとに1行**にする */
@@ -1401,7 +1428,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
   return (
     <div className="wrap">
       <div className="head">
-        <button className="back" onClick={back}>← もどる</button>
+        <button className="back" onClick={back}>← トップ画面に戻る</button>
         <span className="head-t">{head}</span>
         <span className="head-n">{at + 1} / {plan.length}</span>
       </div>

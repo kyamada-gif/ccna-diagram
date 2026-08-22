@@ -790,6 +790,11 @@ BLOCK_IDS.forEach((id) => {
       (p.a || []).forEach((w) => {
         if (ans.indexOf(w) < 0) bad.push(`${sp.name}: ${q.qid} の答えの言葉「${w}」が正解の選択肢に無い`);
       });
+      /* **答え合わせに出る説明は、これしかない。**本の解説は空か一言だけのことが多く、
+         規則で答えを出せない問題では、ここが唯一の説明になる */
+      if (!p.why || p.why.length < 30) {
+        bad.push(`${sp.name}: ${q.qid} の「なぜそうなるか」（why）が無いか短い`);
+      }
       ok++;
     });
     console.log(`  ${sp.name}: 覚える論点 ${ok} / ${(BANKS[id] || []).length} 問`);
