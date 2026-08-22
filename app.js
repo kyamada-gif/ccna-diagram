@@ -60,7 +60,7 @@ const CARDS = [{
 }, {
   id: "misc",
   name: "図表付きの問題を覚える",
-  note: "本に載っている問題を、図や出力ごとそのまま覚えてから解く",
+  note: "想定問題を、図や出力ごとそのまま覚えてから解く",
   blocks: [{
     id: "wlangui",
     name: "無線の画面を読む",
@@ -660,7 +660,7 @@ function Steps({
       className: "note-t"
     }, answer || ""), book && /*#__PURE__*/React.createElement("div", {
       className: "note-b"
-    }, "\u672C\u306E\u89E3\u8AAC\uFF1A", trimBook(book)));
+    }, "\u60F3\u5B9A\u554F\u984C\u306E\u89E3\u8AAC\uFF1A", trimBook(book)));
   }
   return /*#__PURE__*/React.createElement("div", {
     className: "note"
@@ -692,7 +692,7 @@ function Steps({
     className: "rej-v"
   }, r.why)))), book && /*#__PURE__*/React.createElement("div", {
     className: "note-b"
-  }, "\u672C\u306E\u89E3\u8AAC\uFF1A", trimBook(book)));
+  }, "\u60F3\u5B9A\u554F\u984C\u306E\u89E3\u8AAC\uFF1A", trimBook(book)));
 }
 
 /* ── 説明の1枚に添える一言 ────────────────────────
@@ -751,7 +751,7 @@ function Note({
     n: body
   })), book && /*#__PURE__*/React.createElement("div", {
     className: "note-b"
-  }, "\u672C\u306E\u89E3\u8AAC\uFF1A", trimBook(book)));
+  }, "\u60F3\u5B9A\u554F\u984C\u306E\u89E3\u8AAC\uFF1A", trimBook(book)));
 }
 
 /* ── ホーム。札＝問題の型 ──────────────────────
@@ -824,7 +824,7 @@ function Home({
       className: "row-t"
     }, b.name), /*#__PURE__*/React.createElement("span", {
       className: "row-s"
-    }, "\u672C\u306E\u554F\u984C ", n, " \u554F")), /*#__PURE__*/React.createElement(Mark, {
+    }, "\u60F3\u5B9A\u554F\u984C ", n, " \u554F")), /*#__PURE__*/React.createElement(Mark, {
       mark: mark,
       sm: true
     }), /*#__PURE__*/React.createElement("span", {
@@ -845,16 +845,14 @@ function Home({
       onClick: () => go(b.id, "test:0")
     }, "\u30C6\u30B9\u30C8\u3092\u53D7\u3051\u308B")) : /*#__PURE__*/React.createElement("div", {
       className: "row-d"
-    }, "\u3053\u306E\u5206\u91CE\u306E\u300C\u78BA\u8A8D\u9805\u76EE\u300D\u3068\u300C\u6C7A\u3081\u65B9\u300D\u3092\u3001\u672C\u306E\u554F\u984C\u3068\u89E3\u8AAC\u304B\u3089\u66F8\u304D\u8D77\u3053\u3059\u4F5C\u696D\u304C\u3053\u308C\u304B\u3089\u3067\u3059\u3002 \u3067\u304D\u308B\u3068\u3001\u307B\u304B\u306E\u5206\u91CE\u3068\u540C\u3058\u3088\u3046\u306B\u3001\u7DF4\u7FD2\u3067\u899A\u3048\u3066\u304B\u3089\u30C6\u30B9\u30C8\u306B\u9032\u3081\u307E\u3059\u3002")));
+    }, "\u3053\u306E\u5206\u91CE\u306E\u300C\u78BA\u8A8D\u9805\u76EE\u300D\u3068\u300C\u6C7A\u3081\u65B9\u300D\u3092\u3001\u60F3\u5B9A\u554F\u984C\u3068\u89E3\u8AAC\u304B\u3089\u66F8\u304D\u8D77\u3053\u3059\u4F5C\u696D\u304C\u3053\u308C\u304B\u3089\u3067\u3059\u3002 \u3067\u304D\u308B\u3068\u3001\u307B\u304B\u306E\u5206\u91CE\u3068\u540C\u3058\u3088\u3046\u306B\u3001\u7DF4\u7FD2\u3067\u899A\u3048\u3066\u304B\u3089\u30C6\u30B9\u30C8\u306B\u9032\u3081\u307E\u3059\u3002")));
   }))), /*#__PURE__*/React.createElement("div", {
     className: "legend"
   }, /*#__PURE__*/React.createElement("span", {
     className: "slot got"
   }, "\uD83C\uDFC5"), /*#__PURE__*/React.createElement("span", {
     className: "legend-t"
-  }, "\u30D0\u30C3\u30B8\u306F\u5206\u91CE\u3054\u3068\u306B1\u3064\u3002\u305D\u306E\u5206\u91CE\u306E\u30C6\u30B9\u30C8\u30679\u5272\u6B63\u89E3\u3059\u308B\u3068\u4ED8\u304D\u307E\u3059\u3002")), /*#__PURE__*/React.createElement("div", {
-    className: "foot"
-  }, "\u8A08\u7B97\u306E\u3044\u3089\u306A\u3044\u56F3\u8868\u554F\u984C\u306F\u3001\u672C\u3067 335 \u554F\u3042\u308A\u307E\u3059\u3002 \u3069\u306E\u554F\u984C\u3082\u3001\u5FC5\u305A\u3069\u308C\u304B\u306E\u5206\u91CE\u306B\u5165\u308A\u307E\u3059\u3002 \u30C6\u30B9\u30C8\u306B\u51FA\u308B\u306E\u306F\u3001\u672C\u306B\u8F09\u3063\u3066\u3044\u308B\u554F\u984C\u305D\u306E\u3082\u306E\u3067\u3059\u3002 \u7DF4\u7FD2\u306F\u3001\u305D\u308C\u3092\u89E3\u3051\u308B\u3088\u3046\u306B\u306A\u308B\u305F\u3081\u306E\u3082\u306E\u3067\u3059\u3002"), /*#__PURE__*/React.createElement("button", {
+  }, "\u30D0\u30C3\u30B8\u306F\u5206\u91CE\u3054\u3068\u306B1\u3064\u3002\u305D\u306E\u5206\u91CE\u306E\u30C6\u30B9\u30C8\u30679\u5272\u6B63\u89E3\u3059\u308B\u3068\u4ED8\u304D\u307E\u3059\u3002")), /*#__PURE__*/React.createElement("button", {
     className: "wipe",
     onClick: () => {
       if (window.confirm("これまでの記録をすべて消します。よろしいですか。")) {
@@ -922,7 +920,7 @@ function Learn({
     className: "head-n"
   }, qs.length, " \u554F")), /*#__PURE__*/React.createElement("div", {
     className: "lc-top"
-  }, b ? b.block.name : "", "\u306E\u904E\u53BB\u554F\u3092\u30011\u554F\u305A\u3064\u899A\u3048\u307E\u3059\u3002 \u899A\u3048\u305F\u3089\u3001\u540C\u3058\u554F\u984C\u3092\u7B54\u3048\u3092\u96A0\u3057\u3066\u89E3\u304D\u307E\u3059\u3002"), qs.map((q, i) => {
+  }, b ? b.block.name : "", "\u306E\u60F3\u5B9A\u554F\u984C\u3092\u30011\u554F\u305A\u3064\u899A\u3048\u307E\u3059\u3002 \u899A\u3048\u305F\u3089\u3001\u540C\u3058\u554F\u984C\u3092\u7B54\u3048\u3092\u96A0\u3057\u3066\u89E3\u304D\u307E\u3059\u3002"), qs.map((q, i) => {
     const it = asPast(q);
     const p = pointOf(q.qid);
     const rights = [].concat(it.right);
@@ -986,7 +984,7 @@ function Learn({
       className: "pt-tip"
     }, p.tip), q.explanation && /*#__PURE__*/React.createElement("div", {
       className: "lc-b"
-    }, "\u672C\u306E\u89E3\u8AAC\uFF1A", trimBook(q.explanation)));
+    }, "\u60F3\u5B9A\u554F\u984C\u306E\u89E3\u8AAC\uFF1A", trimBook(q.explanation)));
   }), /*#__PURE__*/React.createElement("button", {
     className: "go dock",
     onClick: goPractice
@@ -1462,7 +1460,7 @@ function Drill({
       className: "sec"
     }, /*#__PURE__*/React.createElement("span", {
       className: "sec-l"
-    }, "\u3053\u306E\u7528\u8A9E\u306B\u5F53\u3066\u306F\u307E\u308B\u8AAC\u660E\uFF08\u904E\u53BB\u554F\u304B\u3089\uFF09"), lb.learn.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    }, "\u3053\u306E\u7528\u8A9E\u306B\u5F53\u3066\u306F\u307E\u308B\u8AAC\u660E\uFF08\u60F3\u5B9A\u554F\u984C\u304B\u3089\uFF09"), lb.learn.map((p, i) => /*#__PURE__*/React.createElement("div", {
       className: "brief-r",
       key: i
     }, /*#__PURE__*/React.createElement("span", {
@@ -1649,7 +1647,7 @@ function Drill({
         className: "mt-ans-v"
       }, p.l)))), it.note && it.note.explanation && /*#__PURE__*/React.createElement("div", {
         className: "note-b"
-      }, "\u672C\u306E\u89E3\u8AAC\uFF1A", trimBook(it.note.explanation))) : /*#__PURE__*/React.createElement(React.Fragment, null, it.image && it.exhibit && it.exhibit.kind === "topology" && /*#__PURE__*/React.createElement(Figure, {
+      }, "\u60F3\u5B9A\u554F\u984C\u306E\u89E3\u8AAC\uFF1A", trimBook(it.note.explanation))) : /*#__PURE__*/React.createElement(React.Fragment, null, it.image && it.exhibit && it.exhibit.kind === "topology" && /*#__PURE__*/React.createElement(Figure, {
         fig: it.exhibit.fig
       }), fullNote ? /*#__PURE__*/React.createElement(Note, {
         title: it.note ? rights.join(" ／ ") : it.right[0] || "",

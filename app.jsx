@@ -40,7 +40,7 @@ const CARDS = [
       { id: "ospfdr", name: "OSPF の代表ルータ", n: 2 }
     ] },
   { id: "misc", name: "図表付きの問題を覚える",
-    note: "本に載っている問題を、図や出力ごとそのまま覚えてから解く",
+    note: "想定問題を、図や出力ごとそのまま覚えてから解く",
     blocks: [
       { id: "wlangui", name: "無線の画面を読む", n: 13 },
       { id: "nolink", name: "繋がらない原因を探す", n: 5 },
@@ -492,7 +492,7 @@ function Steps({ t, answer, book }) {
     return (
       <div className="note">
         <div className="note-t">{answer || ""}</div>
-        {book && <div className="note-b">本の解説：{trimBook(book)}</div>}
+        {book && <div className="note-b">想定問題の解説：{trimBook(book)}</div>}
       </div>
     );
   }
@@ -518,7 +518,7 @@ function Steps({ t, answer, book }) {
           </div>
         ))}
       </div>
-      {book && <div className="note-b">本の解説：{trimBook(book)}</div>}
+      {book && <div className="note-b">想定問題の解説：{trimBook(book)}</div>}
     </div>
   );
 }
@@ -566,7 +566,7 @@ function Note({ title, body, gloss, book }) {
       {body && (typeof body === "string"
         ? <div className="note-b">{body}</div>
         : <RuleNote n={body} />)}
-      {book && <div className="note-b">本の解説：{trimBook(book)}</div>}
+      {book && <div className="note-b">想定問題の解説：{trimBook(book)}</div>}
     </div>
   );
 }
@@ -621,7 +621,7 @@ function Home({ prog, go, open, setOpen }) {
                   <span className="row-n">{blockNo(c.id, b.id)}</span>
                   <span className="row-b">
                     <span className="row-t">{b.name}</span>
-                    <span className="row-s">本の問題 {n} 問</span>
+                    <span className="row-s">想定問題 {n} 問</span>
                   </span>
                   <Mark mark={mark} sm />
                   <span className={"row-v" + (on ? " row-v-on" : "")}>▾</span>
@@ -642,7 +642,7 @@ function Home({ prog, go, open, setOpen }) {
                       </div>
                     ) : (
                       <div className="row-d">
-                        この分野の「確認項目」と「決め方」を、本の問題と解説から書き起こす作業がこれからです。
+                        この分野の「確認項目」と「決め方」を、想定問題と解説から書き起こす作業がこれからです。
                         できると、ほかの分野と同じように、練習で覚えてからテストに進めます。
                       </div>
                     )}
@@ -659,13 +659,6 @@ function Home({ prog, go, open, setOpen }) {
         <span className="legend-t">
           バッジは分野ごとに1つ。その分野のテストで9割正解すると付きます。
         </span>
-      </div>
-
-      <div className="foot">
-        計算のいらない図表問題は、本で 335 問あります。
-        どの問題も、必ずどれかの分野に入ります。
-        テストに出るのは、本に載っている問題そのものです。
-        練習は、それを解けるようになるためのものです。
       </div>
 
       <button className="wipe" onClick={() => {
@@ -721,7 +714,7 @@ function Learn({ bid, back, goPractice }) {
         <span className="head-t">覚える</span>
         <span className="head-n">{qs.length} 問</span>
       </div>
-      <div className="lc-top">{b ? b.block.name : ""}の過去問を、1問ずつ覚えます。
+      <div className="lc-top">{b ? b.block.name : ""}の想定問題を、1問ずつ覚えます。
         覚えたら、同じ問題を答えを隠して解きます。</div>
 
       {qs.map((q, i) => {
@@ -771,7 +764,7 @@ function Learn({ bid, back, goPractice }) {
               </div>
             )}
             {p && p.tip && <div className="pt-tip">{p.tip}</div>}
-            {q.explanation && <div className="lc-b">本の解説：{trimBook(q.explanation)}</div>}
+            {q.explanation && <div className="lc-b">想定問題の解説：{trimBook(q.explanation)}</div>}
           </div>
         );
       })}
@@ -1173,7 +1166,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
         {G.kind === "match" ? (
           <>
             <div className="sec">
-              <span className="sec-l">この用語に当てはまる説明（過去問から）</span>
+              <span className="sec-l">この用語に当てはまる説明（想定問題から）</span>
               {/* 用語の名前は上の見出しに出ているので、ここは説明だけ並べる */}
               {lb.learn.map((p, i) => (
                 <div className="brief-r" key={i}>
@@ -1372,7 +1365,7 @@ function Drill({ bid, mode, prog, setProg, back, goTest, goNext }) {
             ))}
           </div>
           {it.note && it.note.explanation &&
-            <div className="note-b">本の解説：{trimBook(it.note.explanation)}</div>}
+            <div className="note-b">想定問題の解説：{trimBook(it.note.explanation)}</div>}
         </div>
       ) : (
         <>
